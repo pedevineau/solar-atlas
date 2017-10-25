@@ -1,6 +1,9 @@
-import numpy as np
+from nclib2.dataset import DataSet, np
+import time
+from sklearn import mixture
+from datetime import datetime, timedelta
 
-
+# global variables to evaluate "cano" separation critera
 cano_checked = 0
 cano_unchecked = 0
 
@@ -64,46 +67,126 @@ def evaluate_model_cano_components(gmm):
         cano_checked += 1
 
 
-def filter_testing_set_and_predict(nb_slots, nb_latitudes, nb_longitudes, data_3D, model_2D):
+def filter_testing_set_and_predict(nb_slots, nb_latitudes, nb_longitudes, data_array, model_2D):
     shape_predicted_data = (nb_slots, nb_latitudes, nb_longitudes)
-    data_3D_predicted_ = np.empty(shape=shape_predicted_data)
+    data_array_predicted = np.empty(shape=shape_predicted_data)
     for latitude_ind in range(nb_latitudes):
         for longitude_ind in range(nb_longitudes):
             model = model_2D[latitude_ind][longitude_ind]
             try:
-                data_3D_predicted_[:, latitude_ind, longitude_ind] = model.predict(data_3D[:, latitude_ind, longitude_ind])
+                data_array_predicted[:, latitude_ind, longitude_ind] = model.predict(data_array[:, latitude_ind, longitude_ind])
             except:
                 print 'except'
-                data_3D_predicted_[:, latitude_ind, longitude_ind] = np.full(nb_slots, -1)
-    return data_3D_predicted_
+                data_array_predicted[:, latitude_ind, longitude_ind] = np.full(nb_slots, -1)
+    return data_array_predicted
+
+
+def visualize_classes(array_3D, bbox):
+    interpolation_ = None
+    ocean_mask_ = True
+    visualize_map_3d(array_3D,
+                     bbox,
+                     interpolation=interpolation_, vmin=0, vmax=3, title='Classes', ocean_mask=ocean_mask_)
+
+
+def get_basis_model(mixture_process):
+    if mixture_process == 'gaussian':
+        means_radiance_ = get_gaussian_init_means(n_components_)
+        means_init_ = np.zeros((n_components_, nb_selected_channels))
+        for compo in range(n_components_):
+            means_init_[compo] = np.array([means_radiance_[chan][k] for chan in selected_channels]).reshape(
+                nb_selected_channels)
+
+        model = mixture.GaussianMixture(n_components=n_components_,
+                                        covariance_type='full',
+                                        warm_start=True,
+                                        means_init=means_init_
+                                        )
+    elif mixture_process == 'bayesian':
+        model = mixture.BayesianGaussianMixture(n_components=n_components_,
+                                                covariance_type='full',
+                                                warm_start=True,
+                                                max_iter=max_iter_,
+                                                weight_concentration_prior=1
+                                                )
+    return model
+
+
+def get_trained_models(training_array, model, shape):
+    if len(shape) == 2:
+        (nb_latitudes, nb_longitudes) = shape
+        for latitude_ind in range(nb_latitudes):
+            long_array_models = []
+            for longitude_ind in range(nb_longitudes):
+                training_sample = filter_nan_training_set(training_array[:, latitude_ind, longitude_ind])
+                gmm = model.fit(training_sample)
+                evaluate_model_cano_components(gmm)
+                long_array_models.append(gmm)
+                if not gmm.converged_:
+                    print 'Not converged'
+                    # print gmm.means_
+                    # print gmm.weights_
+            models.append(long_array_models)
+    return models
+
+
+def get_reshaped_data_channel_dict(data_dict, shape):
+    data_array = np.zeros(shape=shape)
+    for k in range(nb_selected_channels):
+        chan = selected_channels[k]
+        data_array[:, :, :, k] = data_dict[chan][:, :, :]
+    return data_array
+
+
+def get_selected_channels():
+    print 'Do you want all the channels? (1/0) \n'
+    if raw_input() == '1':
+        selected_channels.extend(CHANNELS)
+    else:
+        for chan in CHANNELS:
+            print 'Do you want ', chan, '? (1/0) \n'
+            if raw_input() == '1':
+                selected_channels.append(chan)
+    return selected_channels
+
+
+def get_dfb_tuple():
+    print 'Which day from beginning (eg: 13527)?'
+    dfb_input = raw_input()
+    if dfb_input == '':
+        begin = default_values['dfb_beginning']
+    else:
+        begin = int(dfb_input)
+    ending = begin + default_values['nb_days'] - 1
+    date_beginning = datetime(1980, 1, 1) + timedelta(days=begin)
+    date_ending = datetime(1980, 1, 1) + timedelta(days=ending + 1, seconds=-1)
+    print 'Dates from ', str(date_beginning), ' till ', str(date_ending)
+    return [begin, ending]
 
 
 if __name__ == '__main__':
-    read_dirs = ['/data/model_data_himawari/sat_data_procseg']
-    channels = ['IR124_2000', 'IR390_2000', 'VIS064_2000', 'VIS160_2000' ]
+    DIRS = ['/data/model_data_himawari/sat_data_procseg']
+    CHANNELS = ['IR124_2000', 'IR390_2000', 'VIS064_2000', 'VIS160_2000']
+    SATELLITE = 'H08LATLON'
+    PATTERN_SUFFIX = '__TMON_{YYYY}_{mm}__SDEG05_r{SDEG5_LATITUDE}_c{SDEG5_LONGITUDE}.nc'
+    RESOLUTION = 0.03333  # approximation of real resolution of input data.  Currently coupled with N-interpolation
+    PLOT_COLORS = ['r--', 'bs', 'g^', 'os']  # not used
 
-    TRAINING_RATE = 0.2
-    SHUFFLE = True
-    RESOLUTION = 0.033
-    MIXTURE_PROCESS = 'bayesian'
+
+    ### parameters
+    training_rate = 0.2 # critical
+    shuffle = True   # to select training data among input data
+    mixture_process_ = 'bayesian'  # bayesian or gaussian
     max_iter_ = 500
-    n_components_ = 3
-    colors_plot = ['r--', 'bs', 'g^', 'os']
-
-    bounds_radiance = {
-        'VIS064_2000': [0.1, 1],
-        'VIS160_2000': [0.1, 1],
-        'IR390_2000': [180, 320],
-        'IR124_2000': [180, 320]
-    }
-
-    selected_channels = []
+    n_components_ = 3  # critical!!!
 
     default_values = {
         'dfb_beginning': 13527,
         # 'dfb_beginning': 13532,
         'nb_days': 10,
     }
+
+    selected_channels = []
 
     latitude_beginning = 35.0
     latitude_end = 45.0
@@ -115,16 +198,12 @@ if __name__ == '__main__':
     nb_longitudes_ = int((longitude_end - longitude_beginning) / RESOLUTION) + 1
     longitudes = np.linspace(longitude_beginning, longitude_end, nb_longitudes_, endpoint=False)
 
-    print 'Do you want all the channels? (1/0) \n'
-    if raw_input() == '1':
-        selected_channels.extend(channels)
-    else:
-        for channel in channels:
-            print 'Do you want ', channel, '? (1/0) \n'
-            if raw_input() == '1':
-                selected_channels.append(channel)
-
-    nb_selected_channels_ = len(selected_channels)
+    selected_channels = get_selected_channels()
+    nb_selected_channels = len(selected_channels)
+    chan_patterns = {}
+    for channel in selected_channels:
+        chan_patterns[channel] = SATELLITE + '_' + channel + PATTERN_SUFFIX
+    print(chan_patterns)
 
     # print('Which latitude do you want (eg: 54.0)?')
     # input_ = raw_input()
@@ -140,58 +219,33 @@ if __name__ == '__main__':
     # else:
     #     longitude_ = float(input_)
 
-    print 'Which day from beginning (eg: 13527)?'
-    input_ = raw_input()
-    if input_ == '':
-        dfb_beginning = default_values['dfb_beginning']
-    else:
-        dfb_beginning = int(input_)
-    dfb_ending = dfb_beginning + default_values['nb_days'] -1
-    from datetime import datetime, timedelta
-    date_beginning = datetime(1980,1,1) + timedelta(days=dfb_beginning)
-    date_ending = datetime(1980,1,1) + timedelta(days=dfb_ending+1, seconds=-1)
-
-    print 'Dates from ', str(date_beginning), ' till ', str(date_ending)
-
-    satellite = 'H08LATLON'
-    suffix_pattern = '__TMON_{YYYY}_{mm}__SDEG05_r{SDEG5_LATITUDE}_c{SDEG5_LONGITUDE}.nc'
-
-    chan_patterns = {}
-    for channel in selected_channels:
-        chan_patterns[channel] = satellite + '_' + channel + suffix_pattern
-    print(chan_patterns)
-
-    from nclib2.dataset import DataSet
-    # from pandas import Series
-    # import matplotlib.pyplot as plt
+    [dfb_beginning, dfb_ending] = get_dfb_tuple()
 
     fig_number = 0
     channels_content = {}
 
-    print 'CONDITIONS'
-    print MIXTURE_PROCESS
-    print 'NB_PIXELS:', str(nb_latitudes_*nb_longitudes_)
+    print 'CONDITIONS', mixture_process_
+    print 'NB_PIXELS:', str(nb_latitudes_ * nb_longitudes_)
     print 'NB_SLOTS', str(144*default_values['nb_days'])
 
-    import time
     time_start = time.time()
 
     for channel in chan_patterns:
-        dataset = DataSet.read(dirs=read_dirs,
-                                extent={
+        dataset = DataSet.read(dirs=DIRS,
+                               extent={
                                     'latitude': latitudes,
                                     'longitude': longitudes,
                                     'dfb': {'start': dfb_beginning, 'end': dfb_ending, "end_inclusive": True,  "starty_inclusive": True, },
                                 },
-                                file_pattern=chan_patterns[channel],
-                                variable_name=channel, fill_value=np.nan, interpolation='N', max_processes=0,
+                               file_pattern=chan_patterns[channel],
+                               variable_name=channel, fill_value=np.nan, interpolation='N', max_processes=0,
                                )
 
-        data_3D_ = dataset['data']
+        data_array_ = dataset['data']
         concat_data = []
-        for day in data_3D_:
+        for day in data_array_:
             concat_data.extend(day)
-        total_nb_slots_ = len(concat_data)
+        nb_slots_ = len(concat_data)
 
         # filter aberrant values (especially the night for visible signals) and replace it by -1 (which is easy to seperate!)
         # for k in range(total_nb_slots_):
@@ -208,67 +262,21 @@ if __name__ == '__main__':
     print 'time reading'
     print time_reshape - time_start
 
-    shape_raw_data = (total_nb_slots_, nb_latitudes_, nb_longitudes_, nb_selected_channels_)
-    data_3D_ = np.zeros(shape=shape_raw_data)
-    # for time_ind in range(total_nb_slots_):
-    #     for latitude_ind in range(nb_latitudes_):
-    #         for longitude_ind in range(nb_longitudes_):
-    #             l = []
-    #             for channel in selected_channels:
-    #                 l.append(channels_content[channel][time_ind][latitude_ind][longitude_ind])
-    #             data_3D_[time_ind][latitude_ind][longitude_ind] = l
-
-    k = 0
-    for k in range(nb_selected_channels_):
-        channel = selected_channels[k]
-        data_3D_[:, :, :, k] = channels_content[channel][:, :, :]
-        k += 1
-    len_training_ = int(total_nb_slots_ * TRAINING_RATE)
+    shape_raw_data = (nb_slots_, nb_latitudes_, nb_longitudes_, nb_selected_channels)
+    data_array_ = get_reshaped_data_channel_dict(data_dict=channels_content, shape=shape_raw_data)
 
     print 'time reshaping'
     time_start_training = time.time()
     print time_start_training - time_reshape
 
-    from sklearn import mixture
-
-    if MIXTURE_PROCESS == 'gaussian':
-        means_radiance_ = get_gaussian_init_means(n_components_)
-        means_init_ = np.zeros((n_components_, nb_selected_channels_))
-        for k in range(n_components_):
-            means_init_[k] = np.array([means_radiance_[channel][k] for channel in selected_channels]).reshape(
-                nb_selected_channels_)
-
-        basis_model = mixture.GaussianMixture(n_components=n_components_,
-                                      covariance_type='full',
-                                      warm_start=True,
-                                      means_init=means_init_
-                                      )
-    elif MIXTURE_PROCESS == 'bayesian':
-        basis_model = mixture.BayesianGaussianMixture(n_components=n_components_,
-                                              covariance_type='full',
-                                              warm_start=True,
-                                              max_iter=max_iter_,
-                                              weight_concentration_prior=1
-                                              )
-
     # TRAINING
     models = []
-    if SHUFFLE:
-        np.random.shuffle(data_3D_)
-    data_3D_training_ = data_3D_[0:len_training_]
-
-    for latitude_ind in range(nb_latitudes_):
-        long_array_models = []
-        for longitude_ind in range(nb_longitudes_):
-            sample_training = filter_nan_training_set(data_3D_training_[:,latitude_ind,longitude_ind])
-            gmm = basis_model.fit(sample_training)
-            evaluate_model_cano_components(gmm)
-            long_array_models.append(gmm)
-            if not gmm.converged_:
-                print 'Not converged'
-            # print gmm.means_
-            # print gmm.weights_
-        models.append(long_array_models)
+    if shuffle:
+        np.random.shuffle(data_array_)
+    len_training = int(nb_slots_ * training_rate)
+    data_3D_training_ = data_array_[0:len_training]
+    basis_model = get_basis_model(mixture_process=mixture_process_)
+    models = get_trained_models(training_array=data_3D_training_, model=basis_model, shape=(nb_latitudes_, nb_longitudes_))
 
     time_stop_training = time.time()
     print 'training:'
@@ -278,10 +286,10 @@ if __name__ == '__main__':
     from nclib2.visualization import visualize_map_3d
     from collections import namedtuple
 
-    data_3D_predicted = filter_testing_set_and_predict(nb_slots=total_nb_slots_,
-                                                       nb_latitudes=nb_longitudes_,
+    data_3D_predicted = filter_testing_set_and_predict(nb_slots=nb_slots_,
+                                                       nb_latitudes=nb_latitudes_,
                                                        nb_longitudes=nb_longitudes_,
-                                                       data_3D=data_3D_,
+                                                       data_array=data_array_,
                                                        model_2D=models
                                                        )
 
@@ -289,20 +297,17 @@ if __name__ == '__main__':
     print 'time prediction'
     print time_prediction - time_stop_training
 
-    interpolation_ = None
-    ocean_mask_ = True
+    print 'cano_checked', str(cano_checked)
+    print 'cano_unchecked', str(cano_unchecked)
+
     Bbox = namedtuple("Bbox", ("xmin", "ymin", "xmax", "ymax"))
-    bbox = Bbox(longitudes[0], latitudes[-1],longitudes[-1],
+    bbox_ = Bbox(longitudes[0], latitudes[-1],longitudes[-1],
                 latitudes[0])
+    visualize_classes(array_3D=data_3D_predicted, bbox=bbox_)
 
-    print 'cano_checked'
-    print cano_checked
-    print 'cano_unchecked'
-    print cano_unchecked
 
-    visualize_map_3d(data_3D_predicted,
-                     bbox,
-                     interpolation=interpolation_, vmin=0, vmax=3, title='Classes', ocean_mask=False)
+
+
 
     # classes = gmm.predict(data_testing)
     # plt.figure(fig_number)
