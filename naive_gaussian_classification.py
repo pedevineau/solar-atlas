@@ -1,6 +1,7 @@
 from nclib2.dataset import DataSet, np
 import time
 from sklearn import mixture
+from collections import namedtuple
 from datetime import datetime, timedelta
 
 # global variables to evaluate "cano" separation critera
@@ -34,17 +35,18 @@ def get_gaussian_init_means(n_components):
         }
 
 
-def filter_nan_training_set(vector_to_reshape):
-    data_ = []
-    for d_channels in vector_to_reshape:
+def filter_nan_training_set(array):
+    filtered = []
+    for parameters in array:
         bool_nan = False
-        for d in d_channels:
+        for parameter in parameters:
             # to be precised
-            if np.isnan(d) or d > 300 or d < 0:
+            # if np.isnan(d) or d > 300 or d < 0:
+            if np.isnan(parameter):
                 bool_nan = True
         if not bool_nan:
-            data_.append(d_channels)
-    return data_
+            filtered.append(parameters)
+    return filtered
 
 
 def update_cano_evaluation(gmm):
@@ -77,15 +79,25 @@ def filter_testing_set_and_predict(nb_slots, nb_latitudes, nb_longitudes, data_a
                 data_array_predicted[:, latitude_ind, longitude_ind] = model.predict(data_array[:, latitude_ind, longitude_ind])
                 # print evaluate_model_quality(data_array_predicted[len_training:, latitude_ind, longitude_ind].reshape(-1,1), model)
             except Exception as e:
-                # print e
+                print e
                 data_array_predicted[:, latitude_ind, longitude_ind] = np.full(nb_slots, -1)
     return data_array_predicted
+
+
+def visualize_input(array_3D, bbox):
+    interpolation_ = None
+    ocean_mask_ = False
+    title_ = 'Input'
+    print title_
+    visualize_map_3d(array_3D,
+                     bbox,
+                     interpolation=interpolation_, title=title_, ocean_mask=ocean_mask_)
 
 
 def visualize_classes(array_3D, bbox):
     interpolation_ = None
     ocean_mask_ = False
-    title_ = 'Classes' + str(np.random.randint(0,1000))
+    title_ = 'Naive classification. Plot id:' + str(np.random.randint(0,1000))
     print title_
     visualize_map_3d(array_3D,
                      bbox,
@@ -123,7 +135,7 @@ def evaluate_model_quality(testing_array, model):
     return model.score(testing_array)
 
 
-def get_trained_models(training_array, model, shape):
+def get_trained_models(training_array, model, shape, display_means=False):
     if len(shape) == 2:
         (nb_latitudes, nb_longitudes) = shape
         for latitude_ind in range(nb_latitudes):
@@ -136,18 +148,30 @@ def get_trained_models(training_array, model, shape):
                 long_array_models.append(gmm)
                 if not gmm.converged_:
                     print 'Not converged'
-                # print gmm.means_
-                # print gmm.weights_
+                if display_means:
+                    print gmm.means_
+                    print gmm.weights_
             models.append(long_array_models)
     return models
 
 
-def get_reshaped_data_channel_dict(data_dict, shape):
+def get_array_transformed_parameters(data_dict, shape, compute_indexes=False):
     data_array = np.zeros(shape=shape)
     for k in range(nb_selected_channels):
         chan = selected_channels[k]
         data_array[:, :, :, k] = data_dict[chan][:, :, :]
-    return data_array
+    if compute_indexes:
+        # IR124_2000: 0, IR390_2000: 1, VIS160_2000: 2,  VIS064_2000:3
+        (a, b, c, d) = shape
+        mu = np.full((a,b,c), 1)
+        nsdi = (data_array[:, :, :, 3] - data_array[:, :, :, 2]) / (data_array[:, :, :,2] + data_array[:, :, :, 3])
+        cli = (data_array[:, :, :,1] - data_array[:, :, :, 0]) / mu[:,:,:]
+        new_data_array = np.zeros(shape=(a, b, c,2))
+        new_data_array[:,:,:,0]=nsdi
+        new_data_array[:,:,:,1]=cli
+        return new_data_array
+    else:
+        return data_array
 
 
 def get_selected_channels():
@@ -182,7 +206,7 @@ def reject_model():
 
 if __name__ == '__main__':
     DIRS = ['/data/model_data_himawari/sat_data_procseg']
-    CHANNELS = ['IR124_2000', 'IR390_2000', 'VIS064_2000', 'VIS160_2000']
+    CHANNELS = ['IR124_2000', 'IR390_2000', 'VIS160_2000',  'VIS064_2000']
     SATELLITE = 'H08LATLON'
     PATTERN_SUFFIX = '__TMON_{YYYY}_{mm}__SDEG05_r{SDEG5_LATITUDE}_c{SDEG5_LONGITUDE}.nc'
     RESOLUTION = 2. / 60.  # approximation of real resolution of input data.  Currently coupled with N-interpolation
@@ -190,36 +214,46 @@ if __name__ == '__main__':
 
 
     ### parameters
+    multi_channels = True
     training_rate = 0.2 # critical
     shuffle = True   # to select training data among input data
     mixture_process_ = 'bayesian'  # bayesian or gaussian
     max_iter_ = 500
-    n_components_ = 5  # critical!!!
+    n_components_ = 2  # critical!!!
 
     default_values = {
-        'dfb_beginning': 13527+233,
-        # 'dfb_beginning': 13527,
-        'nb_days': 5,
+        # 'dfb_beginning': 13527+233,
+        'dfb_beginning': 13527,
+        'nb_days': 1,
     }
 
     selected_channels = []
 
-    latitude_beginning = 25.0
-    latitude_end = 30.0
+    latitude_beginning = 50.0
+    latitude_end = 55.5
     # latitude_beginning = 35.0
     # latitude_end = 36.0
     nb_latitudes_ = int((latitude_end - latitude_beginning) / RESOLUTION) + 1
     latitudes = np.linspace(latitude_beginning, latitude_end, nb_latitudes_, endpoint=False)
 
-    longitude_beginning = 100.0
-    longitude_end = 105.0
-    # longitude_beginning = 125.0
-    # longitude_end = 126.0
+    # longitude_beginning = 100.0
+    # longitude_end = 105.0
+    longitude_beginning = 125.0
+    longitude_end = 130.0
     nb_longitudes_ = int((longitude_end - longitude_beginning) / RESOLUTION) + 1
     longitudes = np.linspace(longitude_beginning, longitude_end, nb_longitudes_, endpoint=False)
 
-    selected_channels = get_selected_channels()
+    Bbox = namedtuple("Bbox", ("xmin", "ymin", "xmax", "ymax"))
+    bbox_ = Bbox(longitudes[0], latitudes[-1],longitudes[-1],
+                latitudes[0])
+
+    if multi_channels:
+        selected_channels = CHANNELS
+    else:
+        selected_channels = get_selected_channels()
+
     nb_selected_channels = len(selected_channels)
+
     chan_patterns = {}
     for channel in selected_channels:
         chan_patterns[channel] = SATELLITE + '_' + channel + PATTERN_SUFFIX
@@ -269,15 +303,6 @@ if __name__ == '__main__':
         for day in data_array_:
             concat_data.extend(day)
         nb_slots_ = len(concat_data)
-
-        # filter aberrant values (especially the night for visible signals) and replace it by -1 (which is easy to seperate!)
-        # for k in range(total_nb_slots_):
-        #     for latitude_ind in range(nb_latitudes_):
-        #         for longitude_ind in range(nb_longitudes_):
-        #             d = concat_data[k][latitude_ind][longitude_ind]
-        #             if d < bounds_radiance[channel][0] or d > bounds_radiance[channel][1]:
-        #                 concat_data[k][latitude_ind][longitude_ind] = np.nan
-
         channels_content[channel] = np.array(concat_data)
         del concat_data
 
@@ -286,7 +311,9 @@ if __name__ == '__main__':
     print time_reshape - time_start
 
     shape_raw_data = (nb_slots_, nb_latitudes_, nb_longitudes_, nb_selected_channels)
-    data_array_ = get_reshaped_data_channel_dict(data_dict=channels_content, shape=shape_raw_data)
+
+    data_array_ = get_array_transformed_parameters(data_dict=channels_content, shape=shape_raw_data,
+                                                   compute_indexes=multi_channels)
 
     print 'time reshaping'
     time_start_training = time.time()
@@ -302,7 +329,8 @@ if __name__ == '__main__':
     else:
         data_3D_training_ = data_array_[0:len_training]
     basis_model = get_basis_model(mixture_process=mixture_process_)
-    models = get_trained_models(training_array=data_3D_training_, model=basis_model, shape=(nb_latitudes_, nb_longitudes_))
+    models = get_trained_models(training_array=data_3D_training_, model=basis_model,
+                                shape=(nb_latitudes_, nb_longitudes_), display_means=False)
 
     time_stop_training = time.time()
     print 'training:'
@@ -310,7 +338,6 @@ if __name__ == '__main__':
 
     # TESTING
     from nclib2.visualization import visualize_map_3d
-    from collections import namedtuple
 
     data_3D_predicted = filter_testing_set_and_predict(nb_slots=nb_slots_,
                                                        nb_latitudes=nb_latitudes_,
@@ -326,9 +353,7 @@ if __name__ == '__main__':
     print 'cano_checked', str(cano_checked)
     print 'cano_unchecked', str(cano_unchecked)
 
-    Bbox = namedtuple("Bbox", ("xmin", "ymin", "xmax", "ymax"))
-    bbox_ = Bbox(longitudes[0], latitudes[-1],longitudes[-1],
-                latitudes[0])
+    #   visualize_input(array_3D=data_array_, bbox=bbox_)
     visualize_classes(array_3D=data_3D_predicted, bbox=bbox_)
 
 
