@@ -85,7 +85,7 @@ def filter_testing_set_and_predict(nb_slots, nb_latitudes, nb_longitudes, data_a
 def visualize_classes(array_3D, bbox):
     interpolation_ = None
     ocean_mask_ = False
-    title_ = 'Classes' + str(np.random.random(0,1000))
+    title_ = 'Classes' + str(np.random.randint(0,1000))
     print title_
     visualize_map_3d(array_3D,
                      bbox,
