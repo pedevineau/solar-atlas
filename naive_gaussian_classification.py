@@ -102,18 +102,18 @@ if __name__ == '__main__':
     default_values = {
         'dfb_beginning': 13527,
         # 'dfb_beginning': 13532,
-        'nb_days': 20,
+        'nb_days': 10,
     }
 
     latitude_beginning = 35.0
-    latitude_end = 36.0
+    latitude_end = 45.0
     nb_latitudes_ = int((latitude_end - latitude_beginning) / RESOLUTION) + 1
-    latitudes = np.linspace(latitude_beginning, latitude_end, nb_latitudes_, endpoint=True)
+    latitudes = np.linspace(latitude_beginning, latitude_end, nb_latitudes_, endpoint=False)
 
     longitude_beginning = 125.0
-    longitude_end = 126.0
+    longitude_end = 135.0
     nb_longitudes_ = int((longitude_end - longitude_beginning) / RESOLUTION) + 1
-    longitudes = np.linspace(longitude_beginning, longitude_end, nb_longitudes_, endpoint=True)
+    longitudes = np.linspace(longitude_beginning, longitude_end, nb_longitudes_, endpoint=False)
 
     print 'Do you want all the channels? (1/0) \n'
     if raw_input() == '1':
@@ -253,27 +253,21 @@ if __name__ == '__main__':
 
     # TRAINING
     models = []
+    if SHUFFLE:
+        np.random.shuffle(data_3D_)
+    data_3D_training_ = data_3D_[0:len_training_]
+
     for latitude_ind in range(nb_latitudes_):
         long_array_models = []
         for longitude_ind in range(nb_longitudes_):
-            data_training = []
-            if SHUFFLE:
-                data_copy = data_3D_.copy()
-                np.random.shuffle(data_copy)
-                for t in range(len_training_):
-                    data_training.append(data_3D_[t, latitude_ind, longitude_ind])
-            else:
-                for t in range(len_training_):
-                    data_training.append(data_3D_[t, latitude_ind, longitude_ind])
-
-            data_training = filter_nan_training_set(data_training)
-            gmm = basis_model.fit(data_training)
+            sample_training = filter_nan_training_set(data_3D_training_[:,latitude_ind,longitude_ind])
+            gmm = basis_model.fit(sample_training)
             evaluate_model_cano_components(gmm)
             long_array_models.append(gmm)
             if not gmm.converged_:
                 print 'Not converged'
-            print gmm.means_
-            print gmm.weights_
+            # print gmm.means_
+            # print gmm.weights_
         models.append(long_array_models)
 
     time_stop_training = time.time()
