@@ -83,7 +83,7 @@ def filter_testing_set_and_predict(nb_slots, nb_latitudes, nb_longitudes, data_a
 
 def visualize_classes(array_3D, bbox):
     interpolation_ = None
-    ocean_mask_ = True
+    ocean_mask_ = False
     visualize_map_3d(array_3D,
                      bbox,
                      interpolation=interpolation_, vmin=0, vmax=3, title='Classes', ocean_mask=ocean_mask_)
@@ -124,8 +124,8 @@ def get_trained_models(training_array, model, shape):
                 long_array_models.append(gmm)
                 if not gmm.converged_:
                     print 'Not converged'
-                    # print gmm.means_
-                    # print gmm.weights_
+                # print gmm.means_
+                # print gmm.weights_
             models.append(long_array_models)
     return models
 
@@ -164,6 +164,10 @@ def get_dfb_tuple():
     return [begin, ending]
 
 
+def reject_model():
+    return ''
+
+
 if __name__ == '__main__':
     DIRS = ['/data/model_data_himawari/sat_data_procseg']
     CHANNELS = ['IR124_2000', 'IR390_2000', 'VIS064_2000', 'VIS160_2000']
@@ -178,7 +182,7 @@ if __name__ == '__main__':
     shuffle = True   # to select training data among input data
     mixture_process_ = 'bayesian'  # bayesian or gaussian
     max_iter_ = 500
-    n_components_ = 3  # critical!!!
+    n_components_ = 4  # critical!!!
 
     default_values = {
         'dfb_beginning': 13527,
@@ -189,12 +193,12 @@ if __name__ == '__main__':
     selected_channels = []
 
     latitude_beginning = 35.0
-    latitude_end = 45.0
+    latitude_end = 36.0
     nb_latitudes_ = int((latitude_end - latitude_beginning) / RESOLUTION) + 1
     latitudes = np.linspace(latitude_beginning, latitude_end, nb_latitudes_, endpoint=False)
 
     longitude_beginning = 125.0
-    longitude_end = 135.0
+    longitude_end = 126.0
     nb_longitudes_ = int((longitude_end - longitude_beginning) / RESOLUTION) + 1
     longitudes = np.linspace(longitude_beginning, longitude_end, nb_longitudes_, endpoint=False)
 
@@ -270,11 +274,14 @@ if __name__ == '__main__':
     print time_start_training - time_reshape
 
     # TRAINING
+    len_training = int(nb_slots_ * training_rate)
     models = []
     if shuffle:
-        np.random.shuffle(data_array_)
-    len_training = int(nb_slots_ * training_rate)
-    data_3D_training_ = data_array_[0:len_training]
+        data_array_copy = data_array_.copy()
+        np.random.shuffle(data_array_copy)
+        data_3D_training_ = data_array_copy[0:len_training]
+    else:
+        data_3D_training_ = data_array_[0:len_training]
     basis_model = get_basis_model(mixture_process=mixture_process_)
     models = get_trained_models(training_array=data_3D_training_, model=basis_model, shape=(nb_latitudes_, nb_longitudes_))
 
