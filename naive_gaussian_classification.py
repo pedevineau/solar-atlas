@@ -94,7 +94,7 @@ def get_basis_model(mixture_process):
         means_radiance_ = get_gaussian_init_means(n_components_)
         means_init_ = np.zeros((n_components_, nb_selected_channels))
         for compo in range(n_components_):
-            means_init_[compo] = np.array([means_radiance_[chan][k] for chan in selected_channels]).reshape(
+            means_init_[compo] = np.array([means_radiance_[chan][compo] for chan in selected_channels]).reshape(
                 nb_selected_channels)
 
         model = mixture.GaussianMixture(n_components=n_components_,
