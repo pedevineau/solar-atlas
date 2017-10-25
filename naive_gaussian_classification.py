@@ -47,7 +47,7 @@ def filter_nan_training_set(vector_to_reshape):
     return data_
 
 
-def evaluate_model_cano_components(gmm):
+def update_cano_evaluation(gmm):
     variances = [gmm.covariances_[k][0][0] for k in range(len(gmm.covariances_))]
     ratios = []
     for j in range(len(gmm.means_)):
@@ -75,8 +75,9 @@ def filter_testing_set_and_predict(nb_slots, nb_latitudes, nb_longitudes, data_a
             model = model_2D[latitude_ind][longitude_ind]
             try:
                 data_array_predicted[:, latitude_ind, longitude_ind] = model.predict(data_array[:, latitude_ind, longitude_ind])
-            except:
-                print 'except'
+                # print evaluate_model_quality(data_array_predicted[len_training:, latitude_ind, longitude_ind].reshape(-1,1), model)
+            except Exception as e:
+                # print e
                 data_array_predicted[:, latitude_ind, longitude_ind] = np.full(nb_slots, -1)
     return data_array_predicted
 
@@ -84,9 +85,11 @@ def filter_testing_set_and_predict(nb_slots, nb_latitudes, nb_longitudes, data_a
 def visualize_classes(array_3D, bbox):
     interpolation_ = None
     ocean_mask_ = False
+    title_ = 'Classes' + str(np.random.random(0,1000))
+    print title_
     visualize_map_3d(array_3D,
                      bbox,
-                     interpolation=interpolation_, vmin=0, vmax=3, title='Classes', ocean_mask=ocean_mask_)
+                     interpolation=interpolation_, vmin=0, vmax=3, title=title_, ocean_mask=ocean_mask_)
 
 
 def get_basis_model(mixture_process):
@@ -112,6 +115,14 @@ def get_basis_model(mixture_process):
     return model
 
 
+def get_updated_model(training_array, model):
+    return model.fit(training_array)
+
+
+def evaluate_model_quality(testing_array, model):
+    return model.score(testing_array)
+
+
 def get_trained_models(training_array, model, shape):
     if len(shape) == 2:
         (nb_latitudes, nb_longitudes) = shape
@@ -120,7 +131,8 @@ def get_trained_models(training_array, model, shape):
             for longitude_ind in range(nb_longitudes):
                 training_sample = filter_nan_training_set(training_array[:, latitude_ind, longitude_ind])
                 gmm = model.fit(training_sample)
-                evaluate_model_cano_components(gmm)
+                # print evaluate_model_quality(training_sample, gmm)
+                update_cano_evaluation(gmm)
                 long_array_models.append(gmm)
                 if not gmm.converged_:
                     print 'Not converged'
@@ -173,7 +185,7 @@ if __name__ == '__main__':
     CHANNELS = ['IR124_2000', 'IR390_2000', 'VIS064_2000', 'VIS160_2000']
     SATELLITE = 'H08LATLON'
     PATTERN_SUFFIX = '__TMON_{YYYY}_{mm}__SDEG05_r{SDEG5_LATITUDE}_c{SDEG5_LONGITUDE}.nc'
-    RESOLUTION = 0.03333  # approximation of real resolution of input data.  Currently coupled with N-interpolation
+    RESOLUTION = 2. / 60.  # approximation of real resolution of input data.  Currently coupled with N-interpolation
     PLOT_COLORS = ['r--', 'bs', 'g^', 'os']  # not used
 
 
@@ -182,23 +194,27 @@ if __name__ == '__main__':
     shuffle = True   # to select training data among input data
     mixture_process_ = 'bayesian'  # bayesian or gaussian
     max_iter_ = 500
-    n_components_ = 4  # critical!!!
+    n_components_ = 5  # critical!!!
 
     default_values = {
-        'dfb_beginning': 13527,
-        # 'dfb_beginning': 13532,
-        'nb_days': 10,
+        'dfb_beginning': 13527+233,
+        # 'dfb_beginning': 13527,
+        'nb_days': 5,
     }
 
     selected_channels = []
 
-    latitude_beginning = 35.0
-    latitude_end = 36.0
+    latitude_beginning = 25.0
+    latitude_end = 30.0
+    # latitude_beginning = 35.0
+    # latitude_end = 36.0
     nb_latitudes_ = int((latitude_end - latitude_beginning) / RESOLUTION) + 1
     latitudes = np.linspace(latitude_beginning, latitude_end, nb_latitudes_, endpoint=False)
 
-    longitude_beginning = 125.0
-    longitude_end = 126.0
+    longitude_beginning = 100.0
+    longitude_end = 105.0
+    # longitude_beginning = 125.0
+    # longitude_end = 126.0
     nb_longitudes_ = int((longitude_end - longitude_beginning) / RESOLUTION) + 1
     longitudes = np.linspace(longitude_beginning, longitude_end, nb_longitudes_, endpoint=False)
 
@@ -231,6 +247,9 @@ if __name__ == '__main__':
     print 'CONDITIONS', mixture_process_
     print 'NB_PIXELS:', str(nb_latitudes_ * nb_longitudes_)
     print 'NB_SLOTS', str(144*default_values['nb_days'])
+    print 'training_rate', training_rate
+    print 'n_components', n_components_
+    print 'shuffle', shuffle
 
     time_start = time.time()
 
