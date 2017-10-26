@@ -3,6 +3,7 @@ import time
 from sklearn import mixture
 from collections import namedtuple
 from datetime import datetime, timedelta
+from nclib2.visualization import visualize_map_3d
 
 # global variables to evaluate "cano" separation critera
 cano_checked = 0
@@ -69,7 +70,7 @@ def update_cano_evaluation(gmm):
         cano_checked += 1
 
 
-def filter_testing_set_and_predict(nb_slots, nb_latitudes, nb_longitudes, data_array, model_2D):
+def get_classes(nb_slots, nb_latitudes, nb_longitudes, data_array, model_2D):
     shape_predicted_data = (nb_slots, nb_latitudes, nb_longitudes)
     data_array_predicted = np.empty(shape=shape_predicted_data)
     for latitude_ind in range(nb_latitudes):
@@ -77,7 +78,6 @@ def filter_testing_set_and_predict(nb_slots, nb_latitudes, nb_longitudes, data_a
             model = model_2D[latitude_ind][longitude_ind]
             try:
                 data_array_predicted[:, latitude_ind, longitude_ind] = model.predict(data_array[:, latitude_ind, longitude_ind])
-                # print evaluate_model_quality(data_array_predicted[len_training:, latitude_ind, longitude_ind].reshape(-1,1), model)
             except Exception as e:
                 print e
                 data_array_predicted[:, latitude_ind, longitude_ind] = np.full(nb_slots, -1)
@@ -87,11 +87,13 @@ def filter_testing_set_and_predict(nb_slots, nb_latitudes, nb_longitudes, data_a
 def visualize_input(array_3D, bbox):
     interpolation_ = None
     ocean_mask_ = False
-    title_ = 'Input'
-    print title_
-    visualize_map_3d(array_3D,
-                     bbox,
-                     interpolation=interpolation_, title=title_, ocean_mask=ocean_mask_)
+    (a,b,c,d) = np.shape(array_3D)
+    for var_index in range(d):
+        title_ = 'Input_'+str(var_index)
+        print title_
+        visualize_map_3d(array_3D[:,:,:,var_index],
+                         bbox,
+                         interpolation=interpolation_, title=title_, ocean_mask=ocean_mask_)
 
 
 def visualize_classes(array_3D, bbox):
@@ -141,16 +143,21 @@ def get_trained_models(training_array, model, shape, display_means=False):
         for latitude_ind in range(nb_latitudes):
             long_array_models = []
             for longitude_ind in range(nb_longitudes):
+                # print np.shape(training_array)
                 training_sample = filter_nan_training_set(training_array[:, latitude_ind, longitude_ind])
-                gmm = model.fit(training_sample)
-                # print evaluate_model_quality(training_sample, gmm)
-                update_cano_evaluation(gmm)
+                try:
+                    gmm = model.fit(training_sample)
+                    # print evaluate_model_quality(training_sample, gmm)
+                    update_cano_evaluation(gmm)
+                    if not gmm.converged_:
+                        print 'Not converged'
+                    if display_means:
+                        print gmm.means_
+                        print gmm.weights_
+                except ValueError as e:
+                    print e
+                    gmm = model
                 long_array_models.append(gmm)
-                if not gmm.converged_:
-                    print 'Not converged'
-                if display_means:
-                    print gmm.means_
-                    print gmm.weights_
             models.append(long_array_models)
     return models
 
@@ -165,12 +172,16 @@ def get_array_transformed_parameters(data_dict, shape, compute_indexes=False):
         (a, b, c, d) = shape
         mu = np.full((a,b,c), 1)
         nsdi = (data_array[:, :, :, 3] - data_array[:, :, :, 2]) / (data_array[:, :, :,2] + data_array[:, :, :, 3])
-        cli = (data_array[:, :, :,1] - data_array[:, :, :, 0]) / mu[:,:,:]
-        new_data_array = np.zeros(shape=(a, b, c,2))
-        new_data_array[:,:,:,0]=nsdi
-        new_data_array[:,:,:,1]=cli
+        cli = (data_array[:, :, :, 1] - data_array[:, :, :, 0]) / mu[:, :, :]
+        new_data_array = np.zeros(shape=(a, b, c, 2))
+        new_data_array[:, :, :, 0] = nsdi
+        new_data_array[:, :, :, 1] = cli
+        where_are_nan = np.isnan(new_data_array) + np.isinf(new_data_array)
+        new_data_array[where_are_nan] = 2
+        # print np.max(new_data_array)
         return new_data_array
     else:
+        data_array = np.nan_to_num(data_array) * ~np.isnan(data_array)
         return data_array
 
 
@@ -215,6 +226,7 @@ if __name__ == '__main__':
 
     ### parameters
     multi_channels = True
+    compute_classification = True
     training_rate = 0.2 # critical
     shuffle = True   # to select training data among input data
     mixture_process_ = 'bayesian'  # bayesian or gaussian
@@ -278,9 +290,10 @@ if __name__ == '__main__':
     fig_number = 0
     channels_content = {}
 
-    print 'CONDITIONS', mixture_process_
-    print 'NB_PIXELS:', str(nb_latitudes_ * nb_longitudes_)
+    print '__CONDITIONS__'
+    print 'NB_PIXELS', str(nb_latitudes_ * nb_longitudes_)
     print 'NB_SLOTS', str(144*default_values['nb_days'])
+    print 'process',  mixture_process_
     print 'training_rate', training_rate
     print 'n_components', n_components_
     print 'shuffle', shuffle
@@ -315,46 +328,47 @@ if __name__ == '__main__':
     data_array_ = get_array_transformed_parameters(data_dict=channels_content, shape=shape_raw_data,
                                                    compute_indexes=multi_channels)
 
+
     print 'time reshaping'
     time_start_training = time.time()
     print time_start_training - time_reshape
 
-    # TRAINING
-    len_training = int(nb_slots_ * training_rate)
-    models = []
-    if shuffle:
-        data_array_copy = data_array_.copy()
-        np.random.shuffle(data_array_copy)
-        data_3D_training_ = data_array_copy[0:len_training]
+    if not get_classes:
+        visualize_input(array_3D=data_array_, bbox=bbox_)
     else:
-        data_3D_training_ = data_array_[0:len_training]
-    basis_model = get_basis_model(mixture_process=mixture_process_)
-    models = get_trained_models(training_array=data_3D_training_, model=basis_model,
-                                shape=(nb_latitudes_, nb_longitudes_), display_means=False)
 
-    time_stop_training = time.time()
-    print 'training:'
-    print time_stop_training-time_start_training
+        # TRAINING
+        len_training = int(nb_slots_ * training_rate)
+        models = []
+        if shuffle:
+            data_array_copy = data_array_.copy()
+            np.random.shuffle(data_array_copy)
+            data_3D_training_ = data_array_copy[0:len_training]
+        else:
+            data_3D_training_ = data_array_[0:len_training]
+        basis_model = get_basis_model(mixture_process=mixture_process_)
+        models = get_trained_models(training_array=data_3D_training_, model=basis_model,
+                                    shape=(nb_latitudes_, nb_longitudes_), display_means=False)
+        time_stop_training = time.time()
+        print 'training:'
+        print time_stop_training-time_start_training
 
-    # TESTING
-    from nclib2.visualization import visualize_map_3d
+        # TESTING
+        data_3D_predicted = get_classes(nb_slots=nb_slots_,
+                                        nb_latitudes=nb_latitudes_,
+                                        nb_longitudes=nb_longitudes_,
+                                        data_array=data_array_,
+                                        model_2D=models
+                                        )
 
-    data_3D_predicted = filter_testing_set_and_predict(nb_slots=nb_slots_,
-                                                       nb_latitudes=nb_latitudes_,
-                                                       nb_longitudes=nb_longitudes_,
-                                                       data_array=data_array_,
-                                                       model_2D=models
-                                                       )
+        time_prediction = time.time()
+        print 'time prediction'
+        print time_prediction - time_stop_training
 
-    time_prediction = time.time()
-    print 'time prediction'
-    print time_prediction - time_stop_training
+        print 'cano_checked', str(cano_checked)
+        print 'cano_unchecked', str(cano_unchecked)
 
-    print 'cano_checked', str(cano_checked)
-    print 'cano_unchecked', str(cano_unchecked)
-
-    #   visualize_input(array_3D=data_array_, bbox=bbox_)
-    visualize_classes(array_3D=data_3D_predicted, bbox=bbox_)
+        visualize_classes(array_3D=data_3D_predicted, bbox=bbox_)
 
 
 
