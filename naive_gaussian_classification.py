@@ -3,7 +3,6 @@ import time
 from sklearn import mixture
 from collections import namedtuple
 from datetime import datetime, timedelta
-from nclib2.visualization import visualize_map_3d
 
 # global variables to evaluate "cano" separation critera
 cano_checked = 0
@@ -36,14 +35,15 @@ def get_gaussian_init_means(n_components):
         }
 
 
-def filter_nan_training_set(array):
+def filter_nan_training_set(array, multi_channel_bool):
     filtered = []
     for parameters in array:
         bool_nan = False
         for parameter in parameters:
             # to be precised
-            # if np.isnan(d) or d > 300 or d < 0:
-            if np.isnan(parameter):
+            if multi_channel_bool or parameter > 300 or parameter < 0:
+                bool_nan = True
+            elif np.isnan(parameter):
                 bool_nan = True
         if not bool_nan:
             filtered.append(parameters)
@@ -85,6 +85,7 @@ def get_classes(nb_slots, nb_latitudes, nb_longitudes, data_array, model_2D):
 
 
 def visualize_input(array_3D, bbox):
+    from nclib2.visualization import visualize_map_3d
     interpolation_ = None
     ocean_mask_ = False
     (a,b,c,d) = np.shape(array_3D)
@@ -93,10 +94,11 @@ def visualize_input(array_3D, bbox):
         print title_
         visualize_map_3d(array_3D[:,:,:,var_index],
                          bbox,
-                         interpolation=interpolation_, title=title_, ocean_mask=ocean_mask_)
+                         interpolation=interpolation_, vmin=200, vmax=300, title=title_, ocean_mask=ocean_mask_)
 
 
 def visualize_classes(array_3D, bbox):
+    from nclib2.visualization import visualize_map_3d
     interpolation_ = None
     ocean_mask_ = False
     title_ = 'Naive classification. Plot id:' + str(np.random.randint(0,1000))
@@ -144,7 +146,7 @@ def get_trained_models(training_array, model, shape, display_means=False):
             long_array_models = []
             for longitude_ind in range(nb_longitudes):
                 # print np.shape(training_array)
-                training_sample = filter_nan_training_set(training_array[:, latitude_ind, longitude_ind])
+                training_sample = filter_nan_training_set(training_array[:, latitude_ind, longitude_ind], multi_channels)
                 try:
                     gmm = model.fit(training_sample)
                     # print evaluate_model_quality(training_sample, gmm)
@@ -185,6 +187,17 @@ def get_array_transformed_parameters(data_dict, shape, compute_indexes=False):
         return data_array
 
 
+def visualize_hist(array_1D, title='Histogram', precision=50):
+    from pandas import Series
+    import matplotlib.pyplot as plt
+    title = title + ' id:'+str(np.random.randint(1, 1000))
+    print title
+    plt.title(title)
+    series = Series(array_1D)
+    series.hist(bins=precision)
+    plt.show()
+
+
 def get_selected_channels():
     print 'Do you want all the channels? (1/0) \n'
     if raw_input() == '1':
@@ -197,13 +210,16 @@ def get_selected_channels():
     return selected_channels
 
 
-def get_dfb_tuple():
+def get_dfb_tuple(ask_dfb=True):
     print 'Which day from beginning (eg: 13527)?'
-    dfb_input = raw_input()
-    if dfb_input == '':
-        begin = default_values['dfb_beginning']
+    if ask_dfb:
+        dfb_input = raw_input()
+        if dfb_input == '':
+            begin = default_values['dfb_beginning']
+        else:
+            begin = int(dfb_input)
     else:
-        begin = int(dfb_input)
+        begin = default_values['dfb_beginning']
     ending = begin + default_values['nb_days'] - 1
     date_beginning = datetime(1980, 1, 1) + timedelta(days=begin)
     date_ending = datetime(1980, 1, 1) + timedelta(days=ending + 1, seconds=-1)
@@ -225,13 +241,15 @@ if __name__ == '__main__':
 
 
     ### parameters
-    multi_channels = True
-    compute_classification = True
+    multi_channels = False
+    compute_classification = False
     training_rate = 0.2 # critical
-    shuffle = True   # to select training data among input data
+    shuffle = True  # to select training data among input data
+    display_means_ = False
     mixture_process_ = 'bayesian'  # bayesian or gaussian
     max_iter_ = 500
-    n_components_ = 2  # critical!!!
+    n_components_ = 3  # critical!!!
+    ask_dfb = False
 
     default_values = {
         # 'dfb_beginning': 13527+233,
@@ -271,21 +289,7 @@ if __name__ == '__main__':
         chan_patterns[channel] = SATELLITE + '_' + channel + PATTERN_SUFFIX
     print(chan_patterns)
 
-    # print('Which latitude do you want (eg: 54.0)?')
-    # input_ = raw_input()
-    # if input_ == '':
-    #     latitude_ = default_values['latitude']
-    # else:
-    #     latitude_ = float(input_)
-    #
-    # print('Which longitude do you want (eg: 126.0)?')
-    # input_ = raw_input()
-    # if input_ == '':
-    #     longitude_ = default_values['longitude']
-    # else:
-    #     longitude_ = float(input_)
-
-    [dfb_beginning, dfb_ending] = get_dfb_tuple()
+    [dfb_beginning, dfb_ending] = get_dfb_tuple(ask_dfb)
 
     fig_number = 0
     channels_content = {}
@@ -297,6 +301,7 @@ if __name__ == '__main__':
     print 'training_rate', training_rate
     print 'n_components', n_components_
     print 'shuffle', shuffle
+    print 'compute classification', compute_classification
 
     time_start = time.time()
 
@@ -333,7 +338,13 @@ if __name__ == '__main__':
     time_start_training = time.time()
     print time_start_training - time_reshape
 
-    if not get_classes:
+    if not compute_classification:
+        lat_ind = 1
+        long_ind = 1
+        data_1d_ = data_array_[:, 1, 1, 0]
+        # visualize_hist(array_1D=data_array_[:, 1, 1, 0], precision=30)
+        # visualize_hist(array_1D=data_array_[:, 1, 1, 1], precision=30)
+        del data_1d_
         visualize_input(array_3D=data_array_, bbox=bbox_)
     else:
 
@@ -346,9 +357,12 @@ if __name__ == '__main__':
             data_3D_training_ = data_array_copy[0:len_training]
         else:
             data_3D_training_ = data_array_[0:len_training]
+        # following to delete
+        data_3D_training_ = data_3D_training_[:,:,:,1:]
+        data_array_ = data_array_[:, :, :, 1:]
         basis_model = get_basis_model(mixture_process=mixture_process_)
         models = get_trained_models(training_array=data_3D_training_, model=basis_model,
-                                    shape=(nb_latitudes_, nb_longitudes_), display_means=False)
+                                    shape=(nb_latitudes_, nb_longitudes_), display_means=display_means_)
         time_stop_training = time.time()
         print 'training:'
         print time_stop_training-time_start_training
