@@ -1,0 +1,5 @@
+*.json
+*.txt
+draft.py
+testing_nclib2.py
+*.pyc
