@@ -11,31 +11,48 @@ from pyorbital.astronomy import cos_zen
 cano_checked = 0
 cano_unchecked = 0
 
+### user input ###
+def get_selected_channels(ask_channels=True):
+    channels = []
+    if ask_channels:
+        print 'Do you want all the channels? (1/0) \n'
+        if raw_input() == '1':
+            channels = CHANNELS
+        else:
+            for chan in CHANNELS:
+                print 'Do you want ', chan, '? (1/0) \n'
+                if raw_input() == '1':
+                    channels.append(chan)
+    else:
+        channels = CHANNELS
+    return channels
 
-def get_gaussian_init_means(n_components):
-    if n_components == 2:
-        return {
-            'VIS064_2000': [-1, 0.5],
-            'VIS160_2000': [-1, 0.5],
-            'IR390_2000': [-1, 250],
-            'IR124_2000': [-1, 250]
-        }
 
-    elif n_components == 3:
-        return {
-            'VIS064_2000': [[-1.], [0.3], [0.6]],
-            'VIS160_2000': [[-1.], [0.3], [0.6]],
-            'IR390_2000': [[-1.], [220.], [260.]],
-            'IR124_2000': [[-1.], [220.], [260.]]
-        }
+def get_dfb_tuple(ask_dfb=True):
+    print 'Which day from beginning (eg: 13527)?'
+    if ask_dfb:
+        dfb_input = raw_input()
+        if dfb_input == '':
+            begin = default_values['dfb_beginning']
+        else:
+            begin = int(dfb_input)
+    else:
+        begin = default_values['dfb_beginning']
+    ending = begin + default_values['nb_days'] - 1
+    date_beginning = datetime(1980, 1, 1) + timedelta(days=begin)
+    date_ending = datetime(1980, 1, 1) + timedelta(days=ending + 1, seconds=-1)
+    print 'Dates from ', str(date_beginning), ' till ', str(date_ending)
+    return [begin, ending]
 
-    elif n_components == 4:
-        return {
-            'VIS064_2000': [[-1.], [0.], [0.3], [0.6]],
-            'VIS160_2000': [[-1.], [0.], [0.3], [0.6]],
-            'IR390_2000': [[-1.], [0.], [220.], [260.]],
-            'IR124_2000': [[-1.], [0.], [220.], [260.]]
-        }
+
+### predictors preparation ###
+def normalize_array_3d(array_3d, normalize=False):
+    array_3d[array_3d>350] = -1
+    array_3d[array_3d<0] = -1
+    if normalize:
+        return np.dot(array_3d, 1.0/np.max(array_3d))
+    else:
+        return array_3d
 
 
 def filter_nan_training_set(array, multi_channel_bool):
@@ -53,46 +70,104 @@ def filter_nan_training_set(array, multi_channel_bool):
     return filtered
 
 
-def update_cano_evaluation(gmm):
-    variances = [gmm.covariances_[k][0][0] for k in range(len(gmm.covariances_))]
-    ratios = []
-    for j in range(len(gmm.means_)):
-        for i in range(len(gmm.means_)):
-            if i != j:
-                ratio = np.abs((gmm.means_[i][0] - gmm.means_[j][0])/np.sqrt(variances[j]))
-                ratios.append(ratio)
-    bool_ratio = False
-    for ratio in ratios:
-        if ratio <= 1:
-            bool_ratio = True
-    if bool_ratio:
-        global cano_unchecked
-        cano_unchecked += 1
+def get_channels_content(patterns, latitudes, longitudes, dfb_beginning, dfb_ending):
+    content = {}
+    for chan in patterns:
+        dataset = DataSet.read(dirs=DIRS,
+                               extent={
+                                   'latitude': latitudes,
+                                   'longitude': longitudes,
+                                   'dfb': {'start': dfb_beginning, 'end': dfb_ending, "end_inclusive": True,
+                                           "start_inclusive": True, },
+                               },
+                               file_pattern=chan_patterns[chan],
+                               variable_name=chan, fill_value=np.nan, interpolation='N', max_processes=0,
+                               )
+
+        data = dataset['data']
+        concat_data = []
+        for day in data:
+            concat_data.extend(day)
+        content[chan] = np.array(concat_data)
+    return content
+
+
+def get_array_3d_cos_zen(shape, first_utc, frequency=10):
+    print 'begin cos'
+    time_cos_start = time.time()
+    array = np.empty(shape)
+    utc = first_utc
+    for slot in range(shape[0]):
+        # print 'time per slot'
+        utc = utc + timedelta(minutes=frequency)
+        for lat_index in range(shape[1]):
+            for lon_index in range(shape[2]):
+                lat = latitudes_[lat_index]
+                lon = longitudes_[lon_index]
+                co = cos_zen(utc, lon, lat)
+                array[slot][lat_index][lon_index] = co
+    print 'time cos:'
+    print time.time() - time_cos_start
+    return array
+
+
+def get_array_transformed_parameters(data_dict, shape, utc, compute_indexes=False):
+    data = np.zeros(shape=shape)
+    for k in range(nb_selected_channels):
+        chan = selected_channels[k]
+        data[:, :, :, k] = normalize_array_3d(data_dict[chan][:, :, :], normalize=normalize_)
+    if compute_indexes:
+        # IR124_2000: 0, IR390_2000: 1, VIS160_2000: 2,  VIS064_2000:3
+        (a, b, c, d) = shape
+        mu = get_array_3d_cos_zen((a,b,c), utc, frequency=frequency_himawari)
+        # bound = np.full((a,b,c),0.2)
+        # print mu
+        treshold=0.1
+        aux_ndsi = normalize_array_3d(data[:, :, :,2], normalize_) + normalize_array_3d(data[:, :, :, 3], normalize_)
+        aux_ndsi[aux_ndsi < 0.05] = 0.05
+        nsdi = (normalize_array_3d(data[:, :, :, 3], normalize_) - normalize_array_3d(data[:, :, :, 2], normalize_)) / aux_ndsi
+        cli_num=normalize_array_3d(data[:, :, :, 1], normalize_) - normalize_array_3d(data[:, :, :, 0], normalize_)
+        cli = cli_num / mu
+        cli[mu < treshold] = 0
+        new_data_array = np.zeros(shape=(a, b, c, 2))
+        new_data_array[:, :, :, 0] = nsdi
+        new_data_array[:, :, :, 1] = cli
+        where_are_nan = np.isnan(new_data_array) + np.isinf(new_data_array)
+        new_data_array[where_are_nan] = 2
+        # print np.max(new_data_array)
+        return new_data_array
     else:
-        global cano_checked
-        cano_checked += 1
+        data = np.nan_to_num(data) * ~np.isnan(data)
+        return data
 
 
-def get_classes(nb_slots, nb_latitudes, nb_longitudes, data_array, multi_models = True, model_2D = list(), single_model=None,verbose=True):
-    shape_predicted_data = (nb_slots, nb_latitudes, nb_longitudes)
-    data_array_predicted = np.empty(shape=shape_predicted_data)
-    for latitude_ind in range(nb_latitudes):
-        for longitude_ind in range(nb_longitudes):
-            if multi_models:
-                model = model_2D[latitude_ind][longitude_ind]
-            else:
-                model = single_model
-            data_to_predict = data_array[:, latitude_ind, longitude_ind]
-            try:
-                prediction = model.predict(data_to_predict)
-            except Exception as e:
-                if verbose:
-                    print e
-                prediction = np.full(nb_slots, -1)
-            data_array_predicted[:, latitude_ind, longitude_ind] = prediction
-    return data_array_predicted
+def get_auto_corr_array(x):
+    result = np.correlate(x, x, mode='full')
+    # print result
+    return result[2 + result.size / 2:]
 
 
+def get_autocorr_predictor_array_2d(x):
+    auto_x = get_auto_corr_array(x)
+    return np.max(auto_x[142:146]) / (np.max(auto_x))
+
+
+# unused. relevant??
+def time_smoothing(array_3D_to_smoothen):
+    if smoothing:
+        time_start_smoothing = time.time()
+        shape = np.shape(array_3D_to_smoothen)
+        array = np.empty(shape)
+        for k in range(nb_neighbours_smoothing, shape[0]-nb_neighbours_smoothing):
+            array[k] = np.mean(array_3D_to_smoothen[k-nb_neighbours_smoothing:k+nb_neighbours_smoothing+1])
+        time_stop_smoothing = time.time()
+        print 'time smoothing', str(time_stop_smoothing-time_start_smoothing)
+        return array / (1 + 2 * nb_neighbours_smoothing)
+    else:
+        return array_3D_to_smoothen
+
+
+### build model ###
 def get_basis_model(process):
     if process == 'gaussian':
         means_radiance_ = get_gaussian_init_means(nb_components_)
@@ -125,14 +200,6 @@ def get_basis_model(process):
     return model
 
 
-def get_updated_model(training_array, model):
-    return model.fit(training_array)
-
-
-def evaluate_model_quality(testing_array, model):
-    return model.score(testing_array)
-
-
 def get_trained_models_2d(training_array, model, shape, process, display_means=False, verbose=True):
     if len(shape) == 2:
         (nb_latitudes, nb_longitudes) = shape
@@ -146,7 +213,7 @@ def get_trained_models_2d(training_array, model, shape, process, display_means=F
     return models
 
 
-def get_trained_model(training_sample, model, process, display_means = False, verbose = True):
+def get_trained_model(training_sample, model, process, display_means = False, verbose=True):
     try:
         trained_model = model.fit(training_sample)
         # print evaluate_model_quality(training_sample, gmm)
@@ -168,46 +235,88 @@ def get_trained_model(training_sample, model, process, display_means = False, ve
     return trained_model
 
 
-def get_array_3d_cos_zen(shape, first_utc, frequency=15):
-    print 'begin cos'
-    time_cos_start = time.time()
-    array = np.empty(shape)
-    utc = first_utc
-    for slot in range(shape[0]):
-        # print 'time per slot'
-        utc = utc + timedelta(minutes=frequency)
-        for lat in range(shape[1]):
-            for lon in range(shape[2]):
-                array[slot][lat][lon] = cos_zen(utc, lon, lat)
-    print 'time cos:'
-    print time.time() - time_cos_start
-    return array
+# unused
+def get_gaussian_init_means(n_components):
+    if n_components == 2:
+        return {
+            'VIS064_2000': [-1, 0.5],
+            'VIS160_2000': [-1, 0.5],
+            'IR390_2000': [-1, 250],
+            'IR124_2000': [-1, 250]
+        }
+
+    elif n_components == 3:
+        return {
+            'VIS064_2000': [[-1.], [0.3], [0.6]],
+            'VIS160_2000': [[-1.], [0.3], [0.6]],
+            'IR390_2000': [[-1.], [220.], [260.]],
+            'IR124_2000': [[-1.], [220.], [260.]]
+        }
+
+    elif n_components == 4:
+        return {
+            'VIS064_2000': [[-1.], [0.], [0.3], [0.6]],
+            'VIS160_2000': [[-1.], [0.], [0.3], [0.6]],
+            'IR390_2000': [[-1.], [0.], [220.], [260.]],
+            'IR124_2000': [[-1.], [0.], [220.], [260.]]
+        }
 
 
-def get_array_transformed_parameters(data_dict, shape, compute_indexes=False):
-    data_array = np.zeros(shape=shape)
-    for k in range(nb_selected_channels):
-        chan = selected_channels[k]
-        data_array[:, :, :, k] = data_dict[chan][:, :, :]
-    if compute_indexes:
-        # IR124_2000: 0, IR390_2000: 1, VIS160_2000: 2,  VIS064_2000:3
-        (a, b, c, d) = shape
-        utc = date_beginning
-        mu = get_array_3d_cos_zen((a,b,c), utc)
-        aux = data_array[:, :, :,2] + data_array[:, :, :, 3]
-        aux[aux < 0.05] = 0.05
-        nsdi = (data_array[:, :, :, 3] - data_array[:, :, :, 2]) / aux
-        cli = (data_array[:, :, :, 1] - data_array[:, :, :, 0]) / mu[:, :, :]
-        new_data_array = np.zeros(shape=(a, b, c, 2))
-        new_data_array[:, :, :, 0] = nsdi
-        new_data_array[:, :, :, 1] = cli
-        where_are_nan = np.isnan(new_data_array) + np.isinf(new_data_array)
-        new_data_array[where_are_nan] = 2
-        # print np.max(new_data_array)
-        return new_data_array
-    else:
-        data_array = np.nan_to_num(data_array) * ~np.isnan(data_array)
-        return data_array
+# unused
+def get_updated_model(training_array, model):
+    return model.fit(training_array)
+
+
+### prediction ###
+def get_classes(nb_slots, nb_latitudes, nb_longitudes, data_array, multi_models = True, model_2D = list(), single_model=None,verbose=True):
+    shape_predicted_data = (nb_slots, nb_latitudes, nb_longitudes)
+    data_array_predicted = np.empty(shape=shape_predicted_data)
+    for latitude_ind in range(nb_latitudes):
+        for longitude_ind in range(nb_longitudes):
+            if multi_models:
+                model = model_2D[latitude_ind][longitude_ind]
+            else:
+                model = single_model
+            data_to_predict = data_array[:, latitude_ind, longitude_ind]
+            try:
+                prediction = model.predict(data_to_predict)
+            except Exception as e:
+                if verbose:
+                    print e
+                prediction = np.full(nb_slots, -1)
+            data_array_predicted[:, latitude_ind, longitude_ind] = prediction
+    return data_array_predicted
+
+
+### various visualizations
+def output_filters(array):
+    lat_ind = 1
+    long_ind = 1
+    data_1d_1 = array[:, 5, 8, 1]
+    data_1d_12 = array[:, 0, 0, 1]
+    # visualize_hist(array_1D=data_array_[:, 1, 1, 0], precision=30)
+    # visualize_hist(array_1D=data_array_[:, 1, 1, 1], precision=30)
+    visualize_input(data_1d_1, display_now=False, title='Input')
+    auto_x = np.abs(get_auto_corr_array(data_1d_1))
+    print np.max(auto_x[142:146])/(np.max(auto_x))
+    visualize_input(auto_x, display_now=False, title='Auto-correlation')
+
+    visualize_input(data_1d_12, display_now=False, title='Input 12')
+    auto_x_12 = np.abs(get_auto_corr_array(data_1d_12))
+    print np.max(auto_x_12[142:146])/(np.max(auto_x_12))
+    visualize_input(auto_x_12, display_now=True, title='Auto-correlation 12')
+    # visualize_input(np.diff(data_1d), display_now=False, title='Derivative')
+    # n = len(data_1d)
+    # fft = np.fft.fft(data_1d)
+    # frequencies = np.fft.fftfreq(n, d=1)
+    # visualize_input(x_axis=frequencies, y_axis=np.abs(fft), display_now=True, title='Spectrum')
+    # cut = fft.copy()
+    # cut[abs(frequencies) < frequency_low_cut] = 0
+    # cut[abs(frequencies) > frequency_high_cut] = 0
+    # y = np.fft.ifft(cut)
+    # visualize_input(y_axis=y, display_now=False, title='Filtered')
+    # visualize_input(np.diff(y), display_now=True, title='Derivative of the filtered')
+    # visualize_map_time(array_3d=array, bbox=bbox_)
 
 
 def visualize_map_time(array_3d, bbox):
@@ -265,115 +374,51 @@ def visualize_hist(array_1D, title='Histogram', precision=50):
     plt.show()
 
 
-def get_selected_channels(ask_channels=True):
-    channels = []
-    if ask_channels:
-        print 'Do you want all the channels? (1/0) \n'
-        if raw_input() == '1':
-            channels = CHANNELS
-        else:
-            for chan in CHANNELS:
-                print 'Do you want ', chan, '? (1/0) \n'
-                if raw_input() == '1':
-                    channels.append(chan)
-    else:
-        channels = CHANNELS
-    return channels
+### unused functions to evaluate models
+def evaluate_model_quality(testing_array, model):
+    return model.score(testing_array)
 
 
-def get_dfb_tuple(ask_dfb=True):
-    print 'Which day from beginning (eg: 13527)?'
-    if ask_dfb:
-        dfb_input = raw_input()
-        if dfb_input == '':
-            begin = default_values['dfb_beginning']
-        else:
-            begin = int(dfb_input)
+def update_cano_evaluation(gmm):
+    variances = [gmm.covariances_[k][0][0] for k in range(len(gmm.covariances_))]
+    ratios = []
+    for j in range(len(gmm.means_)):
+        for i in range(len(gmm.means_)):
+            if i != j:
+                ratio = np.abs((gmm.means_[i][0] - gmm.means_[j][0])/np.sqrt(variances[j]))
+                ratios.append(ratio)
+    bool_ratio = False
+    for ratio in ratios:
+        if ratio <= 1:
+            bool_ratio = True
+    if bool_ratio:
+        global cano_unchecked
+        cano_unchecked += 1
     else:
-        begin = default_values['dfb_beginning']
-    ending = begin + default_values['nb_days'] - 1
-    date_beginning = datetime(1980, 1, 1) + timedelta(days=begin)
-    date_ending = datetime(1980, 1, 1) + timedelta(days=ending + 1, seconds=-1)
-    print 'Dates from ', str(date_beginning), ' till ', str(date_ending)
-    return [begin, ending]
+        global cano_checked
+        cano_checked += 1
 
 
 def reject_model():
     return ''
 
 
-# only relevant if solar angle already taken into account
-def time_smoothing(array_3D_to_smoothen):
-    if smoothing:
-        time_start_smoothing = time.time()
-        shape = np.shape(array_3D_to_smoothen)
-        array = np.empty(shape)
-        for k in range(nb_neighbours_smoothing, shape[0]-nb_neighbours_smoothing):
-            array[k] = np.mean(array_3D_to_smoothen[k-nb_neighbours_smoothing:k+nb_neighbours_smoothing+1])
-        time_stop_smoothing = time.time()
-        print 'time smoothing', str(time_stop_smoothing-time_start_smoothing)
-        return array / (1 + 2 * nb_neighbours_smoothing)
-    else:
-        return array_3D_to_smoothen
-
-
-def get_channels_content():
-    content = {}
-    for chan in chan_patterns:
-        dataset = DataSet.read(dirs=DIRS,
-                               extent={
-                                   'latitude': latitudes,
-                                   'longitude': longitudes,
-                                   'dfb': {'start': dfb_beginning, 'end': dfb_ending, "end_inclusive": True,
-                                           "start_inclusive": True, },
-                               },
-                               file_pattern=chan_patterns[chan],
-                               variable_name=chan, fill_value=np.nan, interpolation='N', max_processes=0,
-                               )
-
-        data_array = dataset['data']
-        concat_data = []
-        for day in data_array:
-            concat_data.extend(day)
-        content[chan] = np.array(concat_data)
-    return content
-
-
-def output_filters(array):
-    lat_ind = 1
-    long_ind = 1
-    data_1d = array[:, 1, 1, 1]
-    # visualize_hist(array_1D=data_array_[:, 1, 1, 0], precision=30)
-    # visualize_hist(array_1D=data_array_[:, 1, 1, 1], precision=30)
-    visualize_input(data_1d, display_now=False, title='Input')
-    visualize_input(np.diff(data_1d), display_now=False, title='Derivative')
-    n = len(data_1d)
-    fft = np.fft.fft(data_1d)
-    frequencies = np.fft.fftfreq(n, d=1)
-    visualize_input(x_axis=frequencies, y_axis=np.abs(fft), display_now=False, title='Spectrum')
-    cut = fft.copy()
-    cut[abs(frequencies) < frequency_low_cut] = 0
-    cut[abs(frequencies) > frequency_high_cut] = 0
-    y = np.fft.ifft(cut)
-    visualize_input(y_axis=y, display_now=False, title='Filtered')
-    visualize_input(np.diff(y), display_now=True, title='Derivative of the filtered')
-    # visualize_map_time(array_3d=array, bbox=bbox_)
-
-
 if __name__ == '__main__':
     DIRS = ['/data/model_data_himawari/sat_data_procseg']
     CHANNELS = ['IR124_2000', 'IR390_2000', 'VIS160_2000',  'VIS064_2000']
     SATELLITE = 'H08LATLON'
+    frequency_himawari = 10
     PATTERN_SUFFIX = '__TMON_{YYYY}_{mm}__SDEG05_r{SDEG5_LATITUDE}_c{SDEG5_LONGITUDE}.nc'
     RESOLUTION = 2. / 60.  # approximation of real resolution of input data.  Currently coupled with N-interpolation
     PLOT_COLORS = ['r--', 'bs', 'g^', 'os']  # not used
 
 
     ### parameters
-    multi_channels = False
+    multi_channels = True
     multi_models_ = False
-    compute_classification = True
+    compute_classification = False
     on_point = False
+    normalize_ = False
     training_rate = 0.1 # critical
     shuffle = True  # to select training data among input data
     display_means_ = False
@@ -389,30 +434,30 @@ if __name__ == '__main__':
     frequency_high_cut = 0.2
 
     default_values = {
-        # 'dfb_beginning': 13527+233,
-        'dfb_beginning': 13527,
+        'dfb_beginning': 13522,
+        # 'dfb_beginning': 13527,
         'nb_days': 3,
     }
 
     selected_channels = []
 
-    latitude_beginning = 35.0
-    latitude_end = 55.0
+    latitude_beginning = 45.0   # salt lake mongolia  45.
+    latitude_end = 46.0
     # latitude_beginning = 35.0
     # latitude_end = 36.0
     nb_latitudes_ = int((latitude_end - latitude_beginning) / RESOLUTION) + 1
-    latitudes = np.linspace(latitude_beginning, latitude_end, nb_latitudes_, endpoint=False)
+    latitudes_ = np.linspace(latitude_beginning, latitude_end, nb_latitudes_, endpoint=False)
 
-    # longitude_beginning = 100.0
-    # longitude_end = 105.0
-    longitude_beginning = 120.0
-    longitude_end = 130.0
+    # longitude_beginning = 116.0
+    # longitude_end = 116.5
+    longitude_beginning = 125.0
+    longitude_end = 126.0
     nb_longitudes_ = int((longitude_end - longitude_beginning) / RESOLUTION) + 1
-    longitudes = np.linspace(longitude_beginning, longitude_end, nb_longitudes_, endpoint=False)
+    longitudes_ = np.linspace(longitude_beginning, longitude_end, nb_longitudes_, endpoint=False)
 
     Bbox = namedtuple("Bbox", ("xmin", "ymin", "xmax", "ymax"))
-    bbox_ = Bbox(longitudes[0], latitudes[0],longitudes[-1],
-                latitudes[-1])
+    bbox_ = Bbox(longitudes_[0], latitudes_[0],longitudes_[-1],
+                latitudes_[-1])
 
     if multi_channels:
         selected_channels = CHANNELS
@@ -426,22 +471,25 @@ if __name__ == '__main__':
         chan_patterns[channel] = SATELLITE + '_' + channel + PATTERN_SUFFIX
     print(chan_patterns)
 
-    [dfb_beginning, dfb_ending] = get_dfb_tuple(ask_dfb)
-    date_beginning = datetime(1980, 1, 1) + timedelta(days=dfb_beginning)
+    [dfb_beginning_, dfb_ending_] = get_dfb_tuple(ask_dfb)
+    date_beginning = datetime(1980, 1, 1) + timedelta(days=dfb_beginning_)
 
-    fig_number = 0
     time_start = time.time()
-
-    channels_content = get_channels_content()
-    nb_slots_ = len(channels_content[channels_content.keys()[0]])
+    channels_content = get_channels_content(
+        patterns=chan_patterns,
+        latitudes=latitudes_,
+        longitudes=longitudes_,
+        dfb_beginning=dfb_beginning_,
+        dfb_ending=dfb_ending_
+    )
+    nb_slots_ = len(channels_content[selected_channels[0]])
 
     time_reshape = time.time()
     print 'time reading'
     print time_reshape - time_start
 
     shape_raw_data = (nb_slots_, nb_latitudes_, nb_longitudes_, nb_selected_channels)
-
-    data_array = get_array_transformed_parameters(data_dict=channels_content, shape=shape_raw_data,
+    data_array = get_array_transformed_parameters(data_dict=channels_content, shape=shape_raw_data, utc=date_beginning,
                                                   compute_indexes=multi_channels)
 
     print 'time reshaping'
