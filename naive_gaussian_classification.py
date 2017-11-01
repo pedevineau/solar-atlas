@@ -48,15 +48,16 @@ def get_dfb_tuple(dfb_beginning, nb_days, ask_dfb=True):
 
 
 ### predictors preparation ###
-def mask_and_normalize(array, normalize=False):
+def mask_array(array):
     maskup = array > 350
     maskdown = array < 0
     masknan = np.isnan(array) | np.isinf(array)
     mask = maskup | maskdown | masknan
-    if normalize:
-        array = np.dot(array, 1.0 / np.max(array))
     return array, mask
 
+
+def normalize_array(array, mask):
+    return np.dot(array, 1.0 / np.max(array[~mask]))   # max of data which is not masked...
 
 # the following function has turned useless thanks too mask_and_normalize
 def filter_nan_training_set(array, multi_channel_bool):
@@ -107,13 +108,15 @@ def compute_parameters(data_dict, times, latitudes, longitudes, compute_indexes=
     nb_longitudes = len(longitudes)
     shape_ = (nb_slots, nb_latitudes, nb_longitudes, len(channels))
     data = np.empty(shape=shape_)
-    mask = np.zeros((nb_slots, nb_latitudes, nb_longitudes)) == 0
+    mask = np.zeros((nb_slots, nb_latitudes, nb_longitudes)) == 1
     for k in range(len(channels)):
         chan = channels[k]
-        data[:, :, :, k], maskk = mask_and_normalize(data_dict[chan][:, :, :], normalize)  # filter nan and aberrant
+        data[:, :, :, k], maskk = mask_array(data_dict[chan][:, :, :])  # filter nan and aberrant
+        if normalize:
+            data[:, :, :, k] = normalize_array(data[:, :, :, k], maskk)
         mask = mask | maskk
     if not compute_indexes:
-        data[mask] = -10
+        data[mask] = -1
         return data
     else:
         nb_features = 2
@@ -123,16 +126,16 @@ def compute_parameters(data_dict, times, latitudes, longitudes, compute_indexes=
         aux_ndsi = data[:, :, :, 2] + data[:, :, :, 3]
         aux_ndsi[aux_ndsi < 0.05] = 0.05          # for numerical stability
         nsdi = (data[:, :, :, 3] - data[:, :, :, 2]) / aux_ndsi
-        cli = data[:, :, :, 1] - data[:, :, :, 0] / mu
+        cli = (data[:, :, :, 1] - data[:, :, :, 0]) / mu
         mask = (mu < treshold_mu) | mask
-        cli[mask] = -10   # night and errors represented by (-10,-10)
-        nsdi[mask] = -10
+        nsdi = normalize_array(nsdi, mask)    # normalization take into account the mask
+        cli = normalize_array(cli, mask)
+        cli[mask] = -1   # night and errors represented by (-1,-1)
+        nsdi[mask] = -1
         new_data = np.zeros(shape=(nb_slots, nb_latitudes, nb_longitudes, nb_features))
         new_data[:, :, :, 0] = nsdi
         new_data[:, :, :, 1] = cli
-        del nsdi, cli
         return new_data
-
 
 
 # unused. relevant??
@@ -155,7 +158,7 @@ def get_basis_model(process):
     if process == 'gaussian':
         if multi_channels:
             means_init_ = [
-                [-10, -10],
+                [-1, -1],
                 [-0.1,  -0.1],
                 [-0.1, 0.1],
                 [0.1,  0.1]
@@ -192,6 +195,8 @@ def get_basis_model(process):
             n_clusters=nb_components_,
             max_iter=max_iter_
         )
+    else:
+        print 'process name error'
     return model
 
 
@@ -306,9 +311,9 @@ def get_classes(nb_slots, nb_latitudes, nb_longitudes, data_array, process, mult
 def output_filters(array):
     lat_ind = 1
     long_ind = 1
-    # data_1d_1 = array[:, 0, 0, 1]
+    data_1d_1 = array[:, 0, 0, 1]
     # data_1d_12 = array[:, 5, 8, 1]
-    # visualize_hist(array_1D=data_1d_1, precision=30)
+    visualize_hist(array_1D=data_1d_1, precision=30)
     # visualize_hist(array_1D=data_array_[:, 1, 1, 1], precision=30)
     # visualize_input(data_1d_1, display_now=True, title='Input')
     # auto_x = np.abs(get_auto_corr_array(data_1d_1))
@@ -330,7 +335,7 @@ def output_filters(array):
     # y = np.fft.ifft(cut)
     # visualize_input(y_axis=y, display_now=False, title='Filtered')
     # visualize_input(np.diff(y), display_now=True, title='Derivative of the filtered')
-    visualize_map_time(array_3d=array, bbox=bbox_)
+    # visualize_map_time(array_3d=array, bbox=bbox_)
 
 
 def visualize_map_time(array_3d, bbox):
@@ -395,9 +400,9 @@ def visualize_hist(array_1D, title='Histogram', precision=50):
     plt.title(title)
     series = Series(array_1D)
     series.hist(bins=precision)
-    axes = plt.gca()
-    axes.set_xlim([-0.4, 0.4])
-    axes.set_ylim([0, 500])
+    # axes = plt.gca()
+    # axes.set_xlim([-0.4, 0.4])
+    # axes.set_ylim([0, 500])
     plt.show()
 
 
@@ -453,7 +458,8 @@ def get_features(channels, latitudes, longitudes, dfb_beginning, dfb_ending, com
                               times,
                               latitudes,
                               longitudes,
-                              compute_indexes)
+                              compute_indexes,
+                              normalize=normalize_)
 
 
 def get_latitudes_longitudes(lat_start, lat_end, lon_start, lon_end, resolution=2.0/60):
@@ -485,13 +491,13 @@ if __name__ == '__main__':
     compute_classification = True
     auto_corr = True and nb_days_ >= 5
     on_point = False
-    normalize_ = False
+    normalize_ = True
     training_rate = 0.1 # critical
     shuffle = True  # to select training data among input data
     display_means_ = True
-    process_ = 'kmeans'  # bayesian, gaussian, DBSCAN or kmeans
+    process_ = 'bayesian'  # bayesian, gaussian, DBSCAN or kmeans
     max_iter_ = 500
-    nb_components_ = 6  # critical!!!   # 4 recommended for gaussian: normal, cloud, snow, no data
+    nb_components_ = 4  # critical!!!   # 4 recommended for gaussian: normal, cloud, snow, no data
     ask_dfb_ = False
     ask_channels = False
     verbose_ = True  # print errors during training or prediction
@@ -555,6 +561,7 @@ if __name__ == '__main__':
             # data_array = data_array[:, :, :, 1:]
         ### ###
         basis_model = get_basis_model(process=process_)
+
         # if process_ == 'DBSCAN':
         #     single_model_ = basis_model
         # else:
@@ -565,6 +572,7 @@ if __name__ == '__main__':
             data_array_copy = data_array.copy()
             np.random.shuffle(data_array_copy)
             data_3D_training_ = data_array_copy[0:len_training]
+
         else:
             data_3D_training_ = data_array[0:len_training]
         if multi_models_:
@@ -588,7 +596,6 @@ if __name__ == '__main__':
                 display_means=display_means_,
                 verbose=verbose_
             )
-
             # from matplotlib.pyplot import plot, show
             # print np.shape(merged_data_training)
             # absc=[]
