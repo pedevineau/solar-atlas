@@ -59,6 +59,7 @@ def mask_array(array):
 def normalize_array(array, mask):
     return np.dot(array, 1.0 / np.max(array[~mask]))   # max of data which is not masked...
 
+
 # the following function has turned useless thanks too mask_and_normalize
 def filter_nan_training_set(array, multi_channel_bool):
     filtered = []
@@ -75,10 +76,10 @@ def filter_nan_training_set(array, multi_channel_bool):
     return filtered
 
 
-def get_channels_content(patterns, latitudes, longitudes, dfb_beginning, dfb_ending):
+def get_channels_content(dirs, patterns, latitudes, longitudes, dfb_beginning, dfb_ending):
     content = {}
     for chan in patterns:
-        dataset = DataSet.read(dirs=DIRS,
+        dataset = DataSet.read(dirs=dirs,
                                extent={
                                    'latitude': latitudes,
                                    'longitude': longitudes,
@@ -122,7 +123,7 @@ def compute_parameters(data_dict, times, latitudes, longitudes, compute_indexes=
         nb_features = 2
         # IR124_2000: 0, IR390_2000: 1, VIS160_2000: 2,  VIS064_2000:3
         mu = get_array_3d_cos_zen(times, latitudes, longitudes)
-        treshold_mu = 0.1
+        treshold_mu = 0.15
         aux_ndsi = data[:, :, :, 2] + data[:, :, :, 3]
         aux_ndsi[aux_ndsi < 0.05] = 0.05          # for numerical stability
         nsdi = (data[:, :, :, 3] - data[:, :, :, 2]) / aux_ndsi
@@ -159,9 +160,9 @@ def get_basis_model(process):
         if multi_channels:
             means_init_ = [
                 [-1, -1],
-                [-0.1,  -0.1],
-                [-0.1, 0.1],
-                [0.1,  0.1]
+                [0.2,  0.2],
+                [0.2, 0.8],
+                [0.8,  0.2]
             ]
         else:
             means_radiance_ = get_gaussian_init_means(multi_channels, nb_components_)
@@ -214,7 +215,7 @@ def get_trained_models_2d(training_array, model, shape, process, display_means=F
     return models
 
 
-def get_trained_model(training_sample, model, process, display_means = False, verbose=True):
+def get_trained_model(training_sample, model, process, display_means=False, verbose=True):
     try:
         trained_model = model.fit(training_sample)
         # print evaluate_model_quality(training_sample, gmm)
@@ -274,7 +275,7 @@ def get_updated_model(training_array, model):
 
 ### prediction ###
 def get_classes(nb_slots, nb_latitudes, nb_longitudes, data_array, process, multi_models=True, model_2D=list(),
-                single_model=None, verbose=True):
+                single_model=None, verbose=True, display_counts=True):
     shape_predicted_data = (nb_slots, nb_latitudes, nb_longitudes)
     if False and process == 'DBSCAN':
         print 'resh b'
@@ -304,6 +305,9 @@ def get_classes(nb_slots, nb_latitudes, nb_longitudes, data_array, process, mult
                         print e
                     prediction = np.full(nb_slots, -1)
                 data_array_predicted[:, latitude_ind, longitude_ind] = prediction
+        if display_counts:
+            pre = np.asarray(data_array_predicted,dtype=int)
+            print np.bincount(pre.flatten()) / (1.*len(pre))
         return data_array_predicted
 
 
@@ -435,15 +439,19 @@ def reject_model():
     return ''
 
 
-def get_features(channels, latitudes, longitudes, dfb_beginning, dfb_ending, compute_indexes,
+def get_features(latitudes, longitudes, dfb_beginning, dfb_ending, compute_indexes,
+                 channels=['IR124_2000', 'IR390_2000', 'VIS160_2000',  'VIS064_2000'],
+                 dirs=['/data/model_data_himawari/sat_data_procseg'],
                  satellite='H08LATLON',
                  pattern_suffix='__TMON_{YYYY}_{mm}__SDEG05_r{SDEG5_LATITUDE}_c{SDEG5_LONGITUDE}.nc',
-                 satellite_frequency=10):
+                 satellite_frequency=10,
+                 normalize=True):
     chan_patterns = {}
     for channel in channels:
         chan_patterns[channel] = satellite + '_' + channel + pattern_suffix
     print(chan_patterns)
     data_dict = get_channels_content(
+        dirs,
         chan_patterns,
         latitudes,
         longitudes,
@@ -452,14 +460,14 @@ def get_features(channels, latitudes, longitudes, dfb_beginning, dfb_ending, com
     )
     len_times = (1+dfb_ending-dfb_beginning)*60*24/satellite_frequency
     origin_of_time = datetime(1980, 1, 1)
-    date_beginning = origin_of_time + timedelta(days=dfb_beginning_)
+    date_beginning = origin_of_time + timedelta(days=dfb_beginning)
     times = [date_beginning + timedelta(minutes=k*satellite_frequency) for k in range(len_times)]
     return compute_parameters(data_dict,
                               times,
                               latitudes,
                               longitudes,
                               compute_indexes,
-                              normalize=normalize_)
+                              normalize)
 
 
 def get_latitudes_longitudes(lat_start, lat_end, lon_start, lon_end, resolution=2.0/60):
@@ -484,7 +492,7 @@ if __name__ == '__main__':
 
     dfb_beginning_ = 13522
         # 'dfb_beginning': 13527,
-    nb_days_ = 5
+    nb_days_ = 3
 
     multi_channels = True
     multi_models_ = False
@@ -495,9 +503,9 @@ if __name__ == '__main__':
     training_rate = 0.1 # critical
     shuffle = True  # to select training data among input data
     display_means_ = True
-    process_ = 'bayesian'  # bayesian, gaussian, DBSCAN or kmeans
+    process_ = 'kmeans'  # bayesian (not good), gaussian, DBSCAN or kmeans
     max_iter_ = 500
-    nb_components_ = 4  # critical!!!   # 4 recommended for gaussian: normal, cloud, snow, no data
+    nb_components_ = 6  # critical!!!   # 4 recommended for gaussian: normal, cloud, snow, no data
     ask_dfb_ = False
     ask_channels = False
     verbose_ = True  # print errors during training or prediction
@@ -540,11 +548,12 @@ if __name__ == '__main__':
         longitudes=longitudes_,
         dfb_beginning=dfb_beginning_,
         dfb_ending=dfb_ending_,
-        compute_indexes=multi_channels
+        compute_indexes=multi_channels,
+        normalize=normalize_
     )
     nb_slots_ = len(data_array)
 
-    print 'time reading and reshaping'
+    print 'time reading and getting features'
     time_start_training = time.time()
     print time_start_training - time_start
 
@@ -560,7 +569,7 @@ if __name__ == '__main__':
             print ''
             # data_array = data_array[:, :, :, 1:]
         ### ###
-        basis_model = get_basis_model(process=process_)
+        model_basis = get_basis_model(process=process_)
 
         # if process_ == 'DBSCAN':
         #     single_model_ = basis_model
@@ -578,7 +587,7 @@ if __name__ == '__main__':
         if multi_models_:
             models = get_trained_models_2d(
                 training_array=data_3D_training_,
-                model=basis_model,
+                model=model_basis,
                 shape=(len(latitudes_), len(longitudes_)),
                 process=process_,
                 display_means=display_means_,
@@ -591,11 +600,12 @@ if __name__ == '__main__':
             merged_data_training = data_3D_training_.reshape(nb_ech_*nb_latitudes_*nb_longitudes_, nb_features_)
             single_model_ = get_trained_model(
                 training_sample=merged_data_training,
-                model=basis_model,
+                model=model_basis,
                 process=process_,
                 display_means=display_means_,
                 verbose=verbose_
             )
+            print single_model_
             # from matplotlib.pyplot import plot, show
             # print np.shape(merged_data_training)
             # absc=[]
@@ -610,9 +620,9 @@ if __name__ == '__main__':
             # not really supposed to happen
             basis_lat = 1
             basis_lon = 1
-            single_model = get_trained_model(
+            single_model_ = get_trained_model(
                 training_sample=data_3D_training_[:, basis_lat, basis_lon],
-                model=basis_model,
+                model=model_basis,
                 process=process_,
                 display_means=display_means_,
                 verbose=verbose_
