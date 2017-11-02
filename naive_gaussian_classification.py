@@ -127,7 +127,7 @@ def compute_parameters(data_dict, channels, times, latitudes, longitudes, comput
         aux_ndsi = data[:, :, :, 2] + data[:, :, :, 3]
         aux_ndsi[aux_ndsi < 0.05] = 0.05          # for numerical stability
         nsdi = (data[:, :, :, 3] - data[:, :, :, 2]) / aux_ndsi
-        cli = (data[:, :, :, 1] - data[:, :, :, 0]) # / mu
+        cli = (data[:, :, :, 1] - data[:, :, :, 0]) / mu
         mask = (mu < treshold_mu) | mask
         nsdi = normalize_array(nsdi, mask)    # normalization take into account the mask
         cli = normalize_array(cli, mask)
