@@ -102,8 +102,7 @@ def get_array_3d_cos_zen(times, latitudes, longitudes):
     return sunpos.evaluate(times, latitudes, longitudes, ndim=2, n_cpus=2).cosz
 
 
-def compute_parameters(data_dict, times, latitudes, longitudes, compute_indexes=False, normalize=True):
-    channels = data_dict.keys()
+def compute_parameters(data_dict, channels, times, latitudes, longitudes, compute_indexes=False, normalize=True):
     nb_slots = len(data_dict[channels[0]])
     nb_latitudes = len(latitudes)
     nb_longitudes = len(longitudes)
@@ -116,6 +115,7 @@ def compute_parameters(data_dict, times, latitudes, longitudes, compute_indexes=
         if normalize:
             data[:, :, :, k] = normalize_array(data[:, :, :, k], maskk)
         mask = mask | maskk
+        print data[25,0,0]   #to check the order of chammels...
     if not compute_indexes:
         data[mask] = -1
         return data
@@ -123,16 +123,16 @@ def compute_parameters(data_dict, times, latitudes, longitudes, compute_indexes=
         nb_features = 2
         # IR124_2000: 0, IR390_2000: 1, VIS160_2000: 2,  VIS064_2000:3
         mu = get_array_3d_cos_zen(times, latitudes, longitudes)
-        treshold_mu = 0.15
+        treshold_mu = 0.2
         aux_ndsi = data[:, :, :, 2] + data[:, :, :, 3]
         aux_ndsi[aux_ndsi < 0.05] = 0.05          # for numerical stability
         nsdi = (data[:, :, :, 3] - data[:, :, :, 2]) / aux_ndsi
-        cli = (data[:, :, :, 1] - data[:, :, :, 0]) / mu
+        cli = (data[:, :, :, 1] - data[:, :, :, 0]) # / mu
         mask = (mu < treshold_mu) | mask
         nsdi = normalize_array(nsdi, mask)    # normalization take into account the mask
         cli = normalize_array(cli, mask)
-        cli[mask] = -1   # night and errors represented by (-1,-1)
-        nsdi[mask] = -1
+        cli[mask] = 0   # night and errors represented by (-1,-1)
+        nsdi[mask] = 0
         new_data = np.zeros(shape=(nb_slots, nb_latitudes, nb_longitudes, nb_features))
         new_data[:, :, :, 0] = nsdi
         new_data[:, :, :, 1] = cli
@@ -342,20 +342,32 @@ def output_filters(array):
     # visualize_map_time(array_3d=array, bbox=bbox_)
 
 
-def visualize_map_time(array_3d, bbox):
+def get_bbox(latitudes, longitudes):
+    Bbox = namedtuple("Bbox", ("xmin", "ymin", "xmax", "ymax"))
+    return Bbox(longitudes[0], latitudes[0], longitudes[-1], latitudes[-1])
+
+
+def get_bbox(lat_start, lat_end, lon_start, lon_end):
+    Bbox = namedtuple("Bbox", ("xmin", "ymin", "xmax", "ymax"))
+    return Bbox(lon_start, lat_start, lon_end, lat_end)
+
+
+def visualize_map_time(array_3d, bbox, vmin=0, vmax=1, title=None, subplot_titles_list=[]):
     from nclib2.visualization import visualize_map_3d
     interpolation_ = None
     ocean_mask_ = False
     (a,b,c,d) = np.shape(array_3d)
     for var_index in range(d):
-        title_ = 'Input_'+str(var_index)
-        print title_
+        if title is None:
+            title = 'Input_'+str(var_index)
+        print title
         visualize_map_3d(array_3d[:, :, :, var_index],
                          bbox,
                          interpolation=interpolation_,
-                         vmin=0,
-                         vmax=1,
-                         title=title_,
+                         vmin=vmin,
+                         vmax=vmax,
+                         title=title,
+                         subplot_titles_list=subplot_titles_list,
                          ocean_mask=ocean_mask_)
 
 
@@ -463,6 +475,7 @@ def get_features(latitudes, longitudes, dfb_beginning, dfb_ending, compute_index
     date_beginning = origin_of_time + timedelta(days=dfb_beginning)
     times = [date_beginning + timedelta(minutes=k*satellite_frequency) for k in range(len_times)]
     return compute_parameters(data_dict,
+                              channels,
                               times,
                               latitudes,
                               longitudes,
@@ -527,9 +540,7 @@ if __name__ == '__main__':
     longitude_end = 130.0
 
     latitudes_, longitudes_ = get_latitudes_longitudes(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
-
-    Bbox = namedtuple("Bbox", ("xmin", "ymin", "xmax", "ymax"))
-    bbox_ = Bbox(longitudes_[0], latitudes_[0], longitudes_[-1], latitudes_[-1])
+    bbox_ = get_bbox(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
 
     if multi_channels:
         selected_channels = CHANNELS
