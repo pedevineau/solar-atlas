@@ -86,7 +86,7 @@ def compute_parameters(data_dict, channels, times, latitudes, longitudes, comput
         data[mask] = -1
         return data
     else:
-        nb_features = 2
+        nb_features = 4
         # IR124_2000: 0, IR390_2000: 1, VIS160_2000: 2,  VIS064_2000:3
         mu = get_array_3d_cos_zen(times, latitudes, longitudes)
         treshold_mu = 0.2
@@ -102,6 +102,7 @@ def compute_parameters(data_dict, channels, times, latitudes, longitudes, comput
         new_data = zeros(shape=(nb_slots, nb_latitudes, nb_longitudes, nb_features))
         new_data[:, :, :, 0] = nsdi
         new_data[:, :, :, 1] = cli
+        new_data[:,:,:,2:] = get_variability_array_thresholded(array=new_data[:, :, :, 0:2], step=2)  # variability arr
         return new_data
 
 
@@ -113,6 +114,24 @@ def get_array_3d_cos_zen(times, latitudes, longitudes):
 def normalize_array(array, mask):
     from numpy import dot, max
     return dot(array, 1.0 / max(array[~mask]))   # max of data which is not masked...
+
+
+def get_variability_array(array, step=1):
+    from numpy import roll
+    step_left = step / 2
+    step_right = step - step_left
+    return roll(array,step_right,axis=0)-roll(array,-step_left,axis=0)    # WARNING: time-bordered data is meaningless
+
+
+def get_variability_array_thresholded(array, step=1):
+    from numpy import zeros_like
+    arr = get_variability_array(array, step)
+    arr_th = zeros_like(arr)
+    th_1 = 0.02
+    th_2 = 5 * th_1
+    arr_th[abs(arr)>th_1] = 0.5
+    arr_th[abs(arr)>th_2] = 1
+    return arr_th
 
 
 def get_features(latitudes, longitudes, dfb_beginning, dfb_ending, compute_indexes,
