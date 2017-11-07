@@ -52,7 +52,7 @@ def get_automatic_threshold(normalize, nb_days=3):
     scores = []
     coordinates = []
     feature_number = 1
-    perc = 90 # should be an integer between 0 et 100
+    perc = 95 # should be an integer between 0 et 100
     for att in range(number_attempts):
         latind = np.random.randint(0, 30)
         lonind = np.random.randint(0, 30)

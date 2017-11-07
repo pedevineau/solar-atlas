@@ -1,6 +1,5 @@
 import time
 from sklearn import mixture, cluster
-from datetime import datetime, timedelta
 from quick_visualization import *
 from get_data import *
 import numpy as np
@@ -87,7 +86,7 @@ def get_trained_models_2d(training_array, model, shape, process, display_means=F
     return models
 
 
-def get_trained_model(training_sample, model, process, display_means=False, verbose=True):
+def get_trained_model(training_sample, model, process, display_means=True, verbose=True):
     try:
         trained_model = model.fit(training_sample)
         # print evaluate_model_quality(training_sample, gmm)
@@ -179,7 +178,8 @@ def get_classes(nb_slots, nb_latitudes, nb_longitudes, data_array, process, mult
                 data_array_predicted[:, latitude_ind, longitude_ind] = prediction
         if display_counts:
             pre = np.asarray(data_array_predicted,dtype=int)
-            print np.bincount(pre.flatten()) / (1.*len(pre))
+            fl = pre.flatten()
+            print np.bincount(fl) / (1.*len(pre))
         return data_array_predicted
 
 
@@ -214,7 +214,7 @@ def reject_model():
 
 if __name__ == '__main__':
     ### parameters
-    dfb_beginning_ = 13522
+    dfb_beginning_ = 13527
         # 'dfb_beginning': 13527,
     nb_days_ = 3
 
@@ -223,21 +223,24 @@ if __name__ == '__main__':
     compute_classification = True
     auto_corr = True and nb_days_ >= 5
     on_point = False
-    normalize_ = True
-    training_rate = 0.1 # critical
+    normalize_ = False   # should stay False as long as thresholds has not be computed !?
+    training_rate = 0.05 # critical
     shuffle = True  # to select training data among input data
     display_means_ = True
     process_ = 'kmeans'  # bayesian (not good), gaussian, DBSCAN or kmeans
-    max_iter_ = 500
-    nb_components_ = 6  # critical!!!   # 4 recommended for gaussian: normal, cloud, snow, no data
+    max_iter_ = 100
+    # what I get right now with 5 clusters: icy cloud, water cloud, bare lands or water, another cloud cluster, snow
+    nb_components_ = 8  # critical!!!   # 5 recommended for gaussian: normal, cloud, snow, sea, no data
     ask_dfb_ = False
     ask_channels = False
     verbose_ = True  # print errors during training or prediction
 
+
+    nb_first_slots_to_remove = 5
     selected_channels = []
 
-    latitude_beginning = 45.0   # salt lake mongolia  45.
-    latitude_end = 50.0
+    latitude_beginning = 35.0   # salt lake mongolia  45.
+    latitude_end = 45.0
     longitude_beginning = 125.0
     longitude_end = 130.0
 
@@ -281,7 +284,7 @@ if __name__ == '__main__':
         ### to delete ###
         if multi_channels:
             print ''
-            # data_array = data_array[:, :, :, 1:]
+            # data_array = data_array[:, :, :, 0:4]    # test with killing ndsi and cli !!!
         ### ###
         model_basis = get_basis_model(process=process_)
 
@@ -292,9 +295,14 @@ if __name__ == '__main__':
         len_training = int(nb_slots_ * training_rate)
         models = []
         if shuffle:
-            data_array_copy = data_array.copy()
-            np.random.shuffle(data_array_copy)
-            data_3D_training_ = data_array_copy[0:len_training]
+            from choose_training_sample import *
+            t_randomiz = time.time()
+            data_3D_training_ = get_random_stratified_samples(data_array, training_rate, 10)
+            evaluate_randomization(data_3D_training_)
+            print 'time for ramdomiz', time.time() - t_randomiz
+            # data_array_copy = data_array.copy()
+            # np.random.shuffle(data_array_copy)
+            # data_3D_training_ = data_array_copy[0:len_training]
 
         else:
             data_3D_training_ = data_array[0:len_training]
@@ -359,6 +367,7 @@ if __name__ == '__main__':
         time_prediction = time.time()
         print 'time prediction'
         print time_prediction - time_stop_training
+        print print_date_from_dfb(dfb_beginning_, dfb_ending_)
 
         print '__CONDITIONS__'
         print 'NB_PIXELS', str(nb_latitudes_ * nb_longitudes_)
@@ -372,5 +381,7 @@ if __name__ == '__main__':
 
         print 'cano_checked', str(cano_checked)
         print 'cano_unchecked', str(cano_unchecked)
+
+        print 'with trick'
 
         visualize_classes(array_3D=data_3D_predicted, bbox=bbox_)

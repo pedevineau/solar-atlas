@@ -31,9 +31,6 @@ def get_dfb_tuple(dfb_beginning, nb_days, ask_dfb=True):
     else:
         begin = dfb_beginning
     ending = begin + nb_days - 1
-    d_beginning = datetime(1980, 1, 1) + timedelta(days=begin)
-    d_ending = datetime(1980, 1, 1) + timedelta(days=ending + 1, seconds=-1)
-    print 'Dates from ', str(d_beginning), ' till ', str(d_ending)
     return [begin, ending]
 
 
@@ -84,8 +81,14 @@ def interpolate_the_missing_slots(array, missing_slots_list, interpolation):   #
     return array
 
 
-# function not operational
-def get_missing_slots_list(array):
+# def remove_dawn(array, dawn_slots_list):
+#     for slot in dawn_slots_list:
+#         array[slot] = 0
+#     return array
+
+
+# get list of isolated slots
+def get_missing_slots_list(array, nb_slots_to_remove_dawn=6):
     from numpy import shape
     from numpy.random import randint
     (a, b, c) = shape(array)
@@ -97,15 +100,21 @@ def get_missing_slots_list(array):
     lon_3 = randint(0,c)
     # if a slot is missing for 3 random places, it's probably missing everywhere...
     mask_l = mask_array(array[:,lat_1, lon_1]) & mask_array(array[:, lat_2, lon_2]) & mask_array(array[:, lat_3, lon_3])
-    indexes = []
+    # indexes list of isolated slots
+    indexes_isolated = []
+    # indexes list of dawn slots to be removed
+    # dawn_indexes = []
     for k in range(1, len(mask_l)-1):
         if mask_l[k] and not mask_l[k-1] and not mask_l[k+1]:
-            indexes.append(k)
-    return indexes
+            indexes_isolated.append(k)
+        # following condition is dawn assuming there is no double black slots outside night
+        # elif mask_l[k] and  mask_l[k-1] and not mask_l[k+1]:
+        #     dawn_indexes.extend([k+i for i in range(min(nb_slots_to_remove_dawn,len(mask_l) - k))])
+    return indexes_isolated
 
 
 def compute_parameters(data_dict, channels, times, latitudes, longitudes, frequency, compute_indexes=False, normalize=True):
-    from numpy import zeros, empty, exp, maximum
+    from numpy import zeros, empty, union1d, maximum
     nb_slots = len(data_dict[channels[0]])
     nb_latitudes = len(latitudes)
     nb_longitudes = len(longitudes)
@@ -117,7 +126,7 @@ def compute_parameters(data_dict, channels, times, latitudes, longitudes, freque
         slots_to_interpolate = get_missing_slots_list(data_dict[chan][:, :, :])
         # filter isolated nan and aberrant
         data[:, :, :, k] = interpolate_the_missing_slots(data_dict[chan][:, :, :], slots_to_interpolate, interpolation='linear')
-        # filter non isolated nan and aberrant
+        # get mask for non isolated nan and aberrant
         maskk = mask_array(data[:, :, :, k])
         if normalize:
             data[:, :, :, k] = normalize_array(data[:, :, :, k], maskk)
@@ -126,55 +135,55 @@ def compute_parameters(data_dict, channels, times, latitudes, longitudes, freque
         data[mask] = -1
         return data
     else:
-        nb_features = 4  # short variability, long variability
+        nb_features = 5 # nsdi, short variability nsdi, cli, short variability cli, VIS064
         # IR124_2000: 0, IR390_2000: 1, VIS160_2000: 2,  VIS064_2000:3
         mu = get_array_3d_cos_zen(times, latitudes, longitudes)
-        treshold_mu = 0.1
+        treshold_mu = 0.05
         aux_nsdi = data[:, :, :, 2] + data[:, :, :, 3]
         aux_nsdi[aux_nsdi < 0.05] = 0.05          # for numerical stability
         nsdi = (data[:, :, :, 3] - data[:, :, :, 2]) / aux_nsdi
         cli = (data[:, :, :, 1] - data[:, :, :, 0]) / mu
-        mask = (mu < treshold_mu) | mask
+        mask = (mu < treshold_mu) | mask # this mask consists of night, errors, and mu_mask
         nsdi = normalize_array(nsdi, mask)    # normalization take into account the mask
         cli = normalize_array(cli, mask)
         cli[mask] = 0   # night and errors represented by (-1,-1)
         nsdi[mask] = 0
-        del mu, mask, aux_nsdi, data
         new_data = empty(shape=(nb_slots, nb_latitudes, nb_longitudes, nb_features))
-        # new_data[:, :, :, 0] = get_tricky_transformed_nsdi(nsdi,0.35)  # posey
-        nsdi = get_tricky_transformed_nsdi(nsdi,0.35)  # posey
-        nsdi[nsdi<0]=0
-        new_data[:, :, :, 0] = nsdi
-        # new_data[:, :, :, 1] = get_variability_array_modified(array=nsdi, step=10 / frequency, th_1=0.15, th_2=0.3,
-        #                                                       negative_variation=True)
-        # new_data[:, :, :, 2] = get_variability_array_modified(array=nsdi, step=20 / frequency, th_1=0.1, th_2=0.3,
-        #                                                       negative_variation=True)
-        # new_data[:, :, :, 3] = get_variability_array_modified(array=nsdi, step=60 / frequency, th_1=0.2, th_2=0.4,
-        #                                                       negative_variation=True)
-        # new_data[:, :, :, 4] = cli
-        # new_data[:, :, :, 5] = get_variability_array_modified(array=cli, step=10 / frequency, th_1=0.018,
-        #                                                       negative_variation=False)
-        # new_data[:, :, :, 6] = get_variability_array_modified(array=cli, step=20 / frequency, th_1=0.023,
-        #                                                       negative_variation=False)
-        # new_data[:, :, :, 7] = get_variability_array_modified(array=cli, step=60 / frequency, th_1=0.028, th_2=0.3,
-        #                                                       negative_variation=False)
+        new_data[:, :, :, nb_features-1] = data[:, :, :, 3].copy()
+        new_data[:, :, :, nb_features - 1][mask] = 0
+        # new_data[:, :, :, nb_features-1] = mu.copy()
+        nsdi[data[:, :, :, 3] < 0.3] = 0   # to remove the common artifact "excessive sea nsdi"
+        del mu, aux_nsdi, data
 
-        new_data[:, :, :, 1] = maximum(maximum(get_variability_array_modified(array=nsdi, step=10 / frequency, th_1=0.15, th_2=0.3,
-                                                              negative_variation=True),
-                               get_variability_array_modified(array=nsdi, step=20 / frequency, th_1=0.1, th_2=0.3,
-                                                              negative_variation=True)),
-                                get_variability_array_modified(array=nsdi, step=60 / frequency, th_1=0.2, th_2=0.4,
-                                                              negative_variation=True))
+        # nsdi = get_tricky_transformed_nsdi(nsdi,0.35)  # posey
+        new_data[:, :, :, 0] = nsdi
+
+        # new_data[:, :, :, 0] = get_tricky_transformed_nsdi(nsdi, 0.35)  # posey
+        # new_data[new_data[:, :, :, 0] < 0] = 0
+
+        nsdi_10 = get_variability_array_modified(array=nsdi, mask=mask, step=10 / frequency, th_1=0.15, th_2=0.3,
+                                                              negative_variation=True)
+        nsdi_20 = get_variability_array_modified(array=nsdi, mask=mask, step=20 / frequency, th_1=0.1, th_2=0.3,
+                                                              negative_variation=True)
+        nsdi_60 = get_variability_array_modified(array=nsdi, mask=mask, step=60 / frequency, th_1=0.2,
+                                                                      th_2=0.4,
+                                                                      negative_variation=True)
+        new_data[:, :, :, 1] = maximum(nsdi_10,maximum(nsdi_20, nsdi_60))
+
         new_data[:, :, :, 2] = cli
-        new_data[:, :, :, 3] = maximum(maximum(get_variability_array_modified(array=cli, step=10 / frequency, th_1=0.018,
-                                                              negative_variation=False),
-                                 get_variability_array_modified(array=cli, step=20 / frequency, th_1=0.023,
-                                                                                      negative_variation=False)),
-                                 get_variability_array_modified(array=cli, step=60 / frequency, th_1=0.028, th_2=0.3,
-                                                                                      negative_variation=False))
+
+        cli_10 = get_variability_array_modified(array=cli, mask=mask, step=10 / frequency, th_1=0.018,
+                                                              negative_variation=False)
+        cli_20 = get_variability_array_modified(array=cli, mask=mask, step=20 / frequency, th_1=0.023,
+                                                                                      negative_variation=False)
+        cli_60 = get_variability_array_modified(array=cli, mask=mask, step=60 / frequency, th_1=0.028, th_2=0.3,
+                                                                                      negative_variation=False)
+        new_data[:, :, :, 3] = maximum(cli_10, maximum(cli_20, cli_60))
+
         # new_data[new_data[:, :, :, 3]<0.4]=0
         new_data[new_data>1]=1
         # variability arr
+        del mask
         return new_data
 
 
@@ -185,6 +194,16 @@ def get_tricky_transformed_nsdi(snow_index, summit, gamma=4):
     # alpha = -0.5/(max(1-summit, summit)**2)
     # return beta + alpha * recentered * recentered
     return normalize_array(exp(-gamma*recentered) - exp(-gamma*summit))
+
+
+def apply_smooth_threshold(x, th, order=2):
+    from numpy import exp
+    return exp(-(x-th))
+
+
+def low_pass_filter(x, cut, order=2):
+    print ''
+
 
 def get_array_3d_cos_zen(times, latitudes, longitudes):
     import sunpos
@@ -199,22 +218,21 @@ def normalize_array(array, mask=None):
         return array / max(abs(array[~mask]))   # max of data which is not masked...
 
 
-def get_variability_array(array, step=1, centered=False):
+def get_variability_array(array, mask, step=1):
     from numpy import roll
-    if centered:
-        step_right = step / 2
-        step_left = step - step_right
-        return roll(array, step_right, axis=0) - roll(array, -step_left,
-                                                      axis=0)  # WARNING: time-bordered data is meaningless
-    else:
-        step_right = 0
-        step_left = step
-        return array - roll(array, -step_left, axis=0)
+    step_left = step
+    # array= array - roll(array, step_left, axis=0)
+    # not so easy: there is
+    array = array - roll(array, step_left, axis=0)
+    mask = mask + roll(array, -step_left, axis=0) # mask of night and dawn. numpy.roll casts the mask to an array
+    array[mask is True] = 0
+    array[:step_left] = 0
+    return array
 
 
 def get_variability_parameters_manually(array, step, th_2, positive_variation=True, negative_variation=True):
     from numpy import linspace, shape, zeros
-    th_1_array = linspace(0.01,0.5,20)
+    th_1_array = linspace(0.01, 0.5, 20)
     (a,b,c)= shape(array)
     # cum_len = 0
     # for th_1 in th_1_array:
@@ -227,22 +245,22 @@ def get_variability_parameters_manually(array, step, th_2, positive_variation=Tr
     cursor=0
     for th_1 in th_1_array:
         if cursor + 1 <= a:   # the potential end is already completed with zeros...
-            to_return[cursor,:,:] = get_variability_array_modified(array, step,th_1,th_2,
+            to_return[cursor, :, :] = get_variability_array_modified(array, step, th_1, th_2,
             positive_variation=positive_variation, negative_variation=negative_variation)[22, :, :]
-            to_return[cursor+20,:,:] = get_variability_array_modified(array, step,th_1,th_2,
+            to_return[cursor+20, :, :] = get_variability_array_modified(array, step, th_1, th_2,
             positive_variation=positive_variation, negative_variation=negative_variation)[35, :, :]
-            to_return[cursor+40,:,:] = get_variability_array_modified(array, step,th_1,th_2,
+            to_return[cursor+40, :, :] = get_variability_array_modified(array, step, th_1, th_2,
             positive_variation=positive_variation, negative_variation=negative_variation)[40, :, :]
-            print 'cursor is now',cursor
+            print 'cursor is now', cursor
             print 'parameters', th_1
             cursor += 1
     return to_return
 
 
-def get_variability_array_modified(array, step=1, th_1=0.02, th_2=0.3, centered=False,
+def get_variability_array_modified(array, mask, step=1, th_1=0.02, th_2=0.3,
                                    positive_variation=True, negative_variation=True):
     from numpy import zeros_like, exp, abs, max
-    arr = get_variability_array(array, step, centered)
+    arr = get_variability_array(array, mask, step)
     # arr_th = zeros_like(arr)
     th_coef_2 = 1./exp(th_2)
     if positive_variation and negative_variation:
