@@ -19,7 +19,7 @@ def get_selected_channels(all_channels, ask_channels=True):
     return channels
 
 
-def get_dfb_tuple(dfb_beginning, nb_days, ask_dfb=True):
+def get_dfb_tuple(dfb_beginning, nb_days, ask_dfb=False):
     from datetime import datetime,timedelta
     print 'Which day from beginning (eg: 13527)?'
     if ask_dfb:
@@ -137,7 +137,7 @@ def get_missing_slots_list(array, nb_slots_to_remove_dawn=6):
 
 
 def compute_parameters(content, ocean, times, latitudes, longitudes, frequency, compute_indexes,
-                       normalize, normalization):
+                       normalize, normalization, weights):
     from numpy import zeros, empty, maximum, shape
     nb_slots = len(content[0])
     nb_latitudes = len(latitudes)
@@ -166,12 +166,12 @@ def compute_parameters(content, ocean, times, latitudes, longitudes, frequency, 
         aux_nsdi = data[:, :, :, 2] + data[:, :, :, 3]
         aux_nsdi[aux_nsdi < 0.05] = 0.05          # for numerical stability
         nsdi = (data[:, :, :, 3] - data[:, :, :, 2]) / aux_nsdi
-        blue_sea = (data[:, :, :, 2] < 0.05) & (ocean == 0)   # threshold are uncool
+        blue_sea = (data[:, :, :, 2] < 0.1) & (ocean == 0)   # threshold are uncool
         cli = (data[:, :, :, 1] - data[:, :, :, 0])
         cli = cli / mu
         mask = (mu < treshold_mu) | mask | blue_sea # this mask consists of night, errors, and mu_mask
         cli = normalize_array(cli, mask, normalization='max')
-        nsdi = normalize_array(nsdi, mask, normalization='max')    # normalization take into account the mask
+        # nsdi = normalize_array(nsdi, mask, normalization='max')    # normalization take into account the mask
         cli[mask] = 0   # night and errors represented by (-1,-1)
         nsdi[mask] = 0
         del mu, data, aux_nsdi
@@ -207,13 +207,18 @@ def compute_parameters(content, ocean, times, latitudes, longitudes, frequency, 
         new_data[:, :, :, 3] = maximum(cli_10, maximum(cli_20, cli_60))
         new_data[:, :, :, 2] = cli
 
-        if normalization in ['var','max']:
+        if normalization in ['standard','max']:
             new_data[:, :, :, 0] = normalize_array(new_data[:, :, :, 0], normalization=normalization, mask=mask)
             new_data[:, :, :, 1] = normalize_array(new_data[:, :, :, 1], normalization=normalization, mask=mask)
             new_data[:, :, :, 2] = normalize_array(new_data[:, :, :, 2], normalization=normalization, mask=mask)
             new_data[:, :, :, 3] = normalize_array(new_data[:, :, :, 3], normalization=normalization, mask=mask)
 
-
+        if weights is not None:
+            new_data[:, :, :, 0] = weights[0] * new_data[:, :, :, 0]
+            new_data[:, :, :, 1] = weights[1] * new_data[:, :, :, 1]
+            new_data[:, :, :, 2] = weights[2] * new_data[:, :, :, 2]
+            new_data[:, :, :, 3] = weights[3] * new_data[:, :, :, 3]
+            new_data[:, :, :, 4] = weights[4] * new_data[:, :, :, 4]
 
         # new_data[:, :, :, 3] = mu
 
@@ -332,16 +337,17 @@ def get_variability_array_modified(array, mask, step=1, th_1=0.02, th_2=0.3,
 
 
 def get_features(latitudes, longitudes, dfb_beginning, dfb_ending, compute_indexes,
+                 channels=['IR124_2000', 'IR390_2000', 'VIS160_2000', 'VIS064_2000'],
                  slot_step=1,
-                 channels=['IR124_2000', 'IR390_2000', 'VIS160_2000',  'VIS064_2000'],
+                 normalize=True,
+                 normalization='none',
+                 weights=None,
                  dirs=['/data/model_data_himawari/sat_data_procseg'],
                  satellite='H08LATLON',
                  pattern_suffix='__TMON_{YYYY}_{mm}__SDEG05_r{SDEG5_LATITUDE}_c{SDEG5_LONGITUDE}.nc',
                  satellite_frequency=10,
                  dir_ocean='/data/ocean_shape',
                  pattern_ocean='landsea_mask_2arcmin.nc',
-                 normalize=True,
-                 normalization='none'
                  ):
     from datetime import datetime,timedelta
     chan_patterns = []
@@ -370,7 +376,8 @@ def get_features(latitudes, longitudes, dfb_beginning, dfb_ending, compute_index
                               satellite_frequency,
                               compute_indexes,
                               normalize,
-                              normalization)
+                              normalization,
+                              weights)
 
 
 def get_latitudes_longitudes(lat_start, lat_end, lon_start, lon_end, resolution=2.0/60):

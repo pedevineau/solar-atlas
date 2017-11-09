@@ -29,14 +29,12 @@ def filter_nan_training_set(array, multi_channel_bool):
 def get_basis_model(process):
     if process == 'gaussian':
         if multi_channels:
+            print '!!!!! gaussian init centers not implemented !!!!!!'
             means_init_ = [
-                [-1, -1],
-                [0.2,  0.2],
-                [0.2, 0.8],
-                [0.8,  0.2]
+                # to be completed
             ]
         else:
-            means_radiance_ = get_gaussian_init_means(multi_channels, nb_components_)
+            means_radiance_ = get_gaussian_init_means(nb_components_)
             means_init_ = np.zeros((nb_components_, nb_selected_channels))
             for compo in range(nb_components_):
                 means_init_[compo] = np.array([means_radiance_[chan][compo] for chan in selected_channels]).reshape(
@@ -77,23 +75,22 @@ def get_basis_model(process):
     return model
 
 
-def get_trained_models_2d(training_array, model, shape, process, display_means=False, verbose=True):
-    if len(shape) == 2:
-        (nb_latitudes, nb_longitudes) = shape
-        for latitude_ind in range(nb_latitudes):
-            long_array_models = []
-            for longitude_ind in range(nb_longitudes):
-                # training_sample = filter_nan_training_set(training_array[:, latitude_ind, longitude_ind], multi_channels)
-                training_sample = training_array[:, latitude_ind, longitude_ind]
-                trained_model = get_trained_model(training_sample, model, process, display_means, verbose)
-                long_array_models.append(trained_model)
-            models.append(long_array_models)
-    return models
+# def get_trained_models_2d(training_array, model, shape, process, display_means=False, verbose=True):
+#     if len(shape) == 2:
+#         (nb_latitudes, nb_longitudes) = shape
+#         for latitude_ind in range(nb_latitudes):
+#             long_array_models = []
+#             for longitude_ind in range(nb_longitudes):
+#                 training_sample = training_array[:, latitude_ind, longitude_ind]
+#                 trained_model = get_trained_model(training_sample, model, process, display_means, verbose)
+#                 long_array_models.append(trained_model)
+#             models.append(long_array_models)
+#     return models
 
 
-def get_trained_model(training_sample, model, process, display_means=True, verbose=True):
+def get_trained_model(training_array, model, process, display_means=True, verbose=True):
     try:
-        trained_model = model.fit(training_sample)
+        trained_model = model.fit(training_array)
         # print evaluate_model_quality(training_sample, gmm)
         if process == 'bayesian' or process == 'gaussian':
             trained_model.means_ = np.sort(trained_model.means_)
@@ -118,7 +115,7 @@ def get_trained_model(training_sample, model, process, display_means=True, verbo
 
 
 # unused
-def get_gaussian_init_means(multi_channels, n_components):
+def get_gaussian_init_means(n_components):
     if n_components == 2:
         return {
             'VIS064_2000': [-1, 0.5],
@@ -150,42 +147,30 @@ def get_updated_model(training_array, model):
 
 
 ### prediction ###
-def get_classes(nb_slots, nb_latitudes, nb_longitudes, data_array, process, multi_models=True, model_2D=list(),
-                single_model=None, verbose=True, display_counts=True):
-    shape_predicted_data = (nb_slots, nb_latitudes, nb_longitudes)
+def get_classes(data_array, process, model, verbose=True, display_counts=True):
+    nb_slots, nb_latitudes, nb_longitudes, nb_features = np.shape(data_array)
+    shape_for_prediction = (nb_slots*nb_latitudes*nb_longitudes, nb_features)
     if False and process == 'DBSCAN':
         print 'resh b'
-        data_array = np.reshape(data_array,(nb_slots*nb_latitudes*nb_longitudes, 2))
+        data_array = np.reshape(data_array,(nb_slots*nb_latitudes*nb_longitudes, nb_features))
         print 'resh d'
-        model = single_model
         prediction = model.fit_predict(data_array)
         print len(model.components_)
-        return np.reshape(prediction, shape_predicted_data)
+        return np.reshape(prediction, (nb_slots, nb_latitudes, nb_longitudes))
     else:
-        data_array_predicted = np.empty(shape=shape_predicted_data)
-        for latitude_ind in range(nb_latitudes):
-            for longitude_ind in range(nb_longitudes):
-                if multi_models:
-                    model = model_2D[latitude_ind][longitude_ind]
-                else:
-                    model = single_model
-                data_to_predict = data_array[:, latitude_ind, longitude_ind]
-                try:
-                    if process == 'DBSCAN':
-                        prediction = model.fit_predict(data_to_predict)
-                        # print len(model.components_)
-                    else:
-                        prediction = model.predict(data_to_predict)
-                except Exception as e:
-                    if verbose:
-                        print e
-                    prediction = np.full(nb_slots, -1)
-                data_array_predicted[:, latitude_ind, longitude_ind] = prediction
-        if display_counts:
-            pre = np.asarray(data_array_predicted,dtype=int)
-            fl = pre.flatten()
-            print np.bincount(fl) / (1.*len(pre))
-        return data_array_predicted
+        try:
+            if process in ['DBSCAN', 'spectral']:
+                data_array_predicted = model.fit_predict(np.reshape(data_array, shape_for_prediction))  # dangerous!!!
+                # print len(model.components_)
+            else:
+                data_array_predicted = model.predict(np.reshape(data_array, shape_for_prediction))
+            if display_counts:
+                pre = np.asarray(data_array_predicted, dtype=int)
+                print np.bincount(pre) / (1. * len(pre))
+        except Exception as e:
+            if verbose:
+                print e
+        return np.reshape(data_array_predicted,  (nb_slots, nb_latitudes, nb_longitudes))
 
 
 ### unused functions to evaluate models
@@ -217,50 +202,134 @@ def reject_model():
     return ''
 
 
-if __name__ == '__main__':
-    ### parameters
-    dfb_beginning_testing = 13527+15
-        # 'dfb_beginning': 13527,
-    nb_days_testing = 4
-    slot_step_testing = 1
+def testing(channels, beginning, ending, latitudes, longitudes,
+            compute_indexes, process, slot_step, model, normalize, normalization, weights, verbose, display_counts):
+    print 'TESTING'
+    time_begin_testing = time.time()
 
-    slot_step_training = 12
-    training_rate = 0.01 # critical     # mathematical training rate is training_rate / slot_step_training
+    data_array_testing = get_features(
+        latitudes,
+        longitudes,
+        beginning,
+        ending,
+        compute_indexes,
+        channels,
+        slot_step,
+        normalize,
+        normalization,
+        weights
+    )
+
+    data_predicted = get_classes(data_array_testing,
+                                 process,
+                                 model=model,
+                                 verbose=verbose,
+                                 display_counts=display_counts
+                                 )
+    bbox = get_bbox(latitudes[0], latitudes[-1], longitudes[0], longitudes[-1])
+
+    print 'time prediction'
+    print time.time() - time_begin_testing
+    visualize_classes(data_predicted=data_predicted, bbox=bbox)
+
+
+def training(channels, beginning, ending, latitudes, longitudes, process, compute_indexes, slot_step, normalize,
+             normalization, weights, display_means, verbose):
+
+    print 'TRAINING'
+    time_start_training = time.time()
+    from choose_training_sample import get_random_stratified_samples, evaluate_randomization
+    data_samples_for_training = get_features(
+        latitudes,
+        longitudes,
+        beginning,
+        ending,
+        compute_indexes,
+        channels,
+        slot_step,
+        normalize,
+        normalization,
+        weights
+    )
+
+    len_training = int(len(data_samples_for_training) * training_rate)
+    coef_randomization = 3
+
+    if randomization:
+        t_randomization = time.time()
+        data_training = get_random_stratified_samples(data_samples_for_training, training_rate, coef_randomization * nb_days_testing)
+        evaluate_randomization(data_training)
+        print 'time for ramdomization', time.time() - t_randomization
+
+    else:
+        data_training = data_samples_for_training[0:len_training]
+    (nb_ech_, nb_latitudes_, nb_longitudes_, nb_features_) = np.shape(data_training)
+    data_training = data_training.reshape(nb_ech_ * nb_latitudes_ * nb_longitudes_, nb_features_)
+
+    model_basis = get_basis_model(process)
+    model = get_trained_model(
+        training_array=data_training,
+        model=model_basis,
+        process=process,
+        display_means=display_means,
+        verbose=verbose
+    )
+    time_stop_training = time.time()
+    print 'time training', time_stop_training - time_start_training
+    print model
+    return model
+
+
+if __name__ == '__main__':
+
+
+
+
+    ### TRAINING PARAMETERS ###
+    slot_step_training = 48
+    training_rate = 0.05 # critical     # mathematical training rate is training_rate / slot_step_training
     randomization = True  # to select training data among input data
     dfb_beginning_training = 13527
     nb_days_training = 40
-    dfb_ending_traning = dfb_beginning_training + nb_days_training - 1
-
-    multi_channels = True
-    multi_models_ = False
-    compute_classification = True
-    auto_corr = True and nb_days_testing >= 5
-    on_point = False
-    normalize_ = True   # should stay False as long as thresholds has not be computed !?
-    normalization = 'none'
-
-    display_means_ = True
-    process_ = 'DBSCAN'  # bayesian (not good), gaussian, DBSCAN or kmeans
+    dfb_ending_training = dfb_beginning_training + nb_days_training - 1
+    nb_components_ = 7  # critical!!!   # 5 recommended for gaussian minitest in january: normal, cloud, snow, sea, no data
     max_iter_ = 200
-    # what I get right now with 5 clusters: icy cloud, water cloud, bare lands or water, another cloud cluster, snow
-    nb_components_ = 7  # critical!!!   # 5 recommended for gaussian: normal, cloud, snow, sea, no data
-    ask_dfb_ = False
-    ask_channels = False
+    display_means_ = True
+
+    latitude_beginning_training = 35.0
+    latitude_end_training = 40.
+    longitude_beginning_training = 125.
+    longitude_end_training = 130.
+    latitudes_training, longitudes_training = get_latitudes_longitudes(latitude_beginning_training, latitude_end_training,
+                                                                     longitude_beginning_training, longitude_end_training)
+
+    ### TESTING PARAMETERS ###
+    dfb_beginning_testing = 13527+15
+    nb_days_testing = 1
+    slot_step_testing = 1
+    display_counts_ = False
+
+    latitude_beginning_testing = latitude_beginning_training
+    latitude_end_testing = 40.
+    longitude_beginning_testing = 125.
+    longitude_end_testing = 130.
+    latitudes_testing, longitudes_testing = get_latitudes_longitudes(latitude_beginning_testing, latitude_end_testing,
+                                                                     longitude_beginning_testing, longitude_end_testing)
+
+    ### SHARED PARAMETERS ###
+    multi_channels = True
+    compute_indexes_ = True
+    process_ = 'kmeans'  # bayesian (not good), gaussian, DBSCAN or kmeans
+    normalize_ = True   # should stay False as long as thresholds has not be computed !?
+    normalization_ = 'standard'
+    weights_ = None
+    # weights_ = [1,1,1,1,1]
     verbose_ = True  # print errors during training or prediction
 
+    auto_corr = True and nb_days_testing >= 5
 
-    # nb_first_slots_to_remove = 5
+
     selected_channels = []
-
-    latitude_beginning = 35.0   # salt lake mongolia  45.
-    latitude_end = 40.
-    longitude_beginning = 125.
-    longitude_end = 130.
-
-    latitudes_, longitudes_ = get_latitudes_longitudes(latitude_beginning, latitude_end, longitude_beginning,
-                                                       longitude_end)
-    bbox_ = get_bbox(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
-
     if multi_channels:
         selected_channels = ['IR124_2000', 'IR390_2000', 'VIS160_2000',  'VIS064_2000']
     else:
@@ -270,151 +339,56 @@ if __name__ == '__main__':
 
     time_start = time.time()
 
-    [dfb_beginning_testing, dfb_ending_testing] = get_dfb_tuple(ask_dfb=ask_dfb_, dfb_beginning=dfb_beginning_testing,
+    [dfb_beginning_testing, dfb_ending_testing] = get_dfb_tuple(dfb_beginning=dfb_beginning_testing,
                                                                 nb_days=nb_days_testing)
-
-    data_array_testing = get_features(
-        channels=selected_channels,
-        latitudes=latitudes_,
-        longitudes=longitudes_,
-        dfb_beginning=dfb_beginning_testing,
-        dfb_ending=dfb_ending_testing,
-        compute_indexes=multi_channels,
-        normalize=normalize_,
-        normalization=normalization
-    )
-    nb_slots_ = len(data_array_testing)
-
-    print 'time reading and getting features testing'
-    time_start_training = time.time()
-    print time_start_training - time_start
 
     ###
     ### insert smoothing here if useful ###
     ###
+    single_model_ = training(channels=selected_channels,
+                             beginning=dfb_beginning_training,
+                             ending=dfb_ending_training,
+                             latitudes=latitudes_training,
+                             longitudes=longitudes_training,
+                             compute_indexes=compute_indexes_,
+                             process=process_,
+                             slot_step=slot_step_training,
+                             normalize=normalize_,
+                             normalization=normalization_,
+                             weights=weights_,
+                             display_means=display_means_,
+                             verbose=verbose_)
 
-    if not compute_classification:
-        output_filters(data_array_testing)
-    else:
-        # print data_array
-        ### to delete ###
-        if multi_channels:
-            print ''
-            # data_array = data_array[:, :, :, 0:4]    # test with killing ndsi and cli !!!
-        ### ###
-        model_basis = get_basis_model(process=process_)
-
-        # if process_ == 'DBSCAN':
-        #     single_model_ = basis_model
-        # else:
-        # TRAINING
-        len_training = int(nb_slots_ * training_rate)
-
-        data_array_training = get_features(
-            channels=selected_channels,
-            latitudes=latitudes_,
-            longitudes=longitudes_,
-            dfb_beginning=dfb_beginning_training,
-            dfb_ending=dfb_ending_traning,
-            slot_step=slot_step_training,
-            compute_indexes=multi_channels,
+    testing(channels=selected_channels,
+            beginning=dfb_beginning_testing,
+            ending=dfb_ending_testing,
+            latitudes=latitudes_testing,
+            longitudes=longitudes_testing,
+            compute_indexes=compute_indexes_,
+            process=process_,
+            slot_step=slot_step_testing,
+            model=single_model_,
             normalize=normalize_,
-            normalization=normalization
-        )
+            normalization=normalization_,
+            weights=weights_,
+            verbose=verbose_,
+            display_counts=display_counts_)
 
-        if randomization:
-            from choose_training_sample import *
-            t_randomiz = time.time()
-            data_3D_training_ = get_random_stratified_samples(data_array_testing, training_rate, 3 * nb_days_testing)
-            evaluate_randomization(data_3D_training_)
-            print 'time for ramdomiz', time.time() - t_randomiz
-            # data_array_copy = data_array.copy()
-            # np.random.shuffle(data_array_copy)
-            # data_3D_training_ = data_array_copy[0:len_training]
+    print '__CONDITIONS__'
+    print 'learning', print_date_from_dfb(dfb_beginning_training, dfb_ending_training)
+    print 'testing', print_date_from_dfb(dfb_beginning_testing, dfb_ending_testing)
+    print 'NB_PIXELS testing', str(len(latitudes_testing) * len(longitudes_testing))
+    print 'NB_SLOTS testing', str(144 * nb_days_testing)
+    print 'process', process_
+    print 'training_rate', training_rate
+    print 'n_components', nb_components_
+    print 'shuffle', randomization
+    print 'multi channels', multi_channels
+    if normalize_:
+        print 'normalization', normalization_
 
-        else:
-            data_3D_training_ = data_array_testing[0:len_training]
+    print 'cano_checked', str(cano_checked)
+    print 'cano_unchecked', str(cano_unchecked)
 
-        models = []
-        if multi_models_:
-            models = get_trained_models_2d(
-                training_array=data_3D_training_,
-                model=model_basis,
-                shape=(len(latitudes_), len(longitudes_)),
-                process=process_,
-                display_means=display_means_,
-                verbose=verbose_
-            )
+    print 'with trick'
 
-        elif not on_point:
-            (nb_ech_, nb_latitudes_, nb_longitudes_, nb_features_) = np.shape(data_3D_training_)
-            # merged_data_training = filter_nan_training_set(data_3D_training_.reshape(nb_ech_*nb_latitudes_*nb_longitudes_, nb_features_), multi_channels)
-            merged_data_training = data_3D_training_.reshape(nb_ech_*nb_latitudes_*nb_longitudes_, nb_features_)
-            single_model_ = get_trained_model(
-                training_sample=merged_data_training,
-                model=model_basis,
-                process=process_,
-                display_means=display_means_,
-                verbose=verbose_
-            )
-            print single_model_
-        else:
-            # not really supposed to happen
-            basis_lat = 1
-            basis_lon = 1
-            single_model_ = get_trained_model(
-                training_sample=data_3D_training_[:, basis_lat, basis_lon],
-                model=model_basis,
-                process=process_,
-                display_means=display_means_,
-                verbose=verbose_
-                )
-        time_stop_training = time.time()
-        print 'training:'
-        print time_stop_training-time_start_training
-        print 'TESTING'
-        # TESTING
-        if multi_models_:
-            data_3D_predicted = get_classes(nb_slots=nb_slots_,
-                                            nb_latitudes=nb_latitudes_,
-                                            nb_longitudes=nb_longitudes_,
-                                            data_array=data_array_testing,
-                                            process=process_,
-                                            multi_models=True,
-                                            model_2D=models,
-                                            verbose=verbose_
-                                            )
-        else:
-            data_3D_predicted = get_classes(nb_slots=nb_slots_,
-                                            nb_latitudes=nb_latitudes_,
-                                            nb_longitudes=nb_longitudes_,
-                                            data_array=data_array_testing,
-                                            process=process_,
-                                            multi_models=False,
-                                            single_model=single_model_,
-                                            verbose=verbose_
-                                            )
-        time_prediction = time.time()
-        print 'time prediction'
-        print time_prediction - time_stop_training
-        print 'learning', print_date_from_dfb(dfb_beginning_training, dfb_ending_traning)
-        print 'testing', print_date_from_dfb(dfb_beginning_testing, dfb_ending_testing)
-
-        print '__CONDITIONS__'
-        print 'NB_PIXELS', str(nb_latitudes_ * nb_longitudes_)
-        print 'NB_SLOTS', str(144 * nb_days_testing)
-        print 'process', process_
-        print 'training_rate', training_rate
-        print 'n_components', nb_components_
-        print 'shuffle', randomization
-        print 'compute classification', compute_classification
-        print 'multi channels', multi_channels
-        if normalize_:
-            print 'normalization', normalization
-
-        print 'cano_checked', str(cano_checked)
-        print 'cano_unchecked', str(cano_unchecked)
-
-        print 'with trick'
-
-        visualize_classes(array_3D=data_3D_predicted, bbox=bbox_)
