@@ -35,27 +35,37 @@ def get_dfb_tuple(dfb_beginning, nb_days, ask_dfb=True):
 
 
 # reading data
-def get_channels_content(dirs, patterns, latitudes, longitudes, dfb_beginning, dfb_ending):
-    content = {}
+def get_channels_content(dirs, patterns, channels, latitudes, longitudes, dfb_beginning, dfb_ending, slot_step=1):
+    nb_days = dfb_ending - dfb_beginning + 1
+    nb_slots = 144 / slot_step
+    slots = [k*slot_step for k in range(nb_slots)]
     from nclib2.dataset import DataSet
-    from numpy import nan, array
-    for chan in patterns:
+    from numpy import nan, empty
+    content = empty((len(patterns), nb_slots * nb_days, len(latitudes), len(longitudes)))
+
+    for k in range(len(patterns)):
+        pattern = patterns[k]
+        chan = channels[k]
         dataset = DataSet.read(dirs=dirs,
                                extent={
                                    'latitude': latitudes,
                                    'longitude': longitudes,
                                    'dfb': {'start': dfb_beginning, 'end': dfb_ending, "end_inclusive": True,
-                                           "start_inclusive": True, },
+                                           'start_inclusive': True, },
+                                   'slot': slots
                                },
-                               file_pattern=patterns[chan],
-                               variable_name=chan, fill_value=nan, interpolation='N', max_processes=0,
+                               file_pattern=pattern,
+                               variable_name=chan,
+                               fill_value=nan, interpolation='N', max_processes=0,
                                )
 
-        data = dataset['data']
-        concat_data = []
-        for day in data:
-            concat_data.extend(day)
-        content[chan] = array(concat_data)
+        data = dataset['data'].data
+        day_slot_b = 0
+        day_slot_e = nb_slots
+        for day in range(nb_days):
+            content[k, day_slot_b:day_slot_e] = data[day]
+            day_slot_b += nb_slots
+            day_slot_e += nb_slots
     return content
 
 
@@ -66,6 +76,19 @@ def mask_array(array):
     masknan = isnan(array) | isinf(array)
     mask = maskup | maskdown | masknan
     return mask
+
+
+def get_ocean_mask(dirs, pattern, latitudes, longitudes):
+    from nclib2.dataset import DataSet
+    ocean = DataSet.read(dirs=dirs,
+       extent={
+           'lat': latitudes,
+           'lon': longitudes,
+       },
+       file_pattern=pattern,
+       variable_name='Band1', interpolation='N', max_processes=0,
+       )
+    return ocean['data']
 
 
 def is_likely_outlier(point):
@@ -113,50 +136,52 @@ def get_missing_slots_list(array, nb_slots_to_remove_dawn=6):
     return indexes_isolated
 
 
-def compute_parameters(data_dict, channels, times, latitudes, longitudes, frequency, compute_indexes=False, normalize=True):
-    from numpy import zeros, empty, union1d, maximum
-    nb_slots = len(data_dict[channels[0]])
+def compute_parameters(content, ocean, times, latitudes, longitudes, frequency, compute_indexes,
+                       normalize, normalization):
+    from numpy import zeros, empty, maximum, shape
+    nb_slots = len(content[0])
     nb_latitudes = len(latitudes)
     nb_longitudes = len(longitudes)
-    shape_ = (nb_slots, nb_latitudes, nb_longitudes, len(channels))
+    shape_ = (nb_slots, nb_latitudes, nb_longitudes, len(content))
     data = empty(shape=shape_)
     mask = zeros((nb_slots, nb_latitudes, nb_longitudes)) == 1    # awful trick
-    for k in range(len(channels)):
-        chan = channels[k]
-        slots_to_interpolate = get_missing_slots_list(data_dict[chan][:, :, :])
+    for k in range(len(content)):
+        slots_to_interpolate = get_missing_slots_list(content[k, :, :, :])
         # filter isolated nan and aberrant
-        data[:, :, :, k] = interpolate_the_missing_slots(data_dict[chan][:, :, :], slots_to_interpolate, interpolation='linear')
+        data[:, :, :, k] = interpolate_the_missing_slots(content[k, :, :, :], slots_to_interpolate, interpolation='linear')
         # get mask for non isolated nan and aberrant
         maskk = mask_array(data[:, :, :, k])
-        if normalize:
+        if False and normalize:
             data[:, :, :, k] = normalize_array(data[:, :, :, k], maskk)
         mask = mask | maskk
+    del content
     if not compute_indexes:
         data[mask] = -1
         return data
     else:
-        nb_features = 5 # nsdi, short variability nsdi, cli, short variability cli, VIS064
+        nb_features = 5 # nsdi, short variability nsdi, cli, short variability cli, (VIS)
         # IR124_2000: 0, IR390_2000: 1, VIS160_2000: 2,  VIS064_2000:3
         mu = get_array_3d_cos_zen(times, latitudes, longitudes)
         treshold_mu = 0.05
         aux_nsdi = data[:, :, :, 2] + data[:, :, :, 3]
         aux_nsdi[aux_nsdi < 0.05] = 0.05          # for numerical stability
         nsdi = (data[:, :, :, 3] - data[:, :, :, 2]) / aux_nsdi
-        cli = (data[:, :, :, 1] - data[:, :, :, 0]) / mu
-        mask = (mu < treshold_mu) | mask # this mask consists of night, errors, and mu_mask
-        nsdi = normalize_array(nsdi, mask)    # normalization take into account the mask
-        cli = normalize_array(cli, mask)
+        blue_sea = (data[:, :, :, 2] < 0.05) & (ocean == 0)   # threshold are uncool
+        cli = (data[:, :, :, 1] - data[:, :, :, 0])
+        cli = cli / mu
+        mask = (mu < treshold_mu) | mask | blue_sea # this mask consists of night, errors, and mu_mask
+        cli = normalize_array(cli, mask, normalization='max')
+        nsdi = normalize_array(nsdi, mask, normalization='max')    # normalization take into account the mask
         cli[mask] = 0   # night and errors represented by (-1,-1)
         nsdi[mask] = 0
+        del mu, data, aux_nsdi
+
         new_data = empty(shape=(nb_slots, nb_latitudes, nb_longitudes, nb_features))
-        new_data[:, :, :, nb_features-1] = data[:, :, :, 3].copy()
-        new_data[:, :, :, nb_features - 1][mask] = 0
+        new_data[:, :, :, nb_features-1] = blue_sea
+        # new_data[:, :, :, nb_features - 1][blue_sea] = 1
         # new_data[:, :, :, nb_features-1] = mu.copy()
-        nsdi[data[:, :, :, 3] < 0.3] = 0   # to remove the common artifact "excessive sea nsdi"
-        del mu, aux_nsdi, data
 
         # nsdi = get_tricky_transformed_nsdi(nsdi,0.35)  # posey
-        new_data[:, :, :, 0] = nsdi
 
         # new_data[:, :, :, 0] = get_tricky_transformed_nsdi(nsdi, 0.35)  # posey
         # new_data[new_data[:, :, :, 0] < 0] = 0
@@ -169,8 +194,9 @@ def compute_parameters(data_dict, channels, times, latitudes, longitudes, freque
                                                                       th_2=0.4,
                                                                       negative_variation=True)
         new_data[:, :, :, 1] = maximum(nsdi_10,maximum(nsdi_20, nsdi_60))
+        new_data[:, :, :, 0] = nsdi
 
-        new_data[:, :, :, 2] = cli
+        del nsdi_10, nsdi_20, nsdi_60, nsdi
 
         cli_10 = get_variability_array_modified(array=cli, mask=mask, step=10 / frequency, th_1=0.018,
                                                               negative_variation=False)
@@ -179,11 +205,22 @@ def compute_parameters(data_dict, channels, times, latitudes, longitudes, freque
         cli_60 = get_variability_array_modified(array=cli, mask=mask, step=60 / frequency, th_1=0.028, th_2=0.3,
                                                                                       negative_variation=False)
         new_data[:, :, :, 3] = maximum(cli_10, maximum(cli_20, cli_60))
+        new_data[:, :, :, 2] = cli
+
+        if normalization in ['var','max']:
+            new_data[:, :, :, 0] = normalize_array(new_data[:, :, :, 0], normalization=normalization, mask=mask)
+            new_data[:, :, :, 1] = normalize_array(new_data[:, :, :, 1], normalization=normalization, mask=mask)
+            new_data[:, :, :, 2] = normalize_array(new_data[:, :, :, 2], normalization=normalization, mask=mask)
+            new_data[:, :, :, 3] = normalize_array(new_data[:, :, :, 3], normalization=normalization, mask=mask)
+
+
+
+        # new_data[:, :, :, 3] = mu
 
         # new_data[new_data[:, :, :, 3]<0.4]=0
-        new_data[new_data>1]=1
+        # new_data[new_data>1]=1    # could be inportant to get nicely distributed points
         # variability arr
-        del mask
+        del mask, cli_10, cli_20, cli_60   # useless ?
         return new_data
 
 
@@ -210,12 +247,27 @@ def get_array_3d_cos_zen(times, latitudes, longitudes):
     return sunpos.evaluate(times, latitudes, longitudes, ndim=2, n_cpus=2).cosz
 
 
-def normalize_array(array, mask=None):
-    from numpy import max, abs
-    if mask is None:
-        return array / max(abs(array)) # max of data which is not masked...
+def normalize_array(array, mask=None, normalization='max'):
+    # normalization: max, standard
+    from numpy import max, abs, var, mean, sqrt
+    if normalization == 'max':
+        if mask is None:
+            return array / max(abs(array)) # max of data which is not masked...
+        else:
+            return array / max(abs(array[~mask]))   # max of data which is not masked...
+    elif normalization == 'standard':
+        if mask is None:
+            m = mean(array)
+            s = sqrt(var(array))
+            print 'm', m, 's', s
+            return (array -m) / s
+        else:
+            m = mean(array[~mask])
+            s = sqrt(var(array[~mask]))
+            print 'm', m, 's', s
+            return (array -m) / s
     else:
-        return array / max(abs(array[~mask]))   # max of data which is not masked...
+        return array
 
 
 def get_variability_array(array, mask, step=1):
@@ -280,37 +332,45 @@ def get_variability_array_modified(array, mask, step=1, th_1=0.02, th_2=0.3,
 
 
 def get_features(latitudes, longitudes, dfb_beginning, dfb_ending, compute_indexes,
+                 slot_step=1,
                  channels=['IR124_2000', 'IR390_2000', 'VIS160_2000',  'VIS064_2000'],
                  dirs=['/data/model_data_himawari/sat_data_procseg'],
                  satellite='H08LATLON',
                  pattern_suffix='__TMON_{YYYY}_{mm}__SDEG05_r{SDEG5_LATITUDE}_c{SDEG5_LONGITUDE}.nc',
                  satellite_frequency=10,
-                 normalize=True):
+                 dir_ocean='/data/ocean_shape',
+                 pattern_ocean='landsea_mask_2arcmin.nc',
+                 normalize=True,
+                 normalization='none'
+                 ):
     from datetime import datetime,timedelta
-    chan_patterns = {}
+    chan_patterns = []
     for channel in channels:
-        chan_patterns[channel] = satellite + '_' + channel + pattern_suffix
-    print(chan_patterns)
-    data_dict = get_channels_content(
+        chan_patterns.append(satellite + '_' + channel + pattern_suffix)
+    content = get_channels_content(
         dirs,
         chan_patterns,
+        channels,
         latitudes,
         longitudes,
         dfb_beginning,
-        dfb_ending
+        dfb_ending,
+        slot_step
     )
-    len_times = (1+dfb_ending-dfb_beginning)*60*24/satellite_frequency
+    ocean = get_ocean_mask(dir_ocean, pattern_ocean, latitudes, longitudes)
+    len_times = (1+dfb_ending-dfb_beginning)*60*24/(satellite_frequency*slot_step)
     origin_of_time = datetime(1980, 1, 1)
     date_beginning = origin_of_time + timedelta(days=dfb_beginning-1)
-    times = [date_beginning + timedelta(minutes=k*satellite_frequency) for k in range(len_times)]
-    return compute_parameters(data_dict,
-                              channels,
+    times = [date_beginning + timedelta(minutes=k*satellite_frequency*slot_step) for k in range(len_times)]
+    return compute_parameters(content,
+                              ocean,
                               times,
                               latitudes,
                               longitudes,
                               satellite_frequency,
                               compute_indexes,
-                              normalize)
+                              normalize,
+                              normalization)
 
 
 def get_latitudes_longitudes(lat_start, lat_end, lon_start, lon_end, resolution=2.0/60):
