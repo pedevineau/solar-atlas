@@ -67,6 +67,11 @@ def get_basis_model(process):
             n_clusters=nb_components_,
             max_iter=max_iter_
         )
+    elif process == 'spectral':
+        model = cluster.SpectralClustering(
+            n_clusters=nb_components_,
+            assign_labels='discretize'
+        )
     else:
         print 'process name error'
     return model
@@ -214,37 +219,46 @@ def reject_model():
 
 if __name__ == '__main__':
     ### parameters
-    dfb_beginning_ = 13527
+    dfb_beginning_testing = 13527+15
         # 'dfb_beginning': 13527,
-    nb_days_ = 3
+    nb_days_testing = 4
+    slot_step_testing = 1
+
+    slot_step_training = 12
+    training_rate = 0.01 # critical     # mathematical training rate is training_rate / slot_step_training
+    randomization = True  # to select training data among input data
+    dfb_beginning_training = 13527
+    nb_days_training = 40
+    dfb_ending_traning = dfb_beginning_training + nb_days_training - 1
 
     multi_channels = True
     multi_models_ = False
     compute_classification = True
-    auto_corr = True and nb_days_ >= 5
+    auto_corr = True and nb_days_testing >= 5
     on_point = False
-    normalize_ = False   # should stay False as long as thresholds has not be computed !?
-    training_rate = 0.05 # critical
-    shuffle = True  # to select training data among input data
+    normalize_ = True   # should stay False as long as thresholds has not be computed !?
+    normalization = 'none'
+
     display_means_ = True
-    process_ = 'kmeans'  # bayesian (not good), gaussian, DBSCAN or kmeans
-    max_iter_ = 100
+    process_ = 'DBSCAN'  # bayesian (not good), gaussian, DBSCAN or kmeans
+    max_iter_ = 200
     # what I get right now with 5 clusters: icy cloud, water cloud, bare lands or water, another cloud cluster, snow
-    nb_components_ = 8  # critical!!!   # 5 recommended for gaussian: normal, cloud, snow, sea, no data
+    nb_components_ = 7  # critical!!!   # 5 recommended for gaussian: normal, cloud, snow, sea, no data
     ask_dfb_ = False
     ask_channels = False
     verbose_ = True  # print errors during training or prediction
 
 
-    nb_first_slots_to_remove = 5
+    # nb_first_slots_to_remove = 5
     selected_channels = []
 
     latitude_beginning = 35.0   # salt lake mongolia  45.
-    latitude_end = 45.0
-    longitude_beginning = 125.0
-    longitude_end = 130.0
+    latitude_end = 40.
+    longitude_beginning = 125.
+    longitude_end = 130.
 
-    latitudes_, longitudes_ = get_latitudes_longitudes(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
+    latitudes_, longitudes_ = get_latitudes_longitudes(latitude_beginning, latitude_end, longitude_beginning,
+                                                       longitude_end)
     bbox_ = get_bbox(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
 
     if multi_channels:
@@ -256,20 +270,22 @@ if __name__ == '__main__':
 
     time_start = time.time()
 
-    [dfb_beginning_, dfb_ending_] = get_dfb_tuple(ask_dfb=ask_dfb_, dfb_beginning=dfb_beginning_, nb_days=nb_days_)
+    [dfb_beginning_testing, dfb_ending_testing] = get_dfb_tuple(ask_dfb=ask_dfb_, dfb_beginning=dfb_beginning_testing,
+                                                                nb_days=nb_days_testing)
 
-    data_array = get_features(
+    data_array_testing = get_features(
         channels=selected_channels,
         latitudes=latitudes_,
         longitudes=longitudes_,
-        dfb_beginning=dfb_beginning_,
-        dfb_ending=dfb_ending_,
+        dfb_beginning=dfb_beginning_testing,
+        dfb_ending=dfb_ending_testing,
         compute_indexes=multi_channels,
-        normalize=normalize_
+        normalize=normalize_,
+        normalization=normalization
     )
-    nb_slots_ = len(data_array)
+    nb_slots_ = len(data_array_testing)
 
-    print 'time reading and getting features'
+    print 'time reading and getting features testing'
     time_start_training = time.time()
     print time_start_training - time_start
 
@@ -278,7 +294,7 @@ if __name__ == '__main__':
     ###
 
     if not compute_classification:
-        output_filters(data_array)
+        output_filters(data_array_testing)
     else:
         # print data_array
         ### to delete ###
@@ -293,11 +309,23 @@ if __name__ == '__main__':
         # else:
         # TRAINING
         len_training = int(nb_slots_ * training_rate)
-        models = []
-        if shuffle:
+
+        data_array_training = get_features(
+            channels=selected_channels,
+            latitudes=latitudes_,
+            longitudes=longitudes_,
+            dfb_beginning=dfb_beginning_training,
+            dfb_ending=dfb_ending_traning,
+            slot_step=slot_step_training,
+            compute_indexes=multi_channels,
+            normalize=normalize_,
+            normalization=normalization
+        )
+
+        if randomization:
             from choose_training_sample import *
             t_randomiz = time.time()
-            data_3D_training_ = get_random_stratified_samples(data_array, training_rate, 10)
+            data_3D_training_ = get_random_stratified_samples(data_array_testing, training_rate, 3 * nb_days_testing)
             evaluate_randomization(data_3D_training_)
             print 'time for ramdomiz', time.time() - t_randomiz
             # data_array_copy = data_array.copy()
@@ -305,7 +333,9 @@ if __name__ == '__main__':
             # data_3D_training_ = data_array_copy[0:len_training]
 
         else:
-            data_3D_training_ = data_array[0:len_training]
+            data_3D_training_ = data_array_testing[0:len_training]
+
+        models = []
         if multi_models_:
             models = get_trained_models_2d(
                 training_array=data_3D_training_,
@@ -342,13 +372,13 @@ if __name__ == '__main__':
         time_stop_training = time.time()
         print 'training:'
         print time_stop_training-time_start_training
-
+        print 'TESTING'
         # TESTING
         if multi_models_:
             data_3D_predicted = get_classes(nb_slots=nb_slots_,
                                             nb_latitudes=nb_latitudes_,
                                             nb_longitudes=nb_longitudes_,
-                                            data_array=data_array,
+                                            data_array=data_array_testing,
                                             process=process_,
                                             multi_models=True,
                                             model_2D=models,
@@ -358,7 +388,7 @@ if __name__ == '__main__':
             data_3D_predicted = get_classes(nb_slots=nb_slots_,
                                             nb_latitudes=nb_latitudes_,
                                             nb_longitudes=nb_longitudes_,
-                                            data_array=data_array,
+                                            data_array=data_array_testing,
                                             process=process_,
                                             multi_models=False,
                                             single_model=single_model_,
@@ -367,17 +397,20 @@ if __name__ == '__main__':
         time_prediction = time.time()
         print 'time prediction'
         print time_prediction - time_stop_training
-        print print_date_from_dfb(dfb_beginning_, dfb_ending_)
+        print 'learning', print_date_from_dfb(dfb_beginning_training, dfb_ending_traning)
+        print 'testing', print_date_from_dfb(dfb_beginning_testing, dfb_ending_testing)
 
         print '__CONDITIONS__'
         print 'NB_PIXELS', str(nb_latitudes_ * nb_longitudes_)
-        print 'NB_SLOTS', str(144 * nb_days_)
+        print 'NB_SLOTS', str(144 * nb_days_testing)
         print 'process', process_
         print 'training_rate', training_rate
         print 'n_components', nb_components_
-        print 'shuffle', shuffle
+        print 'shuffle', randomization
         print 'compute classification', compute_classification
         print 'multi channels', multi_channels
+        if normalize_:
+            print 'normalization', normalization
 
         print 'cano_checked', str(cano_checked)
         print 'cano_unchecked', str(cano_unchecked)
