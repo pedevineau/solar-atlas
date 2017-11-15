@@ -1,3 +1,32 @@
+def median_filter_3d(array, scope=5):
+    from scipy import ndimage
+    for k in range(len(array)):
+        array[k] = ndimage.median_filter(array[k], scope)
+    return array
+
+
+def low_pass_filter_3d(array, cutoff, omega=0):
+    from numpy import shape, empty, abs, sin, pi, gradient, square
+    from scipy import fftpack
+    (a, b, c) = shape(array)
+    filt = empty((b, c))
+    filtered_spatial = empty((a, b, c))
+    # grs = empty((a, b, c, 4))
+    # grsq = empty((a,b,c,2))
+    for k in range(len(array)):
+        fft2 = fftpack.fft2(array[k, :, :])
+        filt[abs(fft2) < cutoff - omega] = 1
+        filt[abs(fft2) > cutoff + omega] = 0
+        mask = (cutoff - omega < abs(fft2)) & (abs(fft2) < cutoff + omega)
+        filt[mask] = 0.5 * (1 - sin(pi * (abs(fft2[mask]) - cutoff) / (2 * omega)))
+        fft2 = fft2 * filt
+        filtered_spatial[k] = fftpack.ifft2(fft2)
+    return filtered_spatial
+        # g = gradient(filtered_spatial[k])
+        # grs[k, :, :, 0] = g[0]  # gradient
+        # grs[k, :, :, 1] = g[1]  # gradient
+        # grsq[k, :, :, 0] = square(grs[k, :, :, 0]) + square(grs[k, :, :, 1])
+
 
 # unused. relevant??
 def time_smoothing(array_3D_to_smoothen):
