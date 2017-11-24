@@ -43,18 +43,45 @@ def get_bbox(lat_start, lat_end, lon_start, lon_end):
     return Bbox(lon_start, lat_start, lon_end, lat_end)
 
 
-def visualize_map_time(array_3d, bbox, vmin=0, vmax=1, title=None, subplot_titles_list=[], color='jet'):
+def visualize_curves_3d(latitudes, longitudes, array_2d, title=None):
+    from matplotlib import pyplot
+    from numpy import meshgrid, transpose, array
+    from mpl_toolkits.mplot3d import Axes3D
+    latitudes = list(reversed(latitudes))
+    latitudes, longitudes = meshgrid(latitudes, longitudes)
+    fig = pyplot.figure()
+    ax = Axes3D(fig)
+    pyplot.title(title)
+    print title
+    ax.plot_surface(longitudes, latitudes, transpose(array_2d))  # to get usual Earth vision
+    pyplot.show()
+
+
+def visualize_map_time(array_map, bbox, vmin=0, vmax=1, title=None, subplot_titles_list=[], color='jet'):
+    # array can be 3d or 4d
     from nclib2.visualization import visualize_map_3d
     from numpy import shape
 
     interpolation_ = None
     ocean_mask_ = False
-    (a, b, c, d) = shape(array_3d)
-    for var_index in range(d):
-        if title is None:
-            title = 'Input_'+str(var_index)
+    if len(shape(array_map)) == 4:
+        (a, b, c, d) = shape(array_map)
+        for var_index in range(d):
+            if title is None:
+                title = 'Input_'+str(var_index)
+            print title
+            visualize_map_3d(array_map[:, :, :, var_index],
+                             bbox,
+                             interpolation=interpolation_,
+                             vmin=vmin,
+                             vmax=vmax,
+                             title=title,
+                             subplot_titles_list=subplot_titles_list,
+                             ocean_mask=ocean_mask_,
+                             color=color)
+    elif len(shape(array_map)) == 3:
         print title
-        visualize_map_3d(array_3d[:, :, :, var_index],
+        visualize_map_3d(array_map[:, :, :],
                          bbox,
                          interpolation=interpolation_,
                          vmin=vmin,
@@ -72,18 +99,18 @@ def visualize_map(array_2d):
 
 def print_date_from_dfb(begin, ending):
     from datetime import datetime, timedelta
-    d_beginning = datetime(1980, 1, 1) + timedelta(days=begin)
-    d_ending = datetime(1980, 1, 1) + timedelta(days=ending + 1, seconds=-1)
+    d_beginning = datetime(1980, 1, 1) + timedelta(days=begin-1, seconds=1)
+    d_ending = datetime(1980, 1, 1) + timedelta(days=ending + 1 -1, seconds=-1)
     print 'Dates from ', str(d_beginning), ' till ', str(d_ending)
 
 
-def visualize_classes(array_3D, bbox):
+def visualize_classes(data_predicted, bbox):
     from nclib2.visualization import visualize_map_3d
     interpolation_ = None
     ocean_mask_ = False
     title_ = 'Naive classification. Plot id:' + str(randint(0,1000))
     print title_
-    visualize_map_3d(array_3D,
+    visualize_map_3d(data_predicted,
                      bbox,
                      interpolation=interpolation_,
                      # vmin=0,
@@ -92,7 +119,7 @@ def visualize_classes(array_3D, bbox):
                      ocean_mask=ocean_mask_)
 
 
-def visualize_input(y_axis, x_axis=None, title='Curve', display_now=True):
+def visualize_input(y_axis, x_axis=None, title='Curve', display_now=True, style='-'):
     r = randint(1, 1000)
     title = title + ' id:'+str(r)
     import matplotlib.pyplot as plt
@@ -100,9 +127,9 @@ def visualize_input(y_axis, x_axis=None, title='Curve', display_now=True):
     print title
     plt.title(title)
     if x_axis is None:
-        plt.plot(y_axis)
+        plt.plot(y_axis, style)
     else:
-        plt.plot(x_axis, y_axis)
+        plt.plot(x_axis, y_axis, style)
     if display_now:
         plt.show()
 
@@ -124,29 +151,64 @@ def visualize_hist(array_1d, title='Histogram', precision=50):
 
 
 if __name__ == '__main__':
-    from get_data import get_latitudes_longitudes, get_features, get_variability_array, normalize_array
-    compute_indexes = True
-    latitude_beginning = 35.0   # salt lake mongolia  45.
-    latitude_end = 40.0
-    longitude_beginning = 125.0
-    longitude_end = 130.0
-    dfb_beginning = 13527
+    from get_data import get_latitudes_longitudes, get_features, normalize_array
+    compute_indexes_ = True
+    type_channels = 'visible'
+    latitude_beginning = 35.+20  # salt lake mongolia  45.
+    latitude_end = 40.+25
+    longitude_beginning = 135.
+    longitude_end = 140.
+    dfb_beginning = 13516+7
     dfb_ending = dfb_beginning
     print_date_from_dfb(dfb_beginning, dfb_ending)
     lat, lon = get_latitudes_longitudes(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
-    bbox = get_bbox(latitude_beginning,latitude_end,longitude_beginning,longitude_end)
-    features = get_features(lat, lon, dfb_beginning, dfb_ending, compute_indexes, normalize=False)
-    print features[120,0,0,:]
-    titles = None
-    if not compute_indexes:
-        titles = ['IR124_2000', 'IR390_2000', 'VIS160_2000', 'VIS064_2000']
-    # from numpy import shape
-    # visualize_input(features[:, 10, 10, 0:2], display_now=False)
-    # print 35+32*0.033, 125+12*0.033
-    # visualize_input(normalize_array(features[:,0,0,0:1]))
+    bbox = get_bbox(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
+    features = get_features(type_channels, lat, lon, dfb_beginning, dfb_ending, compute_indexes_, slot_step=1,
+                            normalize=False,
+                            normalization='none')
+    from numpy.random import randint
+    from numpy import *
 
-    print('cli and var')
-    visualize_map_time(features[:, :, :, 2:3], bbox, vmin=0, vmax=1, title=randint(0, 30), color='gray')
-    # visualize_map_time(get_variability_array(features[:,:,:], step=1), bbox, vmin=-0.1, vmax=0.1)
-    # visualize_map_time(features[:,:,:,2:], bbox, subplot_titles_list=titles, vmin=0.3, vmax=1)
+    # visualize_hist(array_1d=ext[(ext!=-10) & (abs(ext) > 0.001)], precision=150)
+    # print ext[abs(ext)<0.001]
+    # vars = features[:, lat_pix, lon_pix, 1:4:2]
+    # chans = features[:, lat_pix, lon_pix, 2:]
+
+    # lat0 = 36.6
+    # lon0 = 128.04
+    #
+    # if compute_indexes_:
+    #     # lat0, lon0 = 39.67, 126.5
+    #     print 'lat, lon', lat0, lon0
+    #     lat_pix, lon_pix = int((lat0 - latitude_beginning) * 60 / 2.), int((lon0 - longitude_beginning) * 60 / 2.)
+    #     print 'pixs', lat_pix, lon_pix
+    #     indexes = features[:, lat_pix, lon_pix, :1]
+    #     visualize_input(indexes, display_now=False, style='^')
+
+
+    # for k in range(25):
+    #     lat_pix = randint(0, 30)
+    #     lon_pix = randint(0, 30)
+    #     # lat_pix, lon_pix=20,61
+    #     print lat_pix, lon_pix
+    #     # print 'lat, lon', lat0, lon0
+    #     # lat_pix, lon_pix = int((lat0 - latitude_beginning) * 60 / 2.), int((lon0 - longitude_beginning) * 60 / 2.)
+    #     indexes = features[:, lat_pix, lon_pix, 0:3]
+    #
+    #     visualize_input(indexes, display_now=True, style='^')
+
+
+    if type_channels == 'infrared' and not compute_indexes_:
+        visualize_map_time(features[:, :, :, 0:4], bbox, title=type_channels, vmin=240, vmax=300, color='gray')
+    else:
+        visualize_map_time(features[:, :, :, 0:4], bbox, title=type_channels, vmin=0, vmax=1, color='gray')
+    # visualize_map_time(4*features[:, :, :, 1:3], bbox, title='INFRARED', vmin=0, vmax=1, color='gray')
+    raise Exception('stop here for now')
+
+
+    for slot0 in arange(4,40,9):
+        visualize_curves_3d(lat, lon, features[slot0,:,:,0], title='slot:'+str(slot0))
+        # visualize_curves_3d(lat, lon, features[slot0,:,:,1], title='slot:'+str(slot0))
+
+        # visualize_map_time(blu, bbox, title='median filter', vmin=-1, vmax=1, color='gray')
 

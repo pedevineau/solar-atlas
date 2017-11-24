@@ -1,7 +1,7 @@
-*.json
+#*.json
 *.txt
-draft.py
-testing_nclib2.py
+outdated/draft.py
+outdated/testing_nclib2.py
 *.pyc
 .idea
 general_utils

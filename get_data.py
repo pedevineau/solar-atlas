@@ -2,6 +2,7 @@
 
 from numpy import isnan, isinf
 from filter import median_filter_3d, low_pass_filter_3d
+from utils import *
 
 
 def get_selected_channels(all_channels, ask_channels=True):
@@ -36,7 +37,14 @@ def get_dfb_tuple(dfb_beginning, nb_days, ask_dfb=False):
 
 
 # reading data
-def get_array_channels_content(dirs, patterns, channels, latitudes, longitudes, dfb_beginning, dfb_ending, slot_step=1):
+def get_array_channels_content(channels, latitudes, longitudes, dfb_beginning, dfb_ending, slot_step=1):
+    import json
+    metadata = json.load(open('metadata.json'))
+    satellite = metadata["satellite"]
+    pattern = metadata["channels"]["pattern"]
+    patterns = [pattern.replace("{SATELLITE}", satellite).replace('{CHANNEL}', chan) for chan in channels]
+    dir = metadata["channels"]["dir"]
+
     nb_days = dfb_ending - dfb_beginning + 1
     nb_slots = 144 / slot_step
     slots = [k*slot_step for k in range(nb_slots)]
@@ -47,7 +55,7 @@ def get_array_channels_content(dirs, patterns, channels, latitudes, longitudes, 
     for k in range(len(patterns)):
         pattern = patterns[k]
         chan = channels[k]
-        dataset = DataSet.read(dirs=dirs,
+        dataset = DataSet.read(dirs=dir,
                                extent={
                                    'latitude': latitudes,
                                    'longitude': longitudes,
@@ -79,16 +87,21 @@ def get_mask_outliers(array):
     return mask
 
 
-def get_ocean_mask(dirs, pattern, latitudes, longitudes):
+def get_ocean_mask(latitudes, longitudes):
     from nclib2.dataset import DataSet
-    ocean = DataSet.read(dirs=dirs,
-       extent={
-           'lat': latitudes,
-           'lon': longitudes,
-       },
-       file_pattern=pattern,
-       variable_name='Band1', interpolation='N', max_processes=0,
-       )
+    import json
+    metadata = json.load(open('metadata.json'))
+    dir_ = metadata["masks"]["ocean"]["dir"]
+    pattern = metadata["masks"]["ocean"]["pattern"]
+
+    ocean = DataSet.read(dirs=dir_,
+                         extent={
+                               'lat': latitudes,
+                               'lon': longitudes,
+                           },
+                         file_pattern=pattern,
+                         variable_name='Band1', interpolation='N', max_processes=0,
+                         )
     return ocean['data']
 
 
@@ -132,8 +145,8 @@ def get_list_missing_slots(array, nb_slots_to_remove_dawn=6):
 
 
 def compute_parameters(type_channels, array_data, ocean, times, latitudes, longitudes, timestep_satellite, compute_indexes,
-                       normalize, normalization, weights, return_m_s=False):
-    from numpy import empty, zeros, full, shape, maximum
+                       normalize, normalization, weights, return_m_s=False, return_mu=False):
+    from numpy import empty, zeros, full, shape, maximum, percentile
     (nb_slots, nb_latitudes, nb_longitudes, nb_channels) = shape(array_data)
     mask = zeros((nb_slots, nb_latitudes, nb_longitudes), dtype=bool)    # trick
 
@@ -157,14 +170,31 @@ def compute_parameters(type_channels, array_data, ocean, times, latitudes, longi
         # VIS160_2000: 0,  VIS064_2000:1
         mu = get_array_3d_cos_zen(times, latitudes, longitudes)
         treshold_mu = 0.05
-        threshold_blue_sea = 0.05
-        blue_sea = (array_data[:, :, :, 0] < threshold_blue_sea) & (ocean == 0)   # threshold are uncool
+        threshold_blue_sea = 5
         cli = (array_data[:, :, :, 1] - array_data[:, :, :, 0])
+        cloudy_sea = (cli > threshold_blue_sea) & (ocean == 0)
         cli = cli / mu
-        mask_cli = (mu < treshold_mu) | mask | blue_sea   # this mask consists of night, errors, and mu_mask
+        mask_cli = (mu < treshold_mu) | mask | (ocean == 0)    # this mask consists of night, errors, mu_mask and sea
+
+        mir=array_data[:, :, :, 0] / mu
+        fir=array_data[:, :, :, 1] / mu
+
+        from numpy import percentile
+        smir = percentile(mir[~mask_cli],4)
+        sfir = percentile(fir[~mask_cli],4)
+
+
+        mir = mir / (smir-mu)
+        fir = fir / (sfir-mu)
+
+
+        mir[mask_cli] = 0
+        fir[mask_cli] = 0
+
+
         cli, m, s = normalize_array(cli, mask_cli, normalization='max')
         cli[mask_cli] = 0   # night and errors represented by (-1,-1)
-        del array_data
+        # del array_data
 
         array_indexes = empty(shape=(nb_slots, nb_latitudes, nb_longitudes, nb_features))
         cli_10 = get_variability_array_modified(array=cli, mask=mask_cli, step=10 / timestep_satellite,  #th_1=0.018,
@@ -175,8 +205,12 @@ def compute_parameters(type_channels, array_data, ocean, times, latitudes, longi
                                                 th_1=0.2,
                                                 negative_variation=False)
         array_indexes[:, :, :, 1] = median_filter_3d(cli_10 + cli_20 + cli_60, scope=2)
-        array_indexes[:, :, :, 0] = median_filter_3d(cli, scope=5)
-        array_indexes[:, :, :, 2] = blue_sea
+        array_indexes[:, :, :, 0] = median_filter_3d(cli, scope=2)
+        array_indexes[:, :, :, 2] = 1 - ocean  # ground is 0, sea is 1
+        # array_indexes[:, :, :, 2][cloudy_sea] = 2  # ground is 0, blue sea is 1 cloudy sea is 2
+
+        # array_indexes[:, :, :, 1] = normalize_array(mir, mask_cli, normalization='max')[0]
+        # array_indexes[:, :, :, 2] = normalize_array(fir, mask_cli, normalization='max')[0]
 
         me, std = zeros(nb_features), full(nb_features, 1.)
         if normalization in ['standard', 'max']:
@@ -186,78 +220,118 @@ def compute_parameters(type_channels, array_data, ocean, times, latitudes, longi
         if weights is not None:
             array_indexes[:, :, :, 0] = weights[0] * array_indexes[:, :, :, 0]
             array_indexes[:, :, :, 1] = weights[1] * array_indexes[:, :, :, 1]
-            array_indexes[:, :, :, 2] = weights[2] * array_indexes[:, :, :, 2]
             me = me * weights
-        array_indexes[mask_cli] = - 10   # - 10 is supposed to be less than standardized data
-        if normalization in ['standard', 'max'] and return_m_s:
+        # array_indexes[:, :, :, 0:2][mask_cli] = - 10   # - 10 is supposed to be less than standardized data
+
+        if return_m_s and return_mu:
+            return array_indexes, mu, me, std
+        elif return_mu and not return_m_s:
+            return array_indexes, mu
+        elif not return_mu and return_m_s:
             return array_indexes, me, std
         else:
             return array_indexes
 
     elif type_channels == 'visible':
         # (spatially-smoothed) ndsi, short variability ndsi, temporally-smoothed "stressed" ndsi, its short variability
-        nb_features = 4
+        nb_features = 2
         # VIS160_2000: 0,  VIS064_2000:1
         mu = get_array_3d_cos_zen(times, latitudes, longitudes)
-        treshold_mu = 0.05
-        threshold_denominator = 0.02
-        ndsi = (array_data[:, :, :, 1] - array_data[:, :, :, 0]) /\
-               maximum(array_data[:, :, :, 0] + array_data[:, :, :, 1], threshold_denominator)
-        mask_ndsi = (mu < treshold_mu) | mask | (ocean == 0)
-        ndsi, m, s = normalize_array(ndsi, mask_ndsi, normalization='max')    # normalization take into account the mask
-        ndsi[mask_ndsi] = 0
-        del array_data
+        #
+        # dndsi, m, s, mask_ndsi = get_ndsi(vis=array_data[:, :, :, 0], nir=array_data[:, :, :, 1], threshold_denominator=0.02,
+        #                                  maskv=mask, mu=mu, threshold_mu=0.05, ocean_mask=ocean, direct=True)
+        ndsi, m, s, mask_ndsi = get_ndsi(vis=array_data[:, :, :, 0], nir=array_data[:, :, :, 1], threshold_denominator=0.02,
+                                         maskv=mask, mu=mu, threshold_mu=0.05, ocean_mask=ocean)
+
+
 
         array_indexes = empty(shape=(nb_slots, nb_latitudes, nb_longitudes, nb_features))
 
         # ndsi = get_tricky_transformed_ndsi(ndsi,0.35)  # posey
 
         print 'ndsi'
-        array_indexes[:, :, :, 0] = median_filter_3d(ndsi, scope=3)
-        from ndsi_day_trend import recognize_pattern
-        stressed_ndsi = recognize_pattern(ndsi, mu, mask_ndsi, timestep_satellite)
-        array_indexes[:, :, :, 2] = stressed_ndsi
-        ndsi_10 = get_variability_array_modified(array=ndsi, mask=mask, step=10 / timestep_satellite, # th_1=0.15,
-                                                 th_1=0.4,
-                                                              negative_variation=False)
-        ndsi_20 = get_variability_array_modified(array=ndsi, mask=mask, step=20 / timestep_satellite, # th_1=0.1,
-                                                 th_1=0.4,
-                                                              negative_variation=False)
-        ndsi_60 = get_variability_array_modified(array=ndsi, mask=mask, step=60 / timestep_satellite, # th_1=0.2,
-                                                                      th_1=0.4,
-                                                                      negative_variation=False)
 
-        array_indexes[:, :, :, 1] = median_filter_3d(ndsi_10+ndsi_20 + ndsi_60, scope=2)
+        from ndsi_local_day_trend import recognize_pattern_vis, recognize_pattern_ndsi
+        stressed_ndsi = recognize_pattern_ndsi(ndsi, mu, mask_ndsi, timestep_satellite,
+                                               slices_per_day=4, persistence_sigma=1.5)
 
-        ndsi_10 = get_variability_array_modified(array=stressed_ndsi, mask=mask, step=10 / timestep_satellite, # th_1=0.15,
-                                                 th_1=0.4,
-                                                              negative_variation=False)
-        ndsi_20 = get_variability_array_modified(array=stressed_ndsi, mask=mask, step=20 / timestep_satellite, # th_1=0.1,
-                                                 th_1=0.4,
-                                                              negative_variation=False)
-        array_indexes[:, :, :, 3] = median_filter_3d(ndsi_10+ndsi_20, scope=2)
+        print 'stressed', stressed_ndsi[isnan(stressed_ndsi)]
+
+        # dstressed_ndsi = recognize_pattern_ndsi(dndsi, mu, mask_ndsi, timestep_satellite,
+        #                                        slices_per_day=4, persistence_sigma=1.)
+        # stressed_ndsi = recognize_pattern_vis(ndsi, array_data[:, :, :, 0], array_data[:, :, :, 1], mu, mask_ndsi, timestep_satellite, slices_by_day=1)
+        array_indexes[:, :, :, 1] = median_filter_3d(stressed_ndsi, scope=2)
+
+        print 'first med', array_indexes[isnan(array_indexes)]
+
+        super_mask = (stressed_ndsi > 0.5) | mask_ndsi
+        ndsi[super_mask]=0
+        array_indexes[:, :, :, 0] = median_filter_3d(ndsi, scope=2)
+        # array_indexes[:, :, :, 1] = get_variability_array_modified(array=ndsi, mask=super_mask)
+        del array_data
+
+        print 'second med', array_indexes[isnan(array_indexes)]
+
+        # ndsi_10 = get_variability_array_modified(array=ndsi, mask=mask, step=10 / timestep_satellite, # th_1=0.15,
+        #                                          th_1=0.4,
+        #                                                       negative_variation=False)
+        # ndsi_20 = get_variability_array_modified(array=ndsi, mask=mask, step=20 / timestep_satellite, # th_1=0.1,
+        #                                          th_1=0.4,
+        #                                                       negative_variation=False)
+        # ndsi_60 = get_variability_array_modified(array=ndsi, mask=mask, step=60 / timestep_satellite, # th_1=0.2,
+        #                                                               th_1=0.4,
+        #                                                               negative_variation=False)
+        #
+        # array_indexes[:, :, :, 1] = median_filter_3d(ndsi_10+ndsi_20 + ndsi_60, scope=2)
+
+        # array_indexes[:, :, :, 1] = recognize_pattern(ndsi, mu, mask_ndsi, timestep_satellite, slices_by_day=1)
+        #
+        #
+        # ndsi_10 = get_variability_array_modified(array=stressed_ndsi, mask=mask, step=10 / timestep_satellite, # th_1=0.15,
+        #                                          th_1=0.4,
+        #                                                       negative_variation=False)
+        # ndsi_20 = get_variability_array_modified(array=stressed_ndsi, mask=mask, step=20 / timestep_satellite, # th_1=0.1,
+        #                                          th_1=0.4,
+        #                                                       negative_variation=False)
+        # array_indexes[:, :, :, 3] = median_filter_3d(ndsi_10+ndsi_20, scope=2)
         me, std = zeros(nb_features), full(nb_features, 1.)
         if normalization in ['standard', 'max']:
-            array_indexes[:, :, :, 0], me[0], std[0] = normalize_array(array_indexes[:, :, :, 0], normalization=normalization, mask=mask_ndsi)
+            # print 'lol'
+            array_indexes[:, :, :, 0], me[0], std[0] = normalize_array(array_indexes[:, :, :, 0], normalization=normalization, mask=super_mask)
             array_indexes[:, :, :, 1], me[1], std[1] = normalize_array(array_indexes[:, :, :, 1], normalization=normalization, mask=mask_ndsi)
-            array_indexes[:, :, :, 2], me[2], std[2] = normalize_array(array_indexes[:, :, :, 2], normalization=normalization, mask=mask_ndsi)
-            array_indexes[:, :, :, 3], me[3], std[3] = normalize_array(array_indexes[:, :, :, 3], normalization=normalization, mask=mask_ndsi)
+            # array_indexes[:, :, :, 2], me[2], std[2] = normalize_array(array_indexes[:, :, :, 2], normalization=normalization, mask=mask_ndsi)
+            # array_indexes[:, :, :, 3], me[3], std[3] = normalize_array(array_indexes[:, :, :, 3], normalization=normalization, mask=mask_ndsi)
 
         if weights is not None:
             array_indexes[:, :, :, 0] = weights[0] * array_indexes[:, :, :, 0]
             array_indexes[:, :, :, 1] = weights[1] * array_indexes[:, :, :, 1]
-            array_indexes[:, :, :, 2] = weights[2] * array_indexes[:, :, :, 2]
-            array_indexes[:, :, :, 3] = weights[3] * array_indexes[:, :, :, 3]
+            # array_indexes[:, :, :, 2] = weights[2] * array_indexes[:, :, :, 2]
+            # array_indexes[:, :, :, 3] = weights[3] * array_indexes[:, :, :, 3]
 
             me = me * weights
-
         array_indexes[mask] = - 10
-        if normalization in ['standard', 'max'] and return_m_s:
+        if return_m_s and return_mu:
+            return array_indexes, mu, me, std
+        elif not return_m_s and return_mu:
+            return array_indexes, mu
+        elif return_m_s and not return_mu:
             return array_indexes, me, std
         else:
             return array_indexes
     else:
         raise AttributeError('The type of channels should be \'visible\' or \'infrared\'')
+
+
+def get_ndsi(vis, nir, maskv, mu, ocean_mask, threshold_denominator=0.02, threshold_mu=0.05, direct=False):
+    from numpy import maximum
+    if direct:
+        ndsi = (nir - vis) / maximum(nir + vis, threshold_denominator)
+    else:
+        ndsi = nir / maximum(vis, threshold_denominator)
+    mask_ndsi = (mu < threshold_mu) | maskv | (ocean_mask == 0)
+    ndsi, m, s = normalize_array(ndsi, mask_ndsi, normalization='max')  # normalization take into account the mask
+    ndsi[mask_ndsi] = 0
+    return ndsi, m, s, mask_ndsi
 
 
 def get_tricky_transformed_ndsi(snow_index, summit, gamma=4):
@@ -279,27 +353,38 @@ def get_array_3d_cos_zen(times, latitudes, longitudes):
     return sunpos.evaluate(times, latitudes, longitudes, ndim=2, n_cpus=2).cosz
 
 
-def normalize_array(array, mask=None, normalization='max'):
+def normalize_array(array, mask=None, normalization='max', return_m_s=True):
     # normalization: max, standard
     from numpy import max, abs, var, mean, sqrt
     if normalization == 'max':
         if mask is None:
-            return array / max(abs(array)), 0, 1 # max of data which is not masked...
+            to_return = array / max(abs(array)), 0, 1 # max of data which is not masked...
         else:
             return array / max(abs(array[~mask])), 0, 1   # max of data which is not masked...
+    elif normalization == 'center':
+        if mask is None:
+            m = mean(array)
+            to_return = (array -m), m, 1
+        else:
+            m = mean(array[~mask])
+            array[~mask] = (array[~mask] - m)
+            to_return = array, m, 1
     elif normalization == 'standard':
         if mask is None:
             m = mean(array)
             s = sqrt(var(array))
-            # print 'm', m, 's', s
-            return (array -m) / s, m, s
+            to_return = (array -m) / s, m, s
         else:
             m = mean(array[~mask])
             s = sqrt(var(array[~mask]))
-            # print 'm', m, 's', s
-            return (array -m) / s, m, s
+            array[~mask] = (array[~mask] - m) / s
+            to_return = array, m, s
     else:
-        return array, 0, 1
+        to_return = array, 0, 1
+    if return_m_s:
+        return to_return
+    else:
+        return to_return[0]
 
 
 def get_variability_array(array, mask, step=1):
@@ -347,37 +432,7 @@ def get_variability_array_modified(array, mask, step=1, th_1=0.02, th_2=0.3,
     print 'var array', var([~mask])
     print 'mean array', mean(array[~mask])
     arr = get_variability_array(array, mask, step)[0]
-
-    # from basical_stats import estimate_gaussian_from_samples
-    # estimate_gaussian_from_samples(arr[arr!=0])
-
-    # if positive_variation and negative_variation:
-    #     arr = exp(abs(arr))
-    # elif positive_variation:
-    #     arr = exp(arr)
-    # else:  # only negative variation
-    # #     arr = exp(-1.*arr)
-    # mask = ~mask & (arr > 0)
-    # p = percentile(arr[mask], 95)
-    # std = sqrt(var(arr[mask]))
-    # arr_ret = zeros_like(arr)
-
-    # print 'mean variability for step:', mean(arr[~mask]), step
-    # # print 'var variability divided by sqrt 2 for step:', var(arr[~mask & (arr>0)])/sqrt(2), step
-    # print '99% percentile variability for step:', p, step
-    #
-    # print p, std
-    # arr_ret[arr > p - 2 * std] = 1
-    # # arr_th[arr_th > 1] = 1
-    # # arr_th[arr < th_1] = 0
-    # arr_th[arr_th < 0] = 0
-    # arr_th[abs(arr)>th_1] = 0.2
-    # arr_th[abs(arr)>th_2] = 2
-    # m = max(arr[3:15])
-    # print m
-    # return arr / m
     return arr
-    # return normalize_array(arr, mask=mask, normalization='max')[0]
 
 
 def get_features(type_channels, latitudes, longitudes, dfb_beginning, dfb_ending, compute_indexes,
@@ -386,32 +441,19 @@ def get_features(type_channels, latitudes, longitudes, dfb_beginning, dfb_ending
                  normalization='none',
                  weights=None,
                  return_m_s=False,
-                 dirs=['/data/model_data_himawari/sat_data_procseg'],
-                 satellite='H08LATLON',
-                 pattern_suffix='__TMON_{YYYY}_{mm}__SDEG05_r{SDEG5_LATITUDE}_c{SDEG5_LONGITUDE}.nc',
-                 satellite_frequency=10,
-                 dir_ocean='/data/ocean_shape',
-                 pattern_ocean='landsea_mask_2arcmin.nc',
+                 return_mu=False,
                  ):
-    #
-    # type_channels is 'visible' or 'infrared'
-    #
+    import json
+    metadata = json.load(open('metadata.json'))
+    satellite = metadata["satellite"]
+    frequency = metadata["frequencies"][satellite]
 
-    from datetime import datetime,timedelta
-
-    ocean = get_ocean_mask(dir_ocean, pattern_ocean, latitudes, longitudes)
-    len_times = (1+dfb_ending-dfb_beginning)*60*24/(satellite_frequency*slot_step)
-    origin_of_time = datetime(1980, 1, 1)
-    date_beginning = origin_of_time + timedelta(days=dfb_beginning)
-    times = [date_beginning + timedelta(minutes=k*satellite_frequency*slot_step) for k in range(len_times)]
+    ocean = get_ocean_mask(latitudes, longitudes)
+    times = get_times(dfb_beginning, dfb_ending, frequency, slot_step)
 
     if type_channels == 'visible':
         channels_visible = ['VIS160_2000', 'VIS064_2000']
-        patterns_visible = [satellite + '_' + channels_visible[0] + pattern_suffix,
-                            satellite + '_' + channels_visible[1] + pattern_suffix]
         content_visible = get_array_channels_content(
-            dirs,
-            patterns_visible,
             channels_visible,
             latitudes,
             longitudes,
@@ -426,20 +468,18 @@ def get_features(type_channels, latitudes, longitudes, dfb_beginning, dfb_ending
             times,
             latitudes,
             longitudes,
-            satellite_frequency,
+            frequency,
             compute_indexes,
             normalize,
             normalization,
             weights,
-            return_m_s)
+            return_m_s,
+            return_mu
+        )
 
     elif type_channels == 'infrared':
         channels_infrared = ['IR124_2000', 'IR390_2000']
-        patterns_infrared = [satellite + '_' + channels_infrared[0] + pattern_suffix,
-                             satellite + '_' + channels_infrared[1] + pattern_suffix]
         content_infrared = get_array_channels_content(
-            dirs,
-            patterns_infrared,
             channels_infrared,
             latitudes,
             longitudes,
@@ -454,20 +494,13 @@ def get_features(type_channels, latitudes, longitudes, dfb_beginning, dfb_ending
             times,
             latitudes,
             longitudes,
-            satellite_frequency,
+            frequency,
             compute_indexes,
             normalize,
             normalization,
             weights,
-            return_m_s)
+            return_m_s,
+            return_mu
+        )
     else:
         raise AttributeError('The type of channels should be \'visible\' or \'infrared\'')
-
-
-def get_latitudes_longitudes(lat_start, lat_end, lon_start, lon_end, resolution=2.0/60):
-    from numpy import linspace
-    nb_lat = int((lat_end - lat_start) / resolution) + 1
-    latitudes = linspace(lat_start, lat_end, nb_lat, endpoint=False)
-    nb_lon = int((lon_end - lon_start) / resolution) + 1
-    longitudes = linspace(lon_start, lon_end, nb_lon, endpoint=False)
-    return latitudes, longitudes

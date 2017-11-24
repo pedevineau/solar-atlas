@@ -1,7 +1,7 @@
 
 def write(variables_definitions_, variables_data_, dfbs, slots, latitudes, longitudes):
     from nclib2.dataset import DataSet, DC, NCError, WritingError
-    dir_writing = '/tmp/data'
+    dir_writing = '/data/computed'
     pattern_writing = 'H08LATLON_VISIBLE_INDEXES_2000__TMON_{YYYY}_{mm}__SDEG05_r{SDEG5_LATITUDE}_c{SDEG5_LONGITUDE}.nc'
     try:
         ds = DataSet.create(file_pattern=pattern_writing,
@@ -48,12 +48,12 @@ if __name__ == '__main__':
     from utils import *
     from numpy import reshape
 
-    latitude_beginning = 35.  # salt lake mongolia  45.
-    latitude_end = 40.
+    latitude_beginning = 35.+10  # salt lake mongolia  45.
+    latitude_end = 40.+15
     longitude_beginning = 125.
     longitude_end = 130.
-    dfb_beginning = 13516
-    nb_dfbs = 30
+    dfb_beginning = 13516+30
+    nb_dfbs = 1
     satellite_timestep = 10
     nb_slots_per_day = get_nb_slots_per_day(satellite_timestep)
     slot_step_ = 1

@@ -1,0 +1,29 @@
+{
+  "satellite": "H08",
+  "frequencies": {
+    "H08": 10
+  },
+  "indexes": {
+    "visible": {
+      "dir": "/data/computed",
+      "pattern": "H08LATLON_VISIBLE_INDEXES_2000__TMON_{YYYY}_{mm}__SDEG05_r{SDEG5_LATITUDE}_c{SDEG5_LONGITUDE}.nc"
+    },
+    "infrared": {
+      "dir": "/data/computed",
+      "pattern": "H08LATLON_INFRARED_INDEXES_2000__TMON_{YYYY}_{mm}__SDEG05_r{SDEG5_LATITUDE}_c{SDEG5_LONGITUDE}.nc"
+    }
+  },
+  "channels": {
+    "dir": "/data/model_data_himawari/sat_data_procseg",
+    "pattern": "{SATELLITE}LATLON_{CHANNEL}__TMON_{YYYY}_{mm}__SDEG05_r{SDEG5_LATITUDE}_c{SDEG5_LONGITUDE}.nc"
+  },
+  "masks": {
+    "ocean": {
+      "dir": "/data/ocean_shape",
+      "pattern": "landsea_mask_2arcmin.nc"
+    },
+    "terrain": {
+
+    }
+  }
+}

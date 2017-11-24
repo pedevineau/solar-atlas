@@ -1,10 +1,12 @@
 def median_filter_3d(array, scope=5):
     from scipy import ndimage
+    if scope == 1:
+        return array
     for k in range(len(array)):
         array[k] = ndimage.median_filter(array[k], scope)
     return array
 
-
+# low pass filter case use: NOT ndsi, perhaps CLI or stressed NDSI
 def low_pass_filter_3d(array, cutoff, omega=0):
     from numpy import shape, empty, abs, sin, pi, gradient, square
     from scipy import fftpack
