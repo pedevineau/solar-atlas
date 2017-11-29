@@ -1,27 +1,39 @@
-def get_nb_slots_per_day(time_step):
-    return 24*60/time_step
+import numpy as np
+from scipy.stats import pearsonr
+
+
+def get_nb_slots_per_day(timestep_satellite, step_sample):
+    return int(24*60 / (timestep_satellite*step_sample))
 
 
 def get_next_darkest_slot(mu, nb_slots_per_day, current_slot, lat, lon):
-    from numpy import argmin, maximum
-    return maximum(0,current_slot+nb_slots_per_day-5+argmin(mu[current_slot+nb_slots_per_day-5:current_slot+nb_slots_per_day+5, lat, lon]))
+    return np.maximum(0,
+                      current_slot+nb_slots_per_day-5 +
+                      np.argmin(mu[current_slot+nb_slots_per_day-5:current_slot+nb_slots_per_day+5, lat, lon]))
 
 
-def get_map_next_darkest_slot(mu, nb_slots_per_day,  current_slot=0):
-    from numpy import argmin, maximum
+def get_map_next_midnight_slots(mu, nb_slots_per_day, current_slot=0):
     if current_slot == 0:   # means it is first iteration
-        return argmin(mu[0:nb_slots_per_day], axis=0)
+        return np.argmax(mu[0:nb_slots_per_day], axis=0)
     else:
-        return maximum(0, current_slot+nb_slots_per_day - 5 + argmin(mu[current_slot+nb_slots_per_day-5:current_slot+nb_slots_per_day+5], axis=0))
+        return np.maximum(0, current_slot+nb_slots_per_day - 5 +
+                          np.argmin(mu[current_slot+nb_slots_per_day-5:current_slot+nb_slots_per_day+5], axis=0))
 
 
-def get_map_all_darkest_slot(mu, nb_slots_per_day):  # should be useless, since these slots are supposed to be
+def get_map_next_dawn_slots(mu, nb_slots_per_day, current_slot=0):
+    if current_slot == 0:   # means it is first iteration
+        return np.argmin(mu[0:nb_slots_per_day], axis=0)
+    else:
+        return np.maximum(0, current_slot+nb_slots_per_day - 5 +
+                          np.argmin(mu[current_slot+nb_slots_per_day-5:current_slot+nb_slots_per_day+5], axis=0))
+
+
+def get_map_all_darkest_slots(mu, nb_slots_per_day):  # should be useless, since these slots are supposed to be
                                                     # regularly distant from nb_slots_per_day
-    from numpy import zeros, shape
-    nb_slots, nb_latitudes, nb_longitudes = shape(mu)
+    nb_slots, nb_latitudes, nb_longitudes = np.shape(mu)
     nb_days = nb_slots / nb_slots_per_day
-    current_slots = zeros((nb_days, nb_latitudes, nb_longitudes), dtype=int)
-    current_slots[0, :, :] = get_map_next_darkest_slot(mu, nb_slots_per_day)
+    current_slots = np.zeros((nb_days, nb_latitudes, nb_longitudes), dtype=int)
+    current_slots[0, :, :] = get_map_next_midnight_slots(mu, nb_slots_per_day)
     for lat in range(nb_latitudes):
         for lon in range(nb_longitudes):
             for day in range(1, nb_days):
@@ -101,3 +113,38 @@ def upper_divisor_slot_step(slot_step, nb_slots_per_day):
     while nb_slots_per_day % slot_step != 0:  # increase slot step as long as its not a divisor of nb_slots_per_day
         slot_step += 1
     return slot_step
+
+
+def normalize_array(array, mask=None, normalization='max', return_m_s=True):
+    # normalization: max, standard
+    from numpy import max, abs, var, mean, sqrt
+    if normalization == 'max':
+        if mask is None:
+            to_return = array / max(abs(array)), 0, 1 # max of data which is not masked...
+        else:
+            print max(abs(array[~mask]))
+            to_return = array / max(array[~mask]), 0, 1   # max of data which is not masked...
+    elif normalization == 'center':
+        if mask is None:
+            m = mean(array)
+            to_return = (array -m), m, 1
+        else:
+            m = mean(array[~mask])
+            array[~mask] = (array[~mask] - m)
+            to_return = array, m, 1
+    elif normalization == 'standard':
+        if mask is None:
+            m = mean(array)
+            s = sqrt(var(array))
+            to_return = (array -m) / s, m, s
+        else:
+            m = mean(array[~mask])
+            s = sqrt(var(array[~mask]))
+            array[~mask] = (array[~mask] - m) / s
+            to_return = array, m, s
+    else:
+        to_return = array, 0, 1
+    if return_m_s:
+        return to_return
+    else:
+        return to_return[0]

@@ -6,7 +6,7 @@ def median_filter_3d(array, scope=5):
         array[k] = ndimage.median_filter(array[k], scope)
     return array
 
-# low pass filter case use: NOT ndsi, perhaps CLI or stressed NDSI
+# low pass spatial filter case use: NOT ndsi, perhaps CLI or stressed NDSI
 def low_pass_filter_3d(array, cutoff, omega=0):
     from numpy import shape, empty, abs, sin, pi, gradient, square
     from scipy import fftpack
@@ -28,6 +28,34 @@ def low_pass_filter_3d(array, cutoff, omega=0):
         # grs[k, :, :, 0] = g[0]  # gradient
         # grs[k, :, :, 1] = g[1]  # gradient
         # grsq[k, :, :, 0] = square(grs[k, :, :, 0]) + square(grs[k, :, :, 1])
+
+
+def digital_low_cut_filtering_time(array, mask, satellite_step):
+    from utils import get_nb_slots_per_day
+    # the slot step does not matter here
+    fs = 0.5*get_nb_slots_per_day(satellite_step, 1)
+    cutoff = 20./(fs*1)
+    from scipy import signal
+    b, a = signal.butter(8, cutoff, 'high', analog=False, output='ba')
+    X1 = signal.lfilter(b, a, array, axis=0)
+    X1[mask] = 0
+    return X1
+    #
+    #
+    # # cutoff : day-time
+    # from scipy import fftpack
+    # fs = 0.5*get_nb_slots_per_day(satellite_timestep)
+    # cutoff = 7./fs
+    # freq = fftpack.rfftfreq(array.shape[0])
+    # # print cutoff
+    # print freq
+    # X = fftpack.rfft(array, axis=0)
+    # X[abs(freq) < cutoff] = 0
+    # y = fftpack.irfft(X)
+    # y[mask] = 0
+    # return y
+    #
+
 
 
 # unused. relevant??
