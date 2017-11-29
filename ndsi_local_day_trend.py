@@ -39,7 +39,7 @@ from get_data import normalize_array
 #     plt.show()
 
 
-def recognize_pattern_ndsi(ndsi, mu, mask, time_step_satellite, slices_per_day=1, tolerance=0.08, persistence_sigma=0.):
+def recognize_pattern_ndsi(ndsi, mu, mask, time_step_satellite, step_slot, slices_per_day=1, tolerance=0.08, persistence_sigma=0.):
     print 'begin recognize pattern'
     from get_data import normalize_array
     from time import time
@@ -54,7 +54,7 @@ def recognize_pattern_ndsi(ndsi, mu, mask, time_step_satellite, slices_per_day=1
     # we'll return a "doped" ndsi. cloudy looks like -1, snowy looks like 1, and other situations are not changed
     # classes: 1 for snow, -1 for clouds, 0 otherwise
     (nb_slots, nb_latitudes, nb_longitudes) = shape(ndsi)
-    nb_slots_per_day = get_nb_slots_per_day(time_step_satellite)
+    nb_slots_per_day = get_nb_slots_per_day(time_step_satellite, step_slot)
     nb_slots_per_step = int(nb_slots_per_day / slices_per_day)
 
     nb_steps = int(ceil(nb_slots/nb_slots_per_step)) + 1 # +1 because first slot is not the darkest slot for every point
@@ -171,7 +171,7 @@ def apply_gaussian_persistence(persistence_array_1d, persistence_mask_1d, persis
                            normalization='maximum', return_m_s=False)
 
 
-def recognize_pattern_vis(ndsi, vis, nir, mu, mask, time_step_satellite, slices_by_day=1, tolerance=0.15):
+def recognize_pattern_vis(ndsi, vis, nir, mu, mask, time_step_satellite, slot_step, slices_by_day=1, tolerance=0.15):
     print 'begin recognize pattern'
     from time import time
     t_begin_reco = time()
@@ -183,7 +183,7 @@ def recognize_pattern_vis(ndsi, vis, nir, mu, mask, time_step_satellite, slices_
     minimal_nb_unmasked_slots = 12
 
     (nb_slots, nb_latitudes, nb_longitudes) = shape(ndsi)
-    nb_slots_per_day = get_nb_slots_per_day(time_step_satellite)
+    nb_slots_per_day = get_nb_slots_per_day(time_step_satellite, slot_step)
     nb_slots_per_step = int(nb_slots_per_day / slices_by_day)
 
     map_first_darkest_points = get_map_next_midnight_slots(mu, nb_slots_per_day, current_slot=0)

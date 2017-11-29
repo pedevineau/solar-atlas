@@ -245,10 +245,10 @@ def compute_parameters(type_channels, array_data, ocean, times, latitudes, longi
         print 'ndsi'
 
         from ndsi_local_day_trend import recognize_pattern_vis, recognize_pattern_ndsi
-        stressed_ndsi = recognize_pattern_ndsi(ndsi, mu, mask_ndsi, satellite_step,
+        stressed_ndsi = recognize_pattern_ndsi(ndsi, mu, mask_ndsi, satellite_step, slot_step,
                                                slices_per_day=4, persistence_sigma=1.5)
 
-        # stressed_ndsi = recognize_pattern_vis(ndsi, array_data[:, :, :, 0], array_data[:, :, :, 1], mu, mask_ndsi, timestep_satellite, slices_by_day=1)
+        # stressed_ndsi = recognize_pattern_vis(ndsi, array_data[:, :, :, 0], array_data[:, :, :, 1], mu, mask_ndsi, timestep_satellite, slot_step, slices_by_day=1)
         array_indexes[:, :, :, 1] = median_filter_3d(stressed_ndsi, scope=2)
         super_mask = (stressed_ndsi > 0.5) | mask_ndsi
         ndsi[super_mask]=0
