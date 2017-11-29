@@ -55,8 +55,8 @@ if __name__ == '__main__':
     dfb_beginning = 13516+30
     nb_dfbs = 1
     satellite_timestep = 10
-    nb_slots_per_day = get_nb_slots_per_day(satellite_timestep)
     slot_step_ = 1
+    nb_slots_per_day = get_nb_slots_per_day(satellite_timestep, slot_step_)
     # increase slotstep to get a divisor of nb_slots_per_day
     slot_step_ = upper_divisor_slot_step(slot_step_, nb_slots_per_day)
 
@@ -66,7 +66,7 @@ if __name__ == '__main__':
 
     latitudes, longitudes = get_latitudes_longitudes(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
     features_visible = get_features(
-        'visible',
+        'infrared',
         latitudes,
         longitudes,
         dfb_beginning,
@@ -78,60 +78,56 @@ if __name__ == '__main__':
         weights=None,
         return_m_s=False,
         return_mu=False,
-        dirs=['/data/model_data_himawari/sat_data_procseg'],
-        satellite='H08LATLON',
-        pattern_suffix='__TMON_{YYYY}_{mm}__SDEG05_r{SDEG5_LATITUDE}_c{SDEG5_LONGITUDE}.nc',
-        satellite_frequency=satellite_timestep,
-        dir_ocean='/data/ocean_shape',
-        pattern_ocean='landsea_mask_2arcmin.nc'
     )
-    ndsi = features_visible[:, :, :, 0]
-    stressed_ndsi = features_visible[:, :, :, 1]
+    cli = features_visible[:, :, :, 0]
+    # stressed_ndsi = features_visible[:, :, :, 1]
 
     nb_latitudes, nb_longitudes = len(latitudes), len(longitudes)
     dfbs, slots = get_dfbs_slots(dfb_beginning, dfb_ending, satellite_timestep, slot_step_)
 
-    ndsi = reshape(ndsi, (nb_dfbs, nb_slots_per_day, nb_latitudes, nb_longitudes))
-    stressed_ndsi = reshape(stressed_ndsi, (nb_dfbs, nb_slots_per_day, nb_latitudes, nb_longitudes))
+    cli = reshape(cli, (nb_dfbs, nb_slots_per_day, nb_latitudes, nb_longitudes))
+    # stressed_ndsi = reshape(stressed_ndsi, (nb_dfbs, nb_slots_per_day, nb_latitudes, nb_longitudes))
 
     from numpy import *
-    print shape(ndsi
-                )
 
-    variables_ndsi = {
-        "NDSI": ndsi,
-        "Stressed_NDSI": stressed_ndsi
-    }
-
-    variables_definitions_ndsi = {
-        "NDSI": {"_FillValue": -999., "units": "no unit", "long_name": "snow index",
-                 "datatype": "f8",
-                 "cell_methods": "time: mean (interval: 1 day comment: hourly sum averages) latitude: mean longitude: mean",
-                 "grid_mapping": "coordinate_reference_system",
-                 "dimensions": ("dfb", "slot", "latitude", "longitude")},
-        "Stressed_NDSI": {"_FillValue": -999., "units": "no unit", "long_name": "1-period stressed snow index",
-                 "datatype": "f8",
-                 "cell_methods": "time: mean (interval: 1 day comment: hourly sum averages) latitude: mean longitude: mean",
-                 "grid_mapping": "coordinate_reference_system",
-                 "dimensions": ("dfb", "slot", "latitude", "longitude")},
-    }
-
-    # variables_cli = {
-    #     "CLI": cli,
-    #     "Stressed_CLI": stressed_cli
+    #
+    # variables_ndsi = {
+    #     "NDSI": ndsi,
+    #     "Stressed_NDSI": stressed_ndsi
     # }
     #
-    # variables_definitions_cli = {
-    #     "CLI": {"_FillValue": -999., "units": "no unit", "long_name": "cloud index",
+    # variables_definitions_ndsi = {
+    #     "NDSI": {"_FillValue": -999., "units": "no unit", "long_name": "snow index",
     #              "datatype": "f8",
     #              "cell_methods": "time: mean (interval: 1 day comment: hourly sum averages) latitude: mean longitude: mean",
     #              "grid_mapping": "coordinate_reference_system",
     #              "dimensions": ("dfb", "slot", "latitude", "longitude")},
-    #     "Stressed_CLI": {"_FillValue": -999., "units": "no unit", "long_name": "stressed cloud index",
+    #     "Stressed_NDSI": {"_FillValue": -999., "units": "no unit", "long_name": "1-period stressed snow index",
     #              "datatype": "f8",
     #              "cell_methods": "time: mean (interval: 1 day comment: hourly sum averages) latitude: mean longitude: mean",
     #              "grid_mapping": "coordinate_reference_system",
     #              "dimensions": ("dfb", "slot", "latitude", "longitude")},
     # }
+    #
+    # write(variables_definitions_ndsi, variables_ndsi, dfbs, slots, latitudes, longitudes)
 
-    write(variables_definitions_ndsi, variables_ndsi, dfbs, slots, latitudes, longitudes)
+
+    variables_cli = {
+        "CLI": cli,
+        # "Stressed_CLI": stressed_cli
+    }
+
+    variables_definitions_cli = {
+        "CLI": {"_FillValue": -999., "units": "no unit", "long_name": "cloud index",
+                 "datatype": "f8",
+                 "cell_methods": "time: mean (interval: 1 day comment: hourly sum averages) latitude: mean longitude: mean",
+                 "grid_mapping": "coordinate_reference_system",
+                 "dimensions": ("dfb", "slot", "latitude", "longitude")},
+        # "Stressed_CLI": {"_FillValue": -999., "units": "no unit", "long_name": "stressed cloud index",
+        #          "datatype": "f8",
+        #          "cell_methods": "time: mean (interval: 1 day comment: hourly sum averages) latitude: mean longitude: mean",
+        #          "grid_mapping": "coordinate_reference_system",
+        #          "dimensions": ("dfb", "slot", "latitude", "longitude")},
+    }
+
+    write(variables_definitions_cli, variables_cli, dfbs, slots, latitudes, longitudes)

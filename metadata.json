@@ -1,6 +1,6 @@
 {
   "satellite": "H08",
-  "frequencies": {
+  "time_steps": {
     "H08": 10
   },
   "indexes": {

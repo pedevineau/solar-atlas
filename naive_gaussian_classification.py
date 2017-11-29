@@ -344,7 +344,8 @@ def training(beginning, ending, latitudes, longitudes, process, compute_indexes,
         nb_features = np.shape(infrared_samples_for_training)[-1]+np.shape(visible_samples_for_training)[-1]
         infrared_me, infrared_std = np.zeros(nb_features), np.full(nb_features, 1)
     len_training = int(len(infrared_samples_for_training) * training_rate)
-    print np.shape(visible_samples_for_training)
+
+    print len(visible_samples_for_training[isnan(visible_samples_for_training)])
 
     (a, b, c) = np.shape(infrared_samples_for_training)[0:3]
 
@@ -417,7 +418,7 @@ if __name__ == '__main__':
     compute_indexes_ = True
     process_ = 'kmeans'  # bayesian (not good), gaussian, DBSCAN or kmeans
     normalize_ = False   # should stay False as long as thresholds has not be computed !?
-    normalization_ = 'standard'
+    normalization_ = 'none'
     # weights_ = None
     weights_array = [
         None,
