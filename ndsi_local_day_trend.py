@@ -59,7 +59,7 @@ def recognize_pattern_ndsi(ndsi, mu, mask, time_step_satellite, slices_per_day=1
 
     nb_steps = int(ceil(nb_slots/nb_slots_per_step)) + 1 # +1 because first slot is not the darkest slot for every point
 
-    map_first_darkest_points = get_map_next_darkest_slot(mu, nb_slots_per_day, current_slot=0)
+    map_first_darkest_points = get_map_next_midnight_slots(mu, nb_slots_per_day, current_slot=0)
 
     stressed_ndsi = zeros_like(ndsi)
 
@@ -88,7 +88,7 @@ def recognize_pattern_ndsi(ndsi, mu, mask, time_step_satellite, slices_per_day=1
                                 slice_ndsi[~slice_mask],
                             )
                             if r_value > 1 - tolerance:
-                                persistence_array[step, lat, lon] = maximum(med+0.4, 1.) # med of 0.6 is considered as snow-like with p=1
+                                persistence_array[step, lat, lon] = 1 # maximum(med+0.4, 1.) # med of 0.6 is considered as snow-like with p=1
                     step += 1
                     slot_beginning_slice = slot_ending_slice
                     slot_ending_slice += nb_slots_per_step
@@ -103,8 +103,9 @@ def recognize_pattern_ndsi(ndsi, mu, mask, time_step_satellite, slices_per_day=1
                 slot_ending_slice = map_first_darkest_points[lat, lon] % nb_slots_per_step
                 step = 0
                 while slot_beginning_slice < nb_slots:
+                    slice_ndsi = ndsi[slot_beginning_slice:slot_ending_slice, lat, lon]
+                    slice_mask = mask[slot_beginning_slice:slot_ending_slice, lat, lon]
                     if slice_ndsi[~slice_mask].size > minimal_nb_unmasked_slots:
-                        slice_mask = mask[slot_beginning_slice:slot_ending_slice, lat, lon]
                         stressed_ndsi[slot_beginning_slice: slot_ending_slice, lat, lon][~slice_mask] =\
                             persistence_array[step, lat, lon]
                     step += 1
@@ -138,13 +139,13 @@ def recognize_pattern_ndsi(ndsi, mu, mask, time_step_satellite, slices_per_day=1
                             # stressed_ndsi[slot_beginning_slice:slot_ending_slice, lat, lon][~slice_mask] = \
                             #     m_ndsi * (slice_ndsi[~slice_mask]+0) / (slice_mu[~slice_mask]+0)
 
-                            if True or med > 0.45:
+                            if True:
                                 # # TODO: the following information should be used (later)
                                 # stressed_ndsi[slot_beginning_slice:slot_ending_slice, lat, lon][~slice_mask] = \
                                 #   med + (slice_ndsi[~slice_mask] - slope * slice_mu[~slice_mask] - intercept)
-                                # stressed_ndsi[slot_beginning_slice:slot_ending_slice, lat, lon][~slice_mask] = 1
-                                stressed_ndsi[slot_beginning_slice:slot_ending_slice, lat, lon][~slice_mask] = \
-                                maximum(med+0.4,1)
+                                stressed_ndsi[slot_beginning_slice:slot_ending_slice, lat, lon][~slice_mask] = 1
+                                # stressed_ndsi[slot_beginning_slice:slot_ending_slice, lat, lon][~slice_mask] = \
+                                # maximum(med+0.4,1)
                                     # 1+slice_ndsi[~slice_mask]-(slope*slice_mu[~slice_mask]+intercept)
 
 
@@ -185,7 +186,7 @@ def recognize_pattern_vis(ndsi, vis, nir, mu, mask, time_step_satellite, slices_
     nb_slots_per_day = get_nb_slots_per_day(time_step_satellite)
     nb_slots_per_step = int(nb_slots_per_day / slices_by_day)
 
-    map_first_darkest_points = get_map_next_darkest_slot(mu, nb_slots_per_day, current_slot=0)
+    map_first_darkest_points = get_map_next_midnight_slots(mu, nb_slots_per_day, current_slot=0)
 
     stressed_ndsi = ndsi
 
