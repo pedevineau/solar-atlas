@@ -50,14 +50,14 @@ if __name__ == '__main__':
     from utils import *
     from numpy import reshape
 
-    type_channels = 'infrared'
+    type_output = 'infrared'   # infrared, visible, classes
 
     latitude_beginning = 35.+10  # salt lake mongolia  45.
     latitude_end = 40.+15
     longitude_beginning = 125.
     longitude_end = 130.
     dfb_beginning = 13516
-    nb_dfbs = 30
+    nb_dfbs = 1
     satellite_timestep = 10
     slot_step_ = 1
     nb_slots_per_day = get_nb_slots_per_day(satellite_timestep, slot_step_)
@@ -70,27 +70,29 @@ if __name__ == '__main__':
 
     latitudes, longitudes = get_latitudes_longitudes(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
 
-    features = get_features(
-        type_channels,
-        latitudes,
-        longitudes,
-        dfb_beginning,
-        dfb_ending,
-        compute_indexes=True,
-        slot_step=slot_step_,
-        normalize=False,
-        normalization='standard',
-        weights=None,
-        return_m_s=False,
-        return_mu=False,
-    )
 
-    features = np.flip(features, axis=1)
 
     nb_latitudes, nb_longitudes = len(latitudes), len(longitudes)
     dfbs, slots = get_dfbs_slots(dfb_beginning, dfb_ending, satellite_timestep, slot_step_)
 
-    if type_channels == 'infrared':
+    if type_output == 'infrared':
+        features = get_features(
+            type_output,
+            latitudes,
+            longitudes,
+            dfb_beginning,
+            dfb_ending,
+            compute_indexes=True,
+            slot_step=slot_step_,
+            normalize=False,
+            normalization='standard',
+            weights=None,
+            return_m_s=False,
+            return_mu=False,
+        )
+
+        features = np.flip(features, axis=1)
+
         cli = features[:, :, :, 0]
         biased = features[:, :, :, 1]
 
@@ -118,7 +120,24 @@ if __name__ == '__main__':
 
         write('infrared', variables_definitions_cli, variables_cli, dfbs, slots, latitudes, longitudes)
 
-    if type_channels == 'visible':
+    if type_output == 'visible':
+
+        features = get_features(
+            type_output,
+            latitudes,
+            longitudes,
+            dfb_beginning,
+            dfb_ending,
+            compute_indexes=True,
+            slot_step=slot_step_,
+            normalize=False,
+            normalization='standard',
+            weights=None,
+            return_m_s=False,
+            return_mu=False,
+        )
+
+        features = np.flip(features, axis=1)
 
         ndsi = features[:, :, :, 0]
         stressed_ndsi = features[:, :, :, 1]
@@ -154,4 +173,39 @@ if __name__ == '__main__':
         }
 
         write('visible', variables_definitions_ndsi, variables_ndsi, dfbs, slots, latitudes, longitudes)
+
+    if type_output == 'classes':
+
+        from decision_tree import *
+
+        classes = get_classes_decision_tree(
+            latitudes,
+            longitudes,
+            dfb_beginning,
+            dfb_ending,
+            compute_indexes=True,
+            slot_step=slot_step_,
+            normalize=False,
+            normalization='standard',
+            weights=None,
+            return_m_s=False,
+            return_mu=False,
+        )
+
+        features = np.flip(features, axis=1)
+
+        variables_definitions_classes = {
+            "Classes": {"_FillValue": -999., "units": "no unit", "long_name": "Decision tree classification",
+                     "datatype": "f8",
+                     "cell_methods": "time: mean (interval: 1 day comment: hourly sum averages) latitude: mean longitude: mean",
+                     "grid_mapping": "coordinate_reference_system",
+                     "dimensions": ("dfb", "slot", "latitude", "longitude")},
+        }
+
+        variables_classes = {
+            "Classes": classes,
+        }
+
+        write('classes', variables_definitions_classes, variables_classes, dfbs, slots, latitudes, longitudes)
+
 

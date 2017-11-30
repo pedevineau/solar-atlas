@@ -1,22 +1,20 @@
 from utils import *
 from get_data import get_features
 
-if __name__ == '__main__':
 
-    slot_step = 1
-    beginning = 13527+6
-    nb_days = 1
-    ending = beginning + nb_days - 1
-    compute_indexes = True
-    normalize = False
-    normalization = 'standard'
 
-    latitude_beginning = 35.0
-    latitude_end = 40.
-    longitude_beginning = 125.
-    longitude_end = 130.
-    latitudes, longitudes = get_latitudes_longitudes(latitude_beginning, latitude_end,
-                                                     longitude_beginning, longitude_end)
+def get_classes_decision_tree(latitudes,
+        longitudes,
+        beginning,
+        ending,
+        compute_indexes,
+        slot_step,
+        normalize,
+        normalization,
+        weights=None,
+        return_m_s=False,
+        return_mu=False,
+   ):
 
     visible_features = get_features(
         'visible',
@@ -27,7 +25,10 @@ if __name__ == '__main__':
         compute_indexes,
         slot_step,
         normalize,
-        normalization
+        normalization,
+        weights,
+        return_m_s,
+        return_mu
     )
 
     infrared_features = get_features(
@@ -39,7 +40,10 @@ if __name__ == '__main__':
         compute_indexes,
         slot_step,
         normalize,
-        normalization
+        normalization,
+        weights,
+        return_m_s,
+        return_mu
     )
 
     # classes: cloudy, snow over the ground, other (ground, sea...), unknown
@@ -61,6 +65,35 @@ if __name__ == '__main__':
     classes[~cloudy_mask & persistent_snow_mask] = 2
     classes[~cloudy_mask & ~persistent_snow_mask & ndsi_mask] = 3
     classes[undefined_mask] = 4
+
+    return classes
+
+
+if __name__ == '__main__':
+
+    slot_step = 1
+    beginning = 13527+6
+    nb_days = 1
+    ending = beginning + nb_days - 1
+    compute_indexes = True
+    normalize = False
+    normalization = 'standard'
+
+    latitude_beginning = 35.0
+    latitude_end = 40.
+    longitude_beginning = 125.
+    longitude_end = 130.
+    latitudes, longitudes = get_latitudes_longitudes(latitude_beginning, latitude_end,
+                                                     longitude_beginning, longitude_end)
+
+    classes = get_classes_decision_tree(latitudes,
+        longitudes,
+        beginning,
+        ending,
+        compute_indexes,
+        slot_step,
+        normalize,
+        normalization)
 
     from quick_visualization import visualize_map_time, get_bbox
 
