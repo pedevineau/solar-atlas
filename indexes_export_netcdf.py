@@ -70,11 +70,11 @@ if __name__ == '__main__':
 
     latitudes, longitudes = get_latitudes_longitudes(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
     features_visible = get_features(
+        type_channels,
         latitudes,
         longitudes,
         dfb_beginning,
         dfb_ending,
-        compute_indexes=True,
         slot_step=slot_step_,
         normalize=False,
         normalization='standard',
