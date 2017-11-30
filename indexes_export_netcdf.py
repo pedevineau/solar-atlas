@@ -3,7 +3,7 @@ def write(type_chan, variables_definitions_, variables_data_, dfbs, slots, latit
     import json
     metadata = json.load(open('metadata.json'))
     pattern = metadata["indexes"][type_chan]["pattern"]
-    dir = metadata["channels"][type_chan]["dir"]
+    dir = metadata["indexes"][type_chan]["dir"]
 
     try:
         ds = DataSet.create(file_pattern=pattern,
