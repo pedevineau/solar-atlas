@@ -56,8 +56,8 @@ if __name__ == '__main__':
     latitude_end = 40.+15
     longitude_beginning = 125.
     longitude_end = 130.
-    dfb_beginning = 13516+30
-    nb_dfbs = 1
+    dfb_beginning = 13516
+    nb_dfbs = 30
     satellite_timestep = 10
     slot_step_ = 1
     nb_slots_per_day = get_nb_slots_per_day(satellite_timestep, slot_step_)
@@ -69,7 +69,8 @@ if __name__ == '__main__':
     times = get_times(dfb_beginning, dfb_ending, satellite_timestep, slot_step_)
 
     latitudes, longitudes = get_latitudes_longitudes(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
-    features_visible = get_features(
+
+    features = get_features(
         type_channels,
         latitudes,
         longitudes,
@@ -84,12 +85,14 @@ if __name__ == '__main__':
         return_mu=False,
     )
 
+    features = np.flip(features, axis=1)
+
     nb_latitudes, nb_longitudes = len(latitudes), len(longitudes)
     dfbs, slots = get_dfbs_slots(dfb_beginning, dfb_ending, satellite_timestep, slot_step_)
 
     if type_channels == 'infrared':
-        cli = features_visible[:, :, :, 0]
-        biased = features_visible[:, :, :, 1]
+        cli = features[:, :, :, 0]
+        biased = features[:, :, :, 1]
 
         cli = reshape(cli, (nb_dfbs, nb_slots_per_day, nb_latitudes, nb_longitudes))
         biased = reshape(biased, (nb_dfbs, nb_slots_per_day, nb_latitudes, nb_longitudes))
@@ -117,9 +120,9 @@ if __name__ == '__main__':
 
     if type_channels == 'visible':
 
-        ndsi = features_visible[:, :, :,0]
-        stressed_ndsi = features_visible[:, :, :, 1]
-        cloudy_sea = features_visible[:, :, :, 2]
+        ndsi = features[:, :, :, 0]
+        stressed_ndsi = features[:, :, :, 1]
+        cloudy_sea = features[:, :, :, 2]
 
         ndsi = reshape(ndsi, (nb_dfbs, nb_slots_per_day, nb_latitudes, nb_longitudes))
         stressed_ndsi = reshape(stressed_ndsi, (nb_dfbs, nb_slots_per_day, nb_latitudes, nb_longitudes))
