@@ -369,7 +369,7 @@ def get_variability_array_modified(array, mask, step=1, th_1=0.02, th_2=0.3,
 
 def get_features(type_channels, latitudes, longitudes, dfb_beginning, dfb_ending, compute_indexes,
                  slot_step=1,
-                 normalize=True,
+                 normalize=False,
                  normalization=None,
                  weights=None,
                  return_m_s=False,
