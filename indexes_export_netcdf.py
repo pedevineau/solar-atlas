@@ -75,6 +75,7 @@ if __name__ == '__main__':
         longitudes,
         dfb_beginning,
         dfb_ending,
+        compute_indexes=True,
         slot_step=slot_step_,
         normalize=False,
         normalization='standard',
