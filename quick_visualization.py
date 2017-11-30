@@ -154,19 +154,19 @@ if __name__ == '__main__':
     from get_data import get_latitudes_longitudes, get_features, normalize_array, get_array_3d_cos_zen
     from utils import get_times, get_latitudes_longitudes
     compute_indexes_ = True
-    type_channels = 'infrared'
-    latitude_beginning = 35.+5  # salt lake mongolia  45.
-    latitude_end = 40. +5
-    longitude_beginning = 135.-10
-    longitude_end = 140.-10
-    dfb_beginning = 13516+105
-    dfb_ending = dfb_beginning+10
+    type_channels = 'visible'
+    latitude_beginning= 35.
+    latitude_end = 45.
+    longitude_beginning = 125.
+    longitude_end = 130.
+    dfb_beginning = 13531
+    dfb_ending = dfb_beginning
     print_date_from_dfb(dfb_beginning, dfb_ending)
     lat, lon = get_latitudes_longitudes(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
     bbox = get_bbox(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
     features = get_features(type_channels, lat, lon, dfb_beginning, dfb_ending, compute_indexes_, slot_step=1,
                             normalize=False,
-                            normalization='none')
+                            normalization='standard')
 
     from numpy.random import randint
     from numpy import *
@@ -191,27 +191,28 @@ if __name__ == '__main__':
     # times = get_times(dfb_beginning, dfb_ending, satellite_timestep=10, slot_step=1)
     # latitudes, longitudes = get_latitudes_longitudes(latitude_beginning, latitude_end, longitude_beginning, longitude_end, 2./60)
     # mu = get_array_3d_cos_zen(times, latitudes, longitudes)
-    # # # # output = zeros((len(features), 2))
-    for k in range(25):
-        lat_pix = 140-randint(0, 60)
-        lon_pix = 140-randint(80, 140)
-        # lat_pix, lon_pix=20,61
-        print lat_pix, lon_pix
-        # print 'lat, lon', lat0, lon0
-        # lat_pix, lon_pix = int((lat0 - latitude_beginning) * 60 / 2.), int((lon0 - longitude_beginning) * 60 / 2.)
-        indexes = features[:, lat_pix, lon_pix, 0:3]
-        # output[:,0] = mu[:,lat_pix, lon_pix]*10+10
-        # output[:,1] = indexes[:,1]-indexes[:,0]
-        # print output
-        visualize_hist(ndsi[ndsi>-1])
-
-        # visualize_input(indexes, display_now=True, style='^')
+    # # # output = zeros((len(features), 2))
+    # for k in range(25):
+    #     lat_pix = randint(0, 140)
+    #     lon_pix = randint(0, 140)
+    #     # lat_pix, lon_pix=20,61
+    #     print lat_pix, lon_pix
+    #     # print 'lat, lon', lat0, lon0
+    #     # lat_pix, lon_pix = int((lat0 - latitude_beginning) * 60 / 2.), int((lon0 - longitude_beginning) * 60 / 2.)
+    #     diff = features[:, lat_pix, lon_pix, 2]
+    #     # output[:,0] = mu[:,lat_pix, lon_pix]*10+10
+    #     # output[:,1] = indexes[:,1]-indexes[:,0]
+    #     # print output
+    #
+    #     visualize_input(diff, display_now=True, style='^')
 
 
     if type_channels == 'infrared' and not compute_indexes_:
         visualize_map_time(features[:, :, :, 0:4], bbox, title=type_channels, vmin=240, vmax=300, color='gray')
+    elif not compute_indexes_:
+        visualize_map_time((features[:, :, :, :]), bbox, title=type_channels, vmin=-1, vmax=1, color='gray')
     else:
-        visualize_map_time(features[:, :, :, 0:4], bbox, title=type_channels, vmin=0, vmax=1, color='gray')
+        visualize_map_time(features[:, :, :, 0:4], bbox, title=type_channels, vmin=0, vmax=2, color='gray')
     # visualize_map_time(4*features[:, :, :, 1:3], bbox, title='INFRARED', vmin=0, vmax=1, color='gray')
     raise Exception('stop here for now')
 

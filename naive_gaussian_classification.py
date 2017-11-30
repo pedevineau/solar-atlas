@@ -345,7 +345,7 @@ def training(beginning, ending, latitudes, longitudes, process, compute_indexes,
         infrared_me, infrared_std = np.zeros(nb_features), np.full(nb_features, 1)
     len_training = int(len(infrared_samples_for_training) * training_rate)
 
-    print len(visible_samples_for_training[isnan(visible_samples_for_training)])
+    print len(visible_samples_for_training[np.isnan(visible_samples_for_training)])
 
     (a, b, c) = np.shape(infrared_samples_for_training)[0:3]
 

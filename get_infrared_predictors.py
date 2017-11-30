@@ -1,6 +1,6 @@
 from utils import *
 from dtw_computing import *
-from quick_visualization import visualize_input, visualize_hist, visualize_map_time
+
 
 def get_cli(mir, fir, maski, mu, treshold_mu, ocean_mask, satellite_step, slot_step):
     # mir = normalize_array(mir, maski, normalization='max', return_m_s=False)
@@ -8,12 +8,37 @@ def get_cli(mir, fir, maski, mu, treshold_mu, ocean_mask, satellite_step, slot_s
     diff = mir - fir
     # get positive shift to apply to mu
     shift_high_peak = get_lag_high_peak(diff, mu, satellite_step, slot_step)
-    # shift_high_peak = 0  # after statisical analysis: no general shift has been detected
-    mask_cli = (mu < treshold_mu) | maski | (ocean_mask == 0)  # this mask consists of night, errors, mu_mask and sea
+    shift_high_peak = 0  # after statisical analysis: no general shift has been detected
+    # mask_cli = (mu < treshold_mu) | maski | (ocean_mask == 0)  # this mask consists of night, errors, mu_mask and sea
     cli = diff / np.roll(mu, shift=shift_high_peak)
-    mask_cli = (np.roll(mu, shift_high_peak) < treshold_mu) | maski | (ocean_mask == 0)  # this mask consists of night, errors, mu_mask and sea
+    mask_cli = (np.roll(mu, shift_high_peak) < treshold_mu) | maski | ocean_mask  # this mask consists of night, errors, mu_mask and sea
     cli, m, s = normalize_array(cli, mask_cli, normalization='max')
     return cli, m, s, mask_cli
+
+
+def get_bias_difference(mir, fir, maski, mu, ocean_mask, is_local=True):
+    diff = mir - fir
+    maski = maski | ocean_mask | (mu <=0)
+    diffstd = normalize_array(diff, maski, normalization='standard', return_m_s=False)
+    mustd = normalize_array(mu, maski, normalization='standard', return_m_s=False)
+    if is_local:
+        biased = np.zeros_like(diff)
+        (nb_slots, nb_latitudes, nb_longitudes) = np.shape(diff)
+        for lat in range(nb_latitudes):
+            for lon in range(nb_longitudes):
+                slice_diffstd = diffstd[:, lat, lon]
+                slice_mustd = mustd[:, lat, lon]
+                slice_maski = maski[:, lat, lon]
+                if not np.all(slice_maski):
+                    local_cov_matrix = np.cov(slice_diffstd[~slice_maski], slice_mustd[~slice_maski])
+                    local_cov = local_cov_matrix[0,1]
+                    local_var_mu = local_cov_matrix[1,1]
+                    biased[:, lat, lon] = slice_diffstd - local_cov/local_var_mu * slice_mustd
+    else:
+        biased = diffstd-mustd
+    biased[maski] = 0
+    print 'remaining pearson', pearsonr(biased[~maski], mustd[~maski])   #objective: put it as close to zero as possible
+    return biased
 
 
 def get_lag_high_peak(diff, mu, satellite_step, slot_step):
@@ -62,6 +87,7 @@ def get_lag_high_peak(diff, mu, satellite_step, slot_step):
             minutes_lag = testing_lags[index_lag]
             # print 'lag in minutes', minutes_lag, index_lag
     return start_lag_minutes/(slot_step*satellite_step) + np.argmax(computed_shifts[1:])
+
 
 if __name__ == '__main__':
     lis = np.arange(0,10)

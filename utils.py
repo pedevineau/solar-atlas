@@ -122,9 +122,8 @@ def normalize_array(array, mask=None, normalization='max', return_m_s=True):
         if mask is None:
             to_return = array / max(abs(array)), 0, 1 # max of data which is not masked...
         else:
-            print max(abs(array[~mask]))
             to_return = array / max(array[~mask]), 0, 1   # max of data which is not masked...
-    elif normalization == 'center':
+    elif normalization == 'centered':
         if mask is None:
             m = mean(array)
             to_return = (array -m), m, 1
@@ -132,6 +131,14 @@ def normalize_array(array, mask=None, normalization='max', return_m_s=True):
             m = mean(array[~mask])
             array[~mask] = (array[~mask] - m)
             to_return = array, m, 1
+    elif normalization == 'reduced':
+        if mask is None:
+            s = sqrt(var(array))
+            to_return = array/s, 0, s
+        else:
+            s = sqrt(var(array[~mask]))
+            array[~mask] = (array[~mask] / s)
+            to_return = array, 0, s
     elif normalization == 'standard':
         if mask is None:
             m = mean(array)
