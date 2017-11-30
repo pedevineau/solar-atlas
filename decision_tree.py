@@ -44,11 +44,11 @@ if __name__ == '__main__':
 
     # classes: cloudy, snow over the ground, other (ground, sea...), unknown
 
-    nb_classes = 4
+    nb_classes = 5
 
     cloudy_mask = (infrared_features[:, :, :, 1] > 0) | (visible_features[:, :, :, 2] == 1)
 
-    ndsi_mask = (visible_features[:, :, :, 0] > 0.2)
+    ndsi_mask = (visible_features[:, :, :, 0] > 0)
 
     undefined_mask = (visible_features[:, :, :, 0] == - 10) & (infrared_features[:, :, :, 0] == - 10)
 
@@ -58,8 +58,9 @@ if __name__ == '__main__':
     classes = np.zeros((nb_slots, nb_latitudes, nb_longitudes, nb_classes))
 
     classes[cloudy_mask] = 1
-    classes[~cloudy_mask & ndsi_mask] = 2
-    classes[undefined_mask] = 3
+    classes[~cloudy_mask & persistent_snow_mask] = 2
+    classes[~cloudy_mask & ~persistent_snow_mask & ndsi_mask] = 3
+    classes[undefined_mask] = 4
 
     from quick_visualization import visualize_map_time, get_bbox
 
