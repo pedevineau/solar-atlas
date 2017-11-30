@@ -1,10 +1,12 @@
-
-def write(variables_definitions_, variables_data_, dfbs, slots, latitudes, longitudes):
+def write(type_chan, variables_definitions_, variables_data_, dfbs, slots, latitudes, longitudes):
     from nclib2.dataset import DataSet, DC, NCError, WritingError
-    dir_writing = '/data/computed'
-    pattern_writing = 'H08LATLON_VISIBLE_INDEXES_2000__TMON_{YYYY}_{mm}__SDEG05_r{SDEG5_LATITUDE}_c{SDEG5_LONGITUDE}.nc'
+    import json
+    metadata = json.load(open('metadata.json'))
+    pattern = metadata["indexes"][type_chan]["pattern"]
+    dir = metadata["channels"][type_chan]["dir"]
+
     try:
-        ds = DataSet.create(file_pattern=pattern_writing,
+        ds = DataSet.create(file_pattern=pattern,
                             globals_definition=dict(DC.CF16_DEFAULT_GLOBALS_DEFINITION,
                                                     **{"title": "Computed visible indexes", "source": "PED", "comments": "For improved visualization"}),
                             dimension_definition={
@@ -14,7 +16,7 @@ def write(variables_definitions_, variables_data_, dfbs, slots, latitudes, longi
                                 "dfb": dfbs,
                             },
                             variables_definition=variables_definitions_,
-                            dir=dir_writing,
+                            dir=dir,
                             overwrite_level=2)
 
         # list files created or skipped during file creation
@@ -26,8 +28,8 @@ def write(variables_definitions_, variables_data_, dfbs, slots, latitudes, longi
 
     try:
         for var in variables_data_:
-            DataSet.write(dir=dir_writing,
-                file_pattern=pattern_writing,
+            DataSet.write(dir=dir,
+                file_pattern=pattern,
                 variable_name=var,
                 data_array=variables_data_[var],
                 extent={
@@ -48,6 +50,8 @@ if __name__ == '__main__':
     from utils import *
     from numpy import reshape
 
+    type_channels = 'infrared'
+
     latitude_beginning = 35.+10  # salt lake mongolia  45.
     latitude_end = 40.+15
     longitude_beginning = 125.
@@ -66,7 +70,6 @@ if __name__ == '__main__':
 
     latitudes, longitudes = get_latitudes_longitudes(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
     features_visible = get_features(
-        'infrared',
         latitudes,
         longitudes,
         dfb_beginning,
@@ -79,55 +82,72 @@ if __name__ == '__main__':
         return_m_s=False,
         return_mu=False,
     )
-    cli = features_visible[:, :, :, 0]
-    # stressed_ndsi = features_visible[:, :, :, 1]
 
     nb_latitudes, nb_longitudes = len(latitudes), len(longitudes)
     dfbs, slots = get_dfbs_slots(dfb_beginning, dfb_ending, satellite_timestep, slot_step_)
 
-    cli = reshape(cli, (nb_dfbs, nb_slots_per_day, nb_latitudes, nb_longitudes))
-    # stressed_ndsi = reshape(stressed_ndsi, (nb_dfbs, nb_slots_per_day, nb_latitudes, nb_longitudes))
+    if type_channels == 'infrared':
+        cli = features_visible[:, :, :, 0]
+        biased = features_visible[:, :, :, 1]
 
-    from numpy import *
-
-    #
-    # variables_ndsi = {
-    #     "NDSI": ndsi,
-    #     "Stressed_NDSI": stressed_ndsi
-    # }
-    #
-    # variables_definitions_ndsi = {
-    #     "NDSI": {"_FillValue": -999., "units": "no unit", "long_name": "snow index",
-    #              "datatype": "f8",
-    #              "cell_methods": "time: mean (interval: 1 day comment: hourly sum averages) latitude: mean longitude: mean",
-    #              "grid_mapping": "coordinate_reference_system",
-    #              "dimensions": ("dfb", "slot", "latitude", "longitude")},
-    #     "Stressed_NDSI": {"_FillValue": -999., "units": "no unit", "long_name": "1-period stressed snow index",
-    #              "datatype": "f8",
-    #              "cell_methods": "time: mean (interval: 1 day comment: hourly sum averages) latitude: mean longitude: mean",
-    #              "grid_mapping": "coordinate_reference_system",
-    #              "dimensions": ("dfb", "slot", "latitude", "longitude")},
-    # }
-    #
-    # write(variables_definitions_ndsi, variables_ndsi, dfbs, slots, latitudes, longitudes)
+        cli = reshape(cli, (nb_dfbs, nb_slots_per_day, nb_latitudes, nb_longitudes))
+        biased = reshape(biased, (nb_dfbs, nb_slots_per_day, nb_latitudes, nb_longitudes))
 
 
-    variables_cli = {
-        "CLI": cli,
-        # "Stressed_CLI": stressed_cli
-    }
+        variables_definitions_cli = {
+            "CLI": {"_FillValue": -999., "units": "no unit", "long_name": "normalized cloud index",
+                     "datatype": "f8",
+                     "cell_methods": "time: mean (interval: 1 day comment: hourly sum averages) latitude: mean longitude: mean",
+                     "grid_mapping": "coordinate_reference_system",
+                     "dimensions": ("dfb", "slot", "latitude", "longitude")},
+            "Biased": {"_FillValue": -999., "units": "no unit", "long_name": "biased cloud index",
+                     "datatype": "f8",
+                     "cell_methods": "time: mean (interval: 1 day comment: hourly sum averages) latitude: mean longitude: mean",
+                     "grid_mapping": "coordinate_reference_system",
+                     "dimensions": ("dfb", "slot", "latitude", "longitude")},
+        }
 
-    variables_definitions_cli = {
-        "CLI": {"_FillValue": -999., "units": "no unit", "long_name": "cloud index",
-                 "datatype": "f8",
-                 "cell_methods": "time: mean (interval: 1 day comment: hourly sum averages) latitude: mean longitude: mean",
-                 "grid_mapping": "coordinate_reference_system",
-                 "dimensions": ("dfb", "slot", "latitude", "longitude")},
-        # "Stressed_CLI": {"_FillValue": -999., "units": "no unit", "long_name": "stressed cloud index",
-        #          "datatype": "f8",
-        #          "cell_methods": "time: mean (interval: 1 day comment: hourly sum averages) latitude: mean longitude: mean",
-        #          "grid_mapping": "coordinate_reference_system",
-        #          "dimensions": ("dfb", "slot", "latitude", "longitude")},
-    }
+        variables_cli = {
+            "CLI": cli,
+            "Biased": biased
+        }
 
-    write(variables_definitions_cli, variables_cli, dfbs, slots, latitudes, longitudes)
+        write('infrared', variables_definitions_cli, variables_cli, dfbs, slots, latitudes, longitudes)
+
+    if type_channels == 'visible':
+
+        ndsi = features_visible[:, :, :,0]
+        stressed_ndsi = features_visible[:, :, :, 1]
+        cloudy_sea = features_visible[:, :, :, 2]
+
+        ndsi = reshape(ndsi, (nb_dfbs, nb_slots_per_day, nb_latitudes, nb_longitudes))
+        stressed_ndsi = reshape(stressed_ndsi, (nb_dfbs, nb_slots_per_day, nb_latitudes, nb_longitudes))
+        cloudy_sea = reshape(cloudy_sea, (nb_dfbs, nb_slots_per_day, nb_latitudes, nb_longitudes))
+
+
+        variables_ndsi = {
+            "NDSI": ndsi,
+            "Stressed_NDSI": stressed_ndsi,
+            "Cloudy_sea": cloudy_sea
+        }
+
+        variables_definitions_ndsi = {
+            "NDSI": {"_FillValue": -999., "units": "no unit", "long_name": "snow index",
+                     "datatype": "f8",
+                     "cell_methods": "time: mean (interval: 1 day comment: hourly sum averages) latitude: mean longitude: mean",
+                     "grid_mapping": "coordinate_reference_system",
+                     "dimensions": ("dfb", "slot", "latitude", "longitude")},
+            "Stressed_NDSI": {"_FillValue": -999., "units": "no unit", "long_name": "4-period stressed snow index",
+                     "datatype": "f8",
+                     "cell_methods": "time: mean (interval: 1 day comment: hourly sum averages) latitude: mean longitude: mean",
+                     "grid_mapping": "coordinate_reference_system",
+                     "dimensions": ("dfb", "slot", "latitude", "longitude")},
+            "Cloudy_sea": {"_FillValue": -999., "units": "no unit", "long_name": "Cloudy sea",
+                              "datatype": "f8",
+                              "cell_methods": "time: mean (interval: 1 day comment: hourly sum averages) latitude: mean longitude: mean",
+                              "grid_mapping": "coordinate_reference_system",
+                              "dimensions": ("dfb", "slot", "latitude", "longitude")},
+        }
+
+        write('visible', variables_definitions_ndsi, variables_ndsi, dfbs, slots, latitudes, longitudes)
+
