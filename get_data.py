@@ -260,7 +260,7 @@ def compute_infrared(array_channels, ocean, times, latitudes, longitudes, satell
     # array_indexes[:,:,:,2] = median_filter_3d(digital_low_cut_filtering_time(fir - mir, mask_cli, satellite_step=satellite_step), scope=1)
     array_indexes[:, :, :, 2] = get_warm_predictor(mir=array_data[:, :, :, 1], cos_zen=mu, satellite_step=satellite_step,
                                                    slot_step=slot_step, cloudy_mask=array_indexes[:, :, :, 1] > 1,
-                                                   threshold_median=280)
+                                                   threshold_median=300)
 
 
     # array_indexes[:, :, :, 2][cloudy_sea] = 2  # ground is 0, blue sea is 1 cloudy sea is 2

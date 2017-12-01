@@ -53,11 +53,11 @@ def get_classes_decision_tree(latitudes,
 
     cloudy_mask = (infrared_features[:, :, :, cli_or_biased] > 0) | (visible_features[:, :, :, 3] == 1)
 
-    ndsi_mask = (visible_features[:, :, :, 0] > 1)
+    ndsi_mask = (visible_features[:, :, :, 0] > 0.5)
 
     ndsi_variable = (np.abs(visible_features[:, :, :, 2]) > 0.5)
 
-    cold_mask = (infrared_features[:, :, :, 2] == 1)
+    hot_mask = (infrared_features[:, :, :, 2] == 1)
 
     undefined_mask = (visible_features[:, :, :, 0] == -10) & (infrared_features[:, :, :, cli_or_biased] == - 10)
 
@@ -70,9 +70,9 @@ def get_classes_decision_tree(latitudes,
     classes[cloudy_mask] = 1
     classes[persistent_snow_mask & ~cloudy_mask] = 2
     classes[persistent_snow_mask & cloudy_mask] = 3
-    classes[~persistent_snow_mask & ndsi_mask & cold_mask] = 4
-    classes[~persistent_snow_mask & ndsi_mask & cold_mask & ndsi_variable] = 5
-    classes[ndsi_mask & ~cold_mask] = 6
+    classes[~persistent_snow_mask & ndsi_mask] = 4
+    classes[~persistent_snow_mask & ndsi_mask & ndsi_variable] = 5
+    classes[~persistent_snow_mask & ndsi_mask & hot_mask] = 6
     classes[cloudy_mask & ndsi_mask] = 7
     classes[undefined_mask] = 8
 
