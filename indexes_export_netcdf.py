@@ -138,16 +138,19 @@ if __name__ == '__main__':
 
         ndsi = features[:, :, :, 0]
         stressed_ndsi = features[:, :, :, 1]
-        cloudy_sea = features[:, :, :, 2]
+        var_ndsi = features[:, :, :, 2]
+        cloudy_sea = features[:, :, :, 3]
 
         ndsi = np.reshape(ndsi, (nb_dfbs, nb_slots_per_day, nb_latitudes, nb_longitudes))
         stressed_ndsi = np.reshape(stressed_ndsi, (nb_dfbs, nb_slots_per_day, nb_latitudes, nb_longitudes))
+        var_ndsi = np.reshape(var_ndsi, (nb_dfbs, nb_slots_per_day, nb_latitudes, nb_longitudes))
         cloudy_sea = np.reshape(cloudy_sea, (nb_dfbs, nb_slots_per_day, nb_latitudes, nb_longitudes))
 
 
         variables_ndsi = {
             "NDSI": ndsi,
             "Stressed_NDSI": stressed_ndsi,
+            "Var_NDSI": var_ndsi,
             "Cloudy_sea": cloudy_sea
         }
 
@@ -162,6 +165,11 @@ if __name__ == '__main__':
                      "cell_methods": "time: mean (interval: 1 day comment: hourly sum averages) latitude: mean longitude: mean",
                      "grid_mapping": "coordinate_reference_system",
                      "dimensions": ("dfb", "slot", "latitude", "longitude")},
+            "Var_NDSI": {"_FillValue": -999., "units": "no unit", "long_name": "The short variability of NDSI",
+                           "datatype": "f8",
+                           "cell_methods": "time: mean (interval: 1 day comment: hourly sum averages) latitude: mean longitude: mean",
+                           "grid_mapping": "coordinate_reference_system",
+                           "dimensions": ("dfb", "slot", "latitude", "longitude")},
             "Cloudy_sea": {"_FillValue": -999., "units": "no unit", "long_name": "Cloudy sea",
                               "datatype": "f8",
                               "cell_methods": "time: mean (interval: 1 day comment: hourly sum averages) latitude: mean longitude: mean",
