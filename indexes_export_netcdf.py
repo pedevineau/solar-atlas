@@ -70,8 +70,6 @@ if __name__ == '__main__':
 
     latitudes, longitudes = get_latitudes_longitudes(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
 
-
-
     nb_latitudes, nb_longitudes = len(latitudes), len(longitudes)
     dfbs, slots = get_dfbs_slots(dfb_beginning, dfb_ending, satellite_timestep, slot_step_)
 
@@ -192,7 +190,7 @@ if __name__ == '__main__':
             return_mu=False,
         )
 
-        features = np.flip(features, axis=1)
+        features = np.flip(classes, axis=1)
 
         variables_definitions_classes = {
             "Classes": {"_FillValue": -999., "units": "no unit", "long_name": "Decision tree classification",
