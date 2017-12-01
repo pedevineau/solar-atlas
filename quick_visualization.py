@@ -147,9 +147,9 @@ if __name__ == '__main__':
     from get_data import get_features
     from utils import *
     compute_indexes_ =True
-    type_channels = 'visible'
-    latitude_beginning= 35.
-    latitude_end = 45.
+    type_channels = 'infrared'
+    latitude_beginning = 35.
+    latitude_end = 36.
     longitude_beginning = 125.
     longitude_end = 130.
     dfb_beginning = 13533

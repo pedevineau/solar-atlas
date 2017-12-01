@@ -93,8 +93,8 @@ if __name__ == '__main__':
     nb_classes = 9
 
     slot_step = 1
-    beginning = 13516+20
-    nb_days = 3
+    beginning = 13516+17
+    nb_days = 1
     ending = beginning + nb_days - 1
     compute_indexes = True
     normalize = False

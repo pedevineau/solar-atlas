@@ -44,12 +44,22 @@ def recognize_pattern_ndsi(ndsi, mu, mask, nb_slots_per_day, slices_per_day=1, t
                     if slice_ndsi[~slice_mask].size > minimal_nb_unmasked_slots:
                         persistence_mask_1d[step] = False
                         if True:
-                            slope, intercept, r_value, p_value, std_err = linregress(
+                            # slope, intercept, r_value, p_value, std_err = linregress(
+                            #     slice_mu[~slice_mask],
+                            #     slice_ndsi[~slice_mask],
+                            # )
+                            r_value, p_value = pearsonr(
                                 slice_mu[~slice_mask],
                                 slice_ndsi[~slice_mask],
                             )
+                            # m_flat = np.mean(slice_ndsi[~slice_mask])
+                            # if m_flat > 0.2:
+                            #     v_flat = np.sqrt(np.var(slice_ndsi[~slice_mask]))
+                            #     print v_flat, m_flat
+
                             if r_value > 1 - tolerance:
                                 persistence_array[step, lat, lon] = 1 # maximum(med+0.4, 1.) # med of 0.6 is considered as snow-like with p=1
+
                     step += 1
                     slot_beginning_slice = slot_ending_slice
                     slot_ending_slice += nb_slots_per_step

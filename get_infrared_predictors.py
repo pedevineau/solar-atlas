@@ -64,31 +64,31 @@ def get_difference(mir, fir, maski, mu, ocean_mask, without_bias=True, return_m_
 #     return cold_mask
 
 
-def get_cold_points(mir, cos_zen, satellite_step, slot_step, cloudy_mask, threshold_median):
+def get_warm_predictor(mir, cos_zen, satellite_step, slot_step, cloudy_mask, threshold_median):
     to_return = np.zeros_like(mir)
-    mask = get_ground_cold_mask(mir, cos_zen, satellite_step, slot_step, cloudy_mask, threshold_median)
+    mask = get_warm_ground_mask(mir, cos_zen, satellite_step, slot_step, cloudy_mask, threshold_median)
     to_return[mask] = 1
     return to_return
 
 
-def get_ground_cold_mask(mir, cos_zen, satellite_step, slot_step, cloudy_mask, threshold_median):
+def get_warm_ground_mask(mir, cos_zen, satellite_step, slot_step, cloudy_mask, threshold_median):
     # compute median temperature around noon (clouds are masked in order not to bias the median)
     # and compare it with a threshold
 
     (nb_slots, nb_latitudes, nb_longitudes) = np.shape(mir)
-    cold_ground_mask = np.zeros((nb_slots, nb_latitudes, nb_longitudes), dtype=bool)
+    warm_ground_mask = np.zeros((nb_slots, nb_latitudes, nb_longitudes), dtype=bool)
     for lat in range(nb_latitudes):
         for lon in range(nb_longitudes):
-            cold_ground_mask[:, lat, lon] = get_cold_array_on_point(mir[:, lat, lon],
+            warm_ground_mask[:, lat, lon] = get_warm_array_on_point(mir[:, lat, lon],
                                                                     cos_zen[:, lat, lon],
                                                                     satellite_step,
                                                                     slot_step,
                                                                     cloudy_mask[:, lat, lon],
                                                                     threshold_median)
-    return cold_ground_mask
+    return warm_ground_mask
 
 
-def get_cold_array_on_point(mir_point, mu_point, satellite_step, slot_step, cloud_mask_point, threshold_median):
+def get_warm_array_on_point(mir_point, mu_point, satellite_step, slot_step, cloud_mask_point, threshold_median):
     nb_slots_per_day = get_nb_slots_per_day(satellite_step, slot_step)
     nb_slots = len(mir_point)
     width_window_in_minutes = 240
@@ -98,22 +98,22 @@ def get_cold_array_on_point(mir_point, mu_point, satellite_step, slot_step, clou
         mu_point,
         nb_slots_per_day
     )
-    beginning_slice = max(0, noon - width_window_in_slots / 2)
-
-    is_cold_array = np.empty_like(mir_point)
-
+    is_warm_array = np.zeros_like(mir_point)
+    beginning_slice = noon - nb_slots_per_day
     ending_slice = beginning_slice + width_window_in_slots + 1
     while ending_slice < nb_slots:
-        slice_cloud_mask = cloud_mask_point[beginning_slice:ending_slice]
-        slice_mir = mir_point[beginning_slice:ending_slice]
+        slice_cloud_mask = cloud_mask_point[max(0,beginning_slice):ending_slice]
+        slice_mir = mir_point[max(0,beginning_slice):ending_slice]
         median_excluding_clouds = np.median(slice_mir[~slice_cloud_mask])
         previous_midnight = max(noon - nb_slots_per_day / 2, 0)
-        next_midnight =noon + nb_slots_per_day / 2
-        is_cold_array[previous_midnight:next_midnight] =\
-            np.full(next_midnight-previous_midnight, median_excluding_clouds < threshold_median)
+        next_midnight = min(noon + nb_slots_per_day / 2, nb_slots)
+        if median_excluding_clouds > threshold_median:
+            is_warm_array[previous_midnight:next_midnight] =\
+                np.ones(next_midnight-previous_midnight, dtype=bool)
         beginning_slice += nb_slots_per_day
         ending_slice += nb_slots_per_day
-    return is_cold_array
+
+    return is_warm_array
 
 
 def get_lag_high_peak(diff, mu, satellite_step, slot_step):
