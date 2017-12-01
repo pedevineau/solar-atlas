@@ -1,47 +1,9 @@
 from utils import *
-from quick_visualization import visualize_input
-from numpy import *
 from scipy.ndimage.filters import gaussian_filter1d
-from get_data import normalize_array
 
 
-# def estimate_gaussian_from_samples(inp):
-#
-#     import numpy as np
-#     import matplotlib.pyplot as plt
-#     from matplotlib.colors import LogNorm
-#     from sklearn import mixture
-#     X_train = inp.reshape(-1, 1)
-#     z = np.linspace(-1,1, np.shape(X_train)[0])
-#
-#     clf = mixture.GaussianMixture(n_components=2, covariance_type='full')
-#     clf.fit(X_train)
-#     print clf.means_
-#     print clf.covariances_
-#
-#     # display predicted scores by the model as a contour plot
-#     x = np.linspace(-1., 1.,300)
-#     y_pred=clf.predict(x.reshape((-1,1)))
-#     # y = np.linspace(-20., 40.)
-#     # X, Y = np.meshgrid(x, y)
-#     # XX = np.array([X.ravel(), Y.ravel()]).T
-#     # Z = -clf.score_samples(XX)
-#     # Z = Z.reshape(X.shape)
-#     #
-#     # CS = plt.contour(X, Y, Z, norm=LogNorm(vmin=1.0, vmax=1000.0),
-#     #                  levels=np.logspace(0, 3, 10))
-#     # CB = plt.colorbar(CS, shrink=0.8, extend='both')
-#     plt.plot(z, inp, 'b*')
-#     plt.plot(x, y_pred, 'g^')
-#
-#     plt.title('Negative log-likelihood predicted by a GMM')
-#     plt.axis('tight')
-#     plt.show()
-
-
-def recognize_pattern_ndsi(ndsi, mu, mask, time_step_satellite, step_slot, slices_per_day=1, tolerance=0.08, persistence_sigma=0.):
+def recognize_pattern_ndsi(ndsi, mu, mask, nb_slots_per_day, slices_per_day=1, tolerance=0.0, persistence_sigma=0.):
     print 'begin recognize pattern'
-    from get_data import normalize_array
     from time import time
     t_begin_reco = time()
     # https://docs.scipy.org/doc/scipy-0.14.0/reference/generated/scipy.stats.pearsonr.html
@@ -53,28 +15,27 @@ def recognize_pattern_ndsi(ndsi, mu, mask, time_step_satellite, step_slot, slice
 
     # we'll return a "doped" ndsi. cloudy looks like -1, snowy looks like 1, and other situations are not changed
     # classes: 1 for snow, -1 for clouds, 0 otherwise
-    (nb_slots, nb_latitudes, nb_longitudes) = shape(ndsi)
-    nb_slots_per_day = get_nb_slots_per_day(time_step_satellite, step_slot)
+    (nb_slots, nb_latitudes, nb_longitudes) = np.shape(ndsi)
     nb_slots_per_step = int(nb_slots_per_day / slices_per_day)
 
-    nb_steps = int(ceil(nb_slots/nb_slots_per_step)) + 1 # +1 because first slot is not the darkest slot for every point
+    nb_steps = int(np.ceil(nb_slots/nb_slots_per_step)) + 1 # +1 because first slot is not the darkest slot for every point
 
     map_first_darkest_points = get_map_next_midnight_slots(mu, nb_slots_per_day, current_slot=0)
 
-    stressed_ndsi = zeros_like(ndsi)
+    stressed_ndsi = np.zeros_like(ndsi)
 
     persistence = persistence_sigma > 0
 
     if persistence:
-        persistence_array = zeros((nb_steps, nb_latitudes, nb_longitudes), dtype=float)
+        persistence_array = np.zeros((nb_steps, nb_latitudes, nb_longitudes), dtype=float)
         # complete persistence array
         for lat in range(nb_latitudes):
             for lon in range(nb_longitudes):
                 slot_beginning_slice = 0
                 slot_ending_slice = map_first_darkest_points[lat, lon] % nb_slots_per_step
-                med = median(ndsi[:, lat, lon][~mask[:, lat, lon]])
+                med = np.median(ndsi[:, lat, lon][~mask[:, lat, lon]])
                 step = 0
-                persistence_mask_1d = ones(nb_steps, dtype=bool)
+                persistence_mask_1d = np.ones(nb_steps, dtype=bool)
                 while slot_beginning_slice < nb_slots:
                     slice_ndsi = ndsi[slot_beginning_slice:slot_ending_slice, lat, lon]
                     slice_mu = mu[slot_beginning_slice:slot_ending_slice, lat, lon]
@@ -118,7 +79,7 @@ def recognize_pattern_ndsi(ndsi, mu, mask, time_step_satellite, step_slot, slice
                 slot_beginning_slice = 0
                 slot_ending_slice = map_first_darkest_points[lat, lon] % nb_slots_per_step
                 # last_slope, last_intercept = 0, 0
-                med = median(ndsi[:, lat, lon][~mask[:, lat, lon]])
+                med = np.median(ndsi[:, lat, lon][~mask[:, lat, lon]])
                 while slot_beginning_slice < nb_slots:
                     slice_ndsi = ndsi[slot_beginning_slice:slot_ending_slice, lat, lon]
                     slice_mu = mu[slot_beginning_slice:slot_ending_slice, lat, lon]
@@ -177,12 +138,11 @@ def recognize_pattern_vis(ndsi, vis, nir, mu, mask, time_step_satellite, slot_st
     t_begin_reco = time()
     # https://docs.scipy.org/doc/scipy-0.14.0/reference/generated/scipy.stats.pearsonr.html
     from scipy.stats import pearsonr
-    from numpy import percentile, shape
 
     # computing of correlation need enough temporal information. If we have data on a too small window, ignore it
     minimal_nb_unmasked_slots = 12
 
-    (nb_slots, nb_latitudes, nb_longitudes) = shape(ndsi)
+    (nb_slots, nb_latitudes, nb_longitudes) = np.shape(ndsi)
     nb_slots_per_day = get_nb_slots_per_day(time_step_satellite, slot_step)
     nb_slots_per_step = int(nb_slots_per_day / slices_by_day)
 

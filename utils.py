@@ -13,10 +13,16 @@ def get_nb_slots_per_day(timestep_satellite, step_sample):
     return int(24*60 / (timestep_satellite*step_sample))
 
 
-def get_next_darkest_slot(mu, nb_slots_per_day, current_slot, lat, lon):
+def get_next_midnight_slot(mu_point, nb_slots_per_day, current_slot=0):
     return np.maximum(0,
                       current_slot+nb_slots_per_day-5 +
-                      np.argmin(mu[current_slot+nb_slots_per_day-5:current_slot+nb_slots_per_day+5, lat, lon]))
+                      np.argmin(mu_point[current_slot+nb_slots_per_day-5:current_slot+nb_slots_per_day+5]))
+
+
+def get_next_noon_slot(mu_point, nb_slots_per_day, current_slot=0):
+    return np.maximum(0,
+                      current_slot+nb_slots_per_day-5 +
+                      np.argmax(mu_point[current_slot+nb_slots_per_day-5:current_slot+nb_slots_per_day+5]))
 
 
 def get_map_next_midnight_slots(mu, nb_slots_per_day, current_slot=0):
@@ -25,6 +31,10 @@ def get_map_next_midnight_slots(mu, nb_slots_per_day, current_slot=0):
     else:
         return np.maximum(0, current_slot+nb_slots_per_day - 5 +
                           np.argmin(mu[current_slot+nb_slots_per_day-5:current_slot+nb_slots_per_day+5], axis=0))
+
+
+def get_map_next_noon_slots(mu, nb_slots_per_day, current_slot=0):
+    return (get_map_next_midnight_slots(mu, nb_slots_per_day, current_slot) + nb_slots_per_day/2) % nb_slots_per_day
 
 
 def get_map_next_dawn_slots(mu, nb_slots_per_day, current_slot=0):
@@ -92,11 +102,10 @@ def latlon_to_rc(lat, lon, size_tile=5):
 
 
 def get_latitudes_longitudes(lat_start, lat_end, lon_start, lon_end, resolution=2.0 / 60):
-    from numpy import linspace
     nb_lat = int((lat_end - lat_start) / resolution) + 1
-    latitudes = linspace(lat_start, lat_end, nb_lat, endpoint=False)
+    latitudes = np.linspace(lat_start, lat_end, nb_lat, endpoint=False)
     nb_lon = int((lon_end - lon_start) / resolution) + 1
-    longitudes = linspace(lon_start, lon_end, nb_lon, endpoint=False)
+    longitudes = np.linspace(lon_start, lon_end, nb_lon, endpoint=False)
     return latitudes, longitudes
 
 
@@ -110,9 +119,8 @@ def get_times(dfb_beginning, dfb_ending, satellite_timestep, slot_step):
 
 
 def get_dfbs_slots(dfb_beginning, dfb_ending, satellite_timestep, slot_step):
-    from numpy import arange
-    dfbs = arange(dfb_beginning, dfb_ending+1, step=1)
-    slots = arange(0, 60 * 24 /satellite_timestep, step=slot_step)
+    dfbs = np.arange(dfb_beginning, dfb_ending+1, step=1)
+    slots = np.arange(0, 60 * 24 /satellite_timestep, step=slot_step)
     return dfbs, slots
 
 
@@ -124,36 +132,35 @@ def upper_divisor_slot_step(slot_step, nb_slots_per_day):
 
 def normalize_array(array, mask=None, normalization='max', return_m_s=True):
     # normalization: max, standard
-    from numpy import max, abs, var, mean, sqrt
     if normalization == 'max':
         if mask is None:
-            to_return = array / max(abs(array)), 0, 1 # max of data which is not masked...
+            to_return = array / np.max(np.abs(array)), 0, 1 # max of data which is not masked...
         else:
-            to_return = array / max(array[~mask]), 0, 1   # max of data which is not masked...
+            to_return = array / np.max(array[~mask]), 0, 1   # max of data which is not masked...
     elif normalization == 'centered':
         if mask is None:
-            m = mean(array)
+            m = np.mean(array)
             to_return = (array -m), m, 1
         else:
-            m = mean(array[~mask])
+            m = np.mean(array[~mask])
             array[~mask] = (array[~mask] - m)
             to_return = array, m, 1
     elif normalization == 'reduced':
         if mask is None:
-            s = sqrt(var(array))
+            s = np.sqrt(np.var(array))
             to_return = array/s, 0, s
         else:
-            s = sqrt(var(array[~mask]))
+            s = np.sqrt(np.var(array[~mask]))
             array[~mask] = (array[~mask] / s)
             to_return = array, 0, s
     elif normalization == 'standard':
         if mask is None:
-            m = mean(array)
-            s = sqrt(var(array))
+            m = np.mean(array)
+            s = np.sqrt(np.var(array))
             to_return = (array -m) / s, m, s
         else:
-            m = mean(array[~mask])
-            s = sqrt(var(array[~mask]))
+            m = np.mean(array[~mask])
+            s = np.sqrt(np.var(array[~mask]))
             array[~mask] = (array[~mask] - m) / s
             to_return = array, m, s
     else:

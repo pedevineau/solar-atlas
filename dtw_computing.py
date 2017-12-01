@@ -1,5 +1,5 @@
 # inspiration from: http://alexminnaar.com/time-series-classification-and-clustering-with-python.html
-from numpy import sqrt, roll, minimum, argmin
+from numpy import sqrt
 
 def get_dtw(s1, s2):
     DTW={}

@@ -1,5 +1,6 @@
-import numpy as np
-from naive_gaussian_classification import visualize_input, get_features, get_latitudes_longitudes, visualize_map_time, get_bbox
+from utils import *
+from get_data import get_features
+from quick_visualization import visualize_input, get_bbox
 
 
 def get_auto_corr_array(x):
@@ -62,8 +63,7 @@ def get_automatic_threshold(normalize, nb_days=3):
         data = features[slot_b:slot_e, latind, lonind, feature_number]
         scores.append(get_autocorr_predictor_array_2d(data))
         coordinates.append([slot_b, slot_e, latind, lonind])
-    from numpy import percentile
-    alpha = percentile(scores, perc)
+    alpha = np.percentile(scores, perc)
     print 'alpha', alpha
     print 'scores', scores
     for k in range(number_attempts):

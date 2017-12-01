@@ -46,15 +46,14 @@ def get_bbox(lat_start, lat_end, lon_start, lon_end):
 
 def visualize_curves_3d(latitudes, longitudes, array_2d, title=None):
     from matplotlib import pyplot
-    from numpy import meshgrid, transpose, array
     from mpl_toolkits.mplot3d import Axes3D
     latitudes = list(reversed(latitudes))
-    latitudes, longitudes = meshgrid(latitudes, longitudes)
+    latitudes, longitudes = np.meshgrid(latitudes, longitudes)
     fig = pyplot.figure()
     ax = Axes3D(fig)
     pyplot.title(title)
     print title
-    ax.plot_surface(longitudes, latitudes, transpose(array_2d))  # to get usual Earth vision
+    ax.plot_surface(longitudes, latitudes, np.transpose(array_2d))  # to get usual Earth vision
     pyplot.show()
 
 
@@ -145,10 +144,10 @@ def visualize_hist(array_1d, title='Histogram', precision=50):
 
 
 if __name__ == '__main__':
-    from get_data import get_latitudes_longitudes, get_features, normalize_array, get_array_3d_cos_zen
-    from utils import get_times, get_latitudes_longitudes
-    compute_indexes_ = True
-    type_channels = 'infrared'
+    from get_data import get_features
+    from utils import *
+    compute_indexes_ =True
+    type_channels = 'visible'
     latitude_beginning= 35.
     latitude_end = 45.
     longitude_beginning = 125.
@@ -163,7 +162,6 @@ if __name__ == '__main__':
                             normalization='standard')
 
     from numpy.random import randint
-    from numpy import *
 
     # visualize_hist(array_1d=ext[(ext!=-10) & (abs(ext) > 0.001)], precision=150)
     # print ext[abs(ext)<0.001]

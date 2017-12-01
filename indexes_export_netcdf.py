@@ -48,7 +48,6 @@ def write(type_chan, variables_definitions_, variables_data_, dfbs, slots, latit
 if __name__ == '__main__':
     from get_data import get_features
     from utils import *
-    from numpy import reshape
 
     type_output = 'classes'   # infrared, visible, classes
 
@@ -94,8 +93,8 @@ if __name__ == '__main__':
         cli = features[:, :, :, 0]
         biased = features[:, :, :, 1]
 
-        cli = reshape(cli, (nb_dfbs, nb_slots_per_day, nb_latitudes, nb_longitudes))
-        biased = reshape(biased, (nb_dfbs, nb_slots_per_day, nb_latitudes, nb_longitudes))
+        cli = np.reshape(cli, (nb_dfbs, nb_slots_per_day, nb_latitudes, nb_longitudes))
+        biased = np.reshape(biased, (nb_dfbs, nb_slots_per_day, nb_latitudes, nb_longitudes))
 
 
         variables_definitions_cli = {
@@ -141,9 +140,9 @@ if __name__ == '__main__':
         stressed_ndsi = features[:, :, :, 1]
         cloudy_sea = features[:, :, :, 2]
 
-        ndsi = reshape(ndsi, (nb_dfbs, nb_slots_per_day, nb_latitudes, nb_longitudes))
-        stressed_ndsi = reshape(stressed_ndsi, (nb_dfbs, nb_slots_per_day, nb_latitudes, nb_longitudes))
-        cloudy_sea = reshape(cloudy_sea, (nb_dfbs, nb_slots_per_day, nb_latitudes, nb_longitudes))
+        ndsi = np.reshape(ndsi, (nb_dfbs, nb_slots_per_day, nb_latitudes, nb_longitudes))
+        stressed_ndsi = np.reshape(stressed_ndsi, (nb_dfbs, nb_slots_per_day, nb_latitudes, nb_longitudes))
+        cloudy_sea = np.reshape(cloudy_sea, (nb_dfbs, nb_slots_per_day, nb_latitudes, nb_longitudes))
 
 
         variables_ndsi = {
@@ -192,7 +191,7 @@ if __name__ == '__main__':
 
         classes = np.flip(classes, axis=1)
 
-        classes = reshape(classes, (nb_dfbs, nb_slots_per_day, nb_latitudes, nb_longitudes))
+        classes = np.reshape(classes, (nb_dfbs, nb_slots_per_day, nb_latitudes, nb_longitudes))
 
 
         variables_definitions_classes = {
