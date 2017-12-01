@@ -1,4 +1,5 @@
 from numpy.random import randint
+from utils import *
 
 
 def output_filters(array):
@@ -60,12 +61,12 @@ def visualize_curves_3d(latitudes, longitudes, array_2d, title=None):
 def visualize_map_time(array_map, bbox, vmin=0, vmax=1, title=None, subplot_titles_list=[], color='jet'):
     # array can be 3d or 4d
     from nclib2.visualization import visualize_map_3d
-    from numpy import shape
 
     interpolation_ = None
     ocean_mask_ = False
-    if len(shape(array_map)) == 4:
-        (a, b, c, d) = shape(array_map)
+    print array_map.size
+    if len(np.shape(array_map)) == 4:
+        (a, b, c, d) = np.shape(array_map)
         for var_index in range(d):
             if title is None:
                 title = 'Input_'+str(var_index)
@@ -79,7 +80,7 @@ def visualize_map_time(array_map, bbox, vmin=0, vmax=1, title=None, subplot_titl
                              subplot_titles_list=subplot_titles_list,
                              ocean_mask=ocean_mask_,
                              color=color)
-    elif len(shape(array_map)) == 3:
+    elif len(np.shape(array_map)) == 3:
         print title
         visualize_map_3d(array_map[:, :, :],
                          bbox,
@@ -95,13 +96,6 @@ def visualize_map_time(array_map, bbox, vmin=0, vmax=1, title=None, subplot_titl
 def visualize_map(array_2d):
     from nclib2.visualization import show_raw
     show_raw(array_2d)
-
-
-def print_date_from_dfb(begin, ending):
-    from datetime import datetime, timedelta
-    d_beginning = datetime(1980, 1, 1) + timedelta(days=begin-1, seconds=1)
-    d_ending = datetime(1980, 1, 1) + timedelta(days=ending + 1 -1, seconds=-1)
-    print 'Dates from ', str(d_beginning), ' till ', str(d_ending)
 
 
 def visualize_classes(data_predicted, bbox):
@@ -154,12 +148,12 @@ if __name__ == '__main__':
     from get_data import get_latitudes_longitudes, get_features, normalize_array, get_array_3d_cos_zen
     from utils import get_times, get_latitudes_longitudes
     compute_indexes_ = True
-    type_channels = 'visible'
+    type_channels = 'infrared'
     latitude_beginning= 35.
     latitude_end = 45.
     longitude_beginning = 125.
     longitude_end = 130.
-    dfb_beginning = 13531
+    dfb_beginning = 13533
     dfb_ending = dfb_beginning
     print_date_from_dfb(dfb_beginning, dfb_ending)
     lat, lon = get_latitudes_longitudes(latitude_beginning, latitude_end, longitude_beginning, longitude_end)

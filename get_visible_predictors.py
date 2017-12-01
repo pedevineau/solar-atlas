@@ -8,7 +8,8 @@ def get_ndsi(vis, nir, maskv, mu, ocean_mask, threshold_denominator=0.02, thresh
     else:
         ndsi = nir / maximum(vis, threshold_denominator)
     threshold_mu = 0.02
-    mask_ndsi = (mu <= threshold_mu) | maskv | ocean_mask
+    blue_sea_mask = ocean_mask & (np.abs(vis-nir) < 5)
+    mask_ndsi = (mu <= threshold_mu) | maskv | blue_sea_mask
     ndsi, m, s = normalize_array(ndsi, mask_ndsi, normalization='max')  # normalization take into account the mask
     ndsi[mask_ndsi] = 0
     return ndsi, m, s, mask_ndsi

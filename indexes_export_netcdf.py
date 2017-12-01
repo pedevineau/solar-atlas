@@ -50,7 +50,7 @@ if __name__ == '__main__':
     from utils import *
     from numpy import reshape
 
-    type_output = 'infrared'   # infrared, visible, classes
+    type_output = 'classes'   # infrared, visible, classes
 
     latitude_beginning = 35.+10  # salt lake mongolia  45.
     latitude_end = 40.+15
@@ -190,7 +190,10 @@ if __name__ == '__main__':
             return_mu=False,
         )
 
-        features = np.flip(classes, axis=1)
+        classes = np.flip(classes, axis=1)
+
+        classes = reshape(classes, (nb_dfbs, nb_slots_per_day, nb_latitudes, nb_longitudes))
+
 
         variables_definitions_classes = {
             "Classes": {"_FillValue": -999., "units": "no unit", "long_name": "Decision tree classification",

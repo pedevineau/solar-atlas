@@ -11,6 +11,10 @@
     "infrared": {
       "dir": "/data/computed",
       "pattern": "H08LATLON_INFRARED_INDEXES_2000__TMON_{YYYY}_{mm}__SDEG05_r{SDEG5_LATITUDE}_c{SDEG5_LONGITUDE}.nc"
+    },
+    "classes": {
+      "dir": "/data/computed",
+      "pattern": "H08LATLON_CLASSES_INDEXES_2000__TMON_{YYYY}_{mm}__SDEG05_r{SDEG5_LATITUDE}_c{SDEG5_LONGITUDE}.nc"
     }
   },
   "channels": {

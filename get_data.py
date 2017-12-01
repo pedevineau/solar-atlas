@@ -191,9 +191,9 @@ def compute_visible(array_channels, ocean, times, latitudes, longitudes, satelli
     del array_data
 
     # stressed_ndsi = recognize_pattern_vis(ndsi, array_data[:, :, :, 0], array_data[:, :, :, 1], mu, mask_ndsi, timestep_satellite, slot_step, slices_by_day=1)
-    array_indexes[:, :, :, 1] = median_filter_3d(stressed_ndsi, scope=2)
+    array_indexes[:, :, :, 1] = median_filter_3d(stressed_ndsi, scope=3)
     # super_mask = (stressed_ndsi > 0.5) | mask_ndsi
-    array_indexes[:, :, :, 0] = median_filter_3d(ndsi, scope=1)
+    array_indexes[:, :, :, 0] = median_filter_3d(ndsi, scope=3)
 
 
 
@@ -263,10 +263,12 @@ def compute_infrared(array_channels, ocean, times, latitudes, longitudes, satell
 
     array_indexes = np.empty(shape=(nb_slots, nb_latitudes, nb_longitudes, nb_features))
 
-    array_indexes[:, :, :, 0] = median_filter_3d(cli, scope=1)
+    array_indexes[:, :, :, 0] = median_filter_3d(cli, scope=3)
 
-    array_indexes[:, :, :, 1] = get_bias_difference(mir=array_data[:, :, :, 1], fir=array_data[:, :, :, 0],
-                                                    maski=mask, mu=mu, ocean_mask=ocean_mask)
+    array_indexes[:, :, :, 1] = median_filter_3d(
+        get_bias_difference(mir=array_data[:, :, :, 1], fir=array_data[:, :, :, 0],
+                                                    maski=mask, mu=mu, ocean_mask=ocean_mask),
+        scope=3)
 
     # array_indexes[:, :, :, 3] = get_variability_array(array=array_indexes[:, :, :, 2], mask=mask_cli)
     #

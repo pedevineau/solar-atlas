@@ -2,6 +2,13 @@ import numpy as np
 from scipy.stats import pearsonr
 
 
+def print_date_from_dfb(begin, ending):
+    from datetime import datetime, timedelta
+    d_beginning = datetime(1980, 1, 1) + timedelta(days=begin-1, seconds=1)
+    d_ending = datetime(1980, 1, 1) + timedelta(days=ending + 1 -1, seconds=-1)
+    print 'Dates from ', str(d_beginning), ' till ', str(d_ending)
+
+
 def get_nb_slots_per_day(timestep_satellite, step_sample):
     return int(24*60 / (timestep_satellite*step_sample))
 

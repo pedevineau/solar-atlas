@@ -50,26 +50,30 @@ def get_classes_decision_tree(latitudes,
 
     nb_classes = 5
 
-    cloudy_mask = (infrared_features[:, :, :, 1] > 0) | (visible_features[:, :, :, 2] == 1)
+    cli_or_biased = 0
+
+    cloudy_mask = (infrared_features[:, :, :, cli_or_biased] > 0) | (visible_features[:, :, :, 2] == 1)
 
     ndsi_mask = (visible_features[:, :, :, 0] > 0)
 
-    undefined_mask = (visible_features[:, :, :, 0] == - 10) & (infrared_features[:, :, :, 0] == - 10)
+    undefined_mask = (visible_features[:, :, :, 0] <- 9) & (infrared_features[:, :, :, cli_or_biased] < - 9)
 
     persistent_snow_mask = (visible_features[:, :, :, 1] > 0.5)
 
     (nb_slots, nb_latitudes, nb_longitudes) = np.shape(visible_features)[0:3]
-    classes = np.zeros((nb_slots, nb_latitudes, nb_longitudes, nb_classes))
+    classes = np.zeros((nb_slots, nb_latitudes, nb_longitudes))
 
     classes[cloudy_mask] = 1
-    classes[~cloudy_mask & persistent_snow_mask] = 2
-    classes[~cloudy_mask & ~persistent_snow_mask & ndsi_mask] = 3
+    classes[persistent_snow_mask] = 2
+    classes[~persistent_snow_mask & ndsi_mask] = 3
     classes[undefined_mask] = 4
+    classes[cloudy_mask & ndsi_mask] = 5
 
     return classes
 
 
 if __name__ == '__main__':
+    nb_classes = 6
 
     slot_step = 1
     beginning = 13527+6
@@ -86,6 +90,8 @@ if __name__ == '__main__':
     latitudes, longitudes = get_latitudes_longitudes(latitude_beginning, latitude_end,
                                                      longitude_beginning, longitude_end)
 
+    print_date_from_dfb(beginning, ending)
+
     classes = get_classes_decision_tree(latitudes,
         longitudes,
         beginning,
@@ -98,7 +104,7 @@ if __name__ == '__main__':
     from quick_visualization import visualize_map_time, get_bbox
 
     bbox = get_bbox(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
-    visualize_map_time(classes, bbox)
+    visualize_map_time(classes, bbox, vmin=0, vmax=nb_classes-1, title='Classes 0-5')
 
 
 
