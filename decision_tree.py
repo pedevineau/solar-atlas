@@ -12,8 +12,7 @@ def get_classes_decision_tree(latitudes,
         normalize,
         normalization,
         weights=None,
-        return_m_s=False,
-        return_mu=False,
+        return_m_s=False
    ):
 
     visible_features = get_features(
@@ -27,8 +26,7 @@ def get_classes_decision_tree(latitudes,
         normalize,
         normalization,
         weights,
-        return_m_s,
-        return_mu
+        return_m_s
     )
 
     infrared_features = get_features(
@@ -42,20 +40,18 @@ def get_classes_decision_tree(latitudes,
         normalize,
         normalization,
         weights,
-        return_m_s,
-        return_mu
+        return_m_s
     )
 
     # classes: cloudy, snow over the ground, other (ground, sea...), unknown
-
 
     cli_or_biased = 1
 
     cloudy_mask = (infrared_features[:, :, :, cli_or_biased] > 0) | (visible_features[:, :, :, 3] == 1)
 
-    ndsi_mask = (visible_features[:, :, :, 0] > 0.5)
+    ndsi_mask = (visible_features[:, :, :, 0] > 0.3)
 
-    ndsi_variable = (np.abs(visible_features[:, :, :, 2]) > 0.5)
+    ndsi_variable = (np.abs(visible_features[:, :, :, 2]) > 0.2)
 
     hot_mask = (infrared_features[:, :, :, 2] == 1)
 
@@ -94,7 +90,7 @@ if __name__ == '__main__':
 
     slot_step = 1
     beginning = 13516+17
-    nb_days = 1
+    nb_days = 2
     ending = beginning + nb_days - 1
     compute_indexes = True
     normalize = False
@@ -107,7 +103,7 @@ if __name__ == '__main__':
     latitudes, longitudes = get_latitudes_longitudes(latitude_beginning, latitude_end,
                                                      longitude_beginning, longitude_end)
 
-    print_date_from_dfb(beginning, ending)
+    date_begin, date_end = print_date_from_dfb(beginning, ending)
 
     classes = get_classes_decision_tree(latitudes,
         longitudes,
@@ -121,7 +117,8 @@ if __name__ == '__main__':
     from quick_visualization import visualize_map_time, get_bbox
 
     bbox = get_bbox(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
-    visualize_map_time(classes, bbox, vmin=0, vmax=nb_classes-1, title='Classes 0-'+str(nb_classes-1))
+    visualize_map_time(classes, bbox, vmin=0, vmax=nb_classes-1, title='Classes 0-'+str(nb_classes-1)+
+                                                                       ' from' + str(date_begin))
 
 
 

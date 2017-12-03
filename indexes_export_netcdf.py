@@ -49,7 +49,7 @@ if __name__ == '__main__':
     from get_data import get_features
     from utils import *
 
-    type_output = 'classes'   # infrared, visible, classes
+    type_output = 'visible'   # infrared, visible, classes
 
     latitude_beginning = 35.+10  # salt lake mongolia  45.
     latitude_end = 40.+15
@@ -85,7 +85,6 @@ if __name__ == '__main__':
             normalization='standard',
             weights=None,
             return_m_s=False,
-            return_mu=False,
         )
 
         features = np.flip(features, axis=1)
@@ -131,7 +130,6 @@ if __name__ == '__main__':
             normalization='standard',
             weights=None,
             return_m_s=False,
-            return_mu=False,
         )
 
         features = np.flip(features, axis=1)
@@ -193,8 +191,7 @@ if __name__ == '__main__':
             normalize=False,
             normalization='standard',
             weights=None,
-            return_m_s=False,
-            return_mu=False,
+            return_m_s=False
         )
 
         classes = np.flip(classes, axis=1)

@@ -2,7 +2,8 @@ from utils import *
 from scipy.ndimage.filters import gaussian_filter1d
 
 
-def recognize_pattern_ndsi(ndsi, mu, mask, nb_slots_per_day, slices_per_day=1, tolerance=0.0, persistence_sigma=0.):
+def recognize_pattern_ndsi(ndsi, mu, mask, mask_high_variability,
+                           nb_slots_per_day, slices_per_day=1, tolerance=0.0, persistence_sigma=0.):
     print 'begin recognize pattern'
     from time import time
     t_begin_reco = time()
@@ -12,6 +13,8 @@ def recognize_pattern_ndsi(ndsi, mu, mask, nb_slots_per_day, slices_per_day=1, t
     # computing of correlation need enough temporal information. If we have data on a too small window, ignore it
     minimal_nb_unmasked_slots = 12
 
+    mask = mask & mask_high_variability
+    del mask_high_variability
 
     # we'll return a "doped" ndsi. cloudy looks like -1, snowy looks like 1, and other situations are not changed
     # classes: 1 for snow, -1 for clouds, 0 otherwise

@@ -2,6 +2,82 @@ from utils import *
 from dtw_computing import *
 
 
+def compute_infrared(array_channels, ocean, times, latitudes, longitudes, satellite_step, slot_step,
+                     normalize, normalization, weights, return_m_s=False, return_mu=False):
+    from get_data import mask_channels, get_array_3d_cos_zen
+    from filter import median_filter_3d
+
+    array_data, mask = mask_channels(array_channels, normalize)
+
+    (nb_slots, nb_latitudes, nb_longitudes, nb_channels) = np.shape(array_data)
+
+    nb_features = 3 # cli, diff cli, cold_mask
+    mu = get_array_3d_cos_zen(times, latitudes, longitudes)
+    mu[mu < 0] = 0
+
+    ocean_mask = (ocean == 0)
+
+    cli, m, s, mask_cli = get_cli(mir=array_data[:,:,:,1], fir=array_data[:, :, :, 0], maski=mask,
+                                  mu=mu, treshold_mu=0.05, ocean_mask=ocean_mask,
+                                  satellite_step=satellite_step, slot_step=slot_step, return_m_s_mask=True)
+
+    array_indexes = np.empty(shape=(nb_slots, nb_latitudes, nb_longitudes, nb_features))
+
+    array_indexes[:, :, :, 0] = median_filter_3d(cli, scope=3)
+
+    array_indexes[:, :, :, 1] = median_filter_3d(
+        get_difference(mir=array_data[:, :, :, 1], fir=array_data[:, :, :, 0],
+                       maski=mask, mu=mu, ocean_mask=ocean_mask, return_m_s_mask=False),
+        scope=3)
+
+    # array_indexes[:, :, :, 3] = get_variability_array(array=array_indexes[:, :, :, 2], mask=mask_cli)
+    #
+    # cli_10 = get_variability_array(array=cli, mask=mask_cli, step=10 / satellite_step,  #th_1=0.018,
+    #                                         th_1=0.2, negative_variation=False)
+    # cli_20 = get_variability_array(array=cli, mask=mask_cli, step=20 / satellite_step,  # th_1=0.023,
+    #                                         th_1=0.2, negative_variation=False)
+
+    # array_indexes[:, :, :, 1] = median_filter_3d(cli_10 + cli_20, scope=1)
+
+    # array_indexes[:, :, :, 0] = median_filter_3d(cli, scope=1)
+
+    # from filter import digital_low_cut_filtering_time
+    # array_indexes[:,:,:,2] = median_filter_3d(digital_low_cut_filtering_time(fir - mir, mask_cli, satellite_step=satellite_step), scope=1)
+    array_indexes[:, :, :, 2] = get_warm_predictor(mir=array_data[:, :, :, 1], cos_zen=mu, satellite_step=satellite_step,
+                                                   slot_step=slot_step, cloudy_mask=array_indexes[:, :, :, 1] > 1,
+                                                   threshold_median=300)
+
+
+    # array_indexes[:, :, :, 2][cloudy_sea] = 2  # ground is 0, blue sea is 1 cloudy sea is 2
+
+
+    # from scipy.stats import pearsonr
+    # print 'redundancy cli and diff', pearsonr(array_indexes[10:40, :, :, 0].flatten(), array_indexes[10:40, :, :, 2].flatten())
+
+    me, std = np.zeros(nb_features), np.full(nb_features, 1.)
+    if normalization is not None:
+        array_indexes[:, :, :, 0], me[0], std[0] = normalize_array(array_indexes[:, :, :, 0], normalization=normalization, mask=mask_cli)
+        # array_indexes[:, :, :, 1], me[1], std[1] = normalize_array(array_indexes[:, :, :, 1], normalization=normalization, mask=mask_cli)
+        # array_indexes[:, :, :, 2], me[2], std[2] = normalize_array(array_indexes[:, :, :, 2], normalization=normalization, mask=mask_cli)
+
+    if weights is not None:
+        for feat in range(nb_features):
+            array_indexes[:, :, :, feat] = weights[feat] * array_indexes[:, :, :, feat]
+        me = me * weights
+    array_indexes[:, :, :, 0:2][mask_cli] = - 10   # - 10 is supposed to be less than standardized data
+
+    # array_indexes[np.abs(array_indexes) < 0.5] = 0
+
+    if return_m_s and return_mu:
+        return array_indexes, mu, me, std
+    elif return_mu and not return_m_s:
+        return array_indexes, mu
+    elif not return_mu and return_m_s:
+        return array_indexes, me, std
+    else:
+        return array_indexes
+
+
 def get_cli(mir, fir, maski, mu, treshold_mu, ocean_mask, satellite_step, slot_step, return_m_s_mask=False):
     # mir = normalize_array(mir, maski, normalization='max', return_m_s=False)
     # fir = normalize_array(fir, maski, normalization='max', return_m_s=False)

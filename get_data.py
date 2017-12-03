@@ -1,9 +1,8 @@
 ### user input ###
 
-from filter import median_filter_3d, low_pass_filter_3d
 from utils import *
-from get_visible_predictors import *
-from get_infrared_predictors import *
+from get_visible_predictors import compute_visible
+from get_infrared_predictors import compute_infrared
 
 
 def get_selected_channels(all_channels, ask_channels=True):
@@ -161,138 +160,6 @@ def mask_channels(array_data, normalize):
     return array_data, mask
 
 
-def compute_visible(array_channels, ocean, times, latitudes, longitudes, satellite_step, slot_step,
-                    normalize, normalization, weights, return_m_s=False, return_mu=False):
-
-    array_data, mask = mask_channels(array_channels, normalize)
-    (nb_slots, nb_latitudes, nb_longitudes, nb_channels) = np.shape(array_data)
-
-    nb_features = 4
-    # VIS160_2000: 0,  VIS064_2000:1
-    mu = get_array_3d_cos_zen(times, latitudes, longitudes)
-
-    ocean_mask = (ocean == 0)
-    nb_slots_per_day = get_nb_slots_per_day(satellite_step, slot_step)
-
-    ndsi, m, s, mask_ndsi = get_ndsi(vis=array_data[:, :, :, 0], nir=array_data[:, :, :, 1], threshold_denominator=0.02,
-                                     maskv=mask, mu=mu, threshold_mu=0.05, ocean_mask=ocean_mask, return_m_s_mask=True)
-
-    array_indexes = np.empty(shape=(nb_slots, nb_latitudes, nb_longitudes, nb_features))
-
-    stressed_ndsi = get_stressed_ndsi(ndsi, mu, mask_ndsi, nb_slots_per_day, tolerance=0.06,
-                                      slices_per_day=1, persistence_sigma=1.5)
-
-    array_indexes[:, :, :, 3] = get_cloudy_sea(vis=array_data[:, :, :, 0], ocean_mask=ocean_mask,
-                                               threshold_cloudy_sea=0.2)
-    del array_data
-
-    # stressed_ndsi = recognize_pattern_vis(ndsi, array_data[:, :, :, 0], array_data[:, :, :, 1], mu, mask_ndsi, nb_slots_per_day, slices_by_day=1)
-    array_indexes[:, :, :, 1] = median_filter_3d(stressed_ndsi, scope=2)
-    array_indexes[:, :, :, 0] = median_filter_3d(ndsi, scope=2)
-
-    ndsi_1 = get_variability_array(array=ndsi, mask=mask, step=1, return_mask=False)
-    ndsi_3 = get_variability_array(array=ndsi, mask=mask, step=3, return_mask=False)
-    array_indexes[:, :, :, 2] = median_filter_3d(ndsi_1+ndsi_3, scope=2)
-
-    me, std = np.zeros(nb_features), np.full(nb_features, 1.)
-    if normalization is not None:
-        for feat in range(nb_features-1):  # please not normalize cloudy sea mask...
-            array_indexes[:, :, :, feat], me[feat], std[feat] = normalize_array(array_indexes[:, :, :, feat], normalization=normalization, mask=mask_ndsi)
-        # array_indexes[:, :, :, 2], me[2], std[2] = normalize_array(array_indexes[:, :, :, 2], normalization=normalization, mask=mask_ndsi)
-        # array_indexes[:, :, :, 3], me[3], std[3] = normalize_array(array_indexes[:, :, :, 3], normalization=normalization, mask=mask_ndsi)
-
-    if weights is not None:
-        for feat in range(nb_features):
-            array_indexes[:, :, :, feat] = weights[feat] * array_indexes[:, :, :, feat]
-        # array_indexes[:, :, :, 2] = weights[2] * array_indexes[:, :, :, 2]
-        # array_indexes[:, :, :, 3] = weights[3] * array_indexes[:, :, :, 3]
-
-        me = me * weights
-    array_indexes[mask] = - 10
-    if return_m_s and return_mu:
-        return array_indexes, mu, me, std
-    elif not return_m_s and return_mu:
-        return array_indexes, mu
-    elif return_m_s and not return_mu:
-        return array_indexes, me, std
-    else:
-        return array_indexes
-
-
-def compute_infrared(array_channels, ocean, times, latitudes, longitudes, satellite_step, slot_step,
-                     normalize, normalization, weights, return_m_s=False, return_mu=False):
-
-    array_data, mask = mask_channels(array_channels, normalize)
-
-    (nb_slots, nb_latitudes, nb_longitudes, nb_channels) = np.shape(array_data)
-
-    nb_features = 3 # cli, diff cli, cold_mask
-    mu = get_array_3d_cos_zen(times, latitudes, longitudes)
-    mu[mu < 0] = 0
-
-    ocean_mask = (ocean == 0)
-
-    cli, m, s, mask_cli = get_cli(mir=array_data[:,:,:,1], fir=array_data[:, :, :, 0], maski=mask,
-                                  mu=mu, treshold_mu=0.05, ocean_mask=ocean_mask,
-                                  satellite_step=satellite_step, slot_step=slot_step, return_m_s_mask=True)
-
-    array_indexes = np.empty(shape=(nb_slots, nb_latitudes, nb_longitudes, nb_features))
-
-    array_indexes[:, :, :, 0] = median_filter_3d(cli, scope=3)
-
-    array_indexes[:, :, :, 1] = median_filter_3d(
-        get_difference(mir=array_data[:, :, :, 1], fir=array_data[:, :, :, 0],
-                       maski=mask, mu=mu, ocean_mask=ocean_mask, return_m_s_mask=False),
-        scope=3)
-
-    # array_indexes[:, :, :, 3] = get_variability_array(array=array_indexes[:, :, :, 2], mask=mask_cli)
-    #
-    # cli_10 = get_variability_array(array=cli, mask=mask_cli, step=10 / satellite_step,  #th_1=0.018,
-    #                                         th_1=0.2, negative_variation=False)
-    # cli_20 = get_variability_array(array=cli, mask=mask_cli, step=20 / satellite_step,  # th_1=0.023,
-    #                                         th_1=0.2, negative_variation=False)
-
-    # array_indexes[:, :, :, 1] = median_filter_3d(cli_10 + cli_20, scope=1)
-
-    # array_indexes[:, :, :, 0] = median_filter_3d(cli, scope=1)
-
-    # from filter import digital_low_cut_filtering_time
-    # array_indexes[:,:,:,2] = median_filter_3d(digital_low_cut_filtering_time(fir - mir, mask_cli, satellite_step=satellite_step), scope=1)
-    array_indexes[:, :, :, 2] = get_warm_predictor(mir=array_data[:, :, :, 1], cos_zen=mu, satellite_step=satellite_step,
-                                                   slot_step=slot_step, cloudy_mask=array_indexes[:, :, :, 1] > 1,
-                                                   threshold_median=300)
-
-
-    # array_indexes[:, :, :, 2][cloudy_sea] = 2  # ground is 0, blue sea is 1 cloudy sea is 2
-
-
-    # from scipy.stats import pearsonr
-    # print 'redundancy cli and diff', pearsonr(array_indexes[10:40, :, :, 0].flatten(), array_indexes[10:40, :, :, 2].flatten())
-
-    me, std = np.zeros(nb_features), np.full(nb_features, 1.)
-    if normalization is not None:
-        array_indexes[:, :, :, 0], me[0], std[0] = normalize_array(array_indexes[:, :, :, 0], normalization=normalization, mask=mask_cli)
-        # array_indexes[:, :, :, 1], me[1], std[1] = normalize_array(array_indexes[:, :, :, 1], normalization=normalization, mask=mask_cli)
-        # array_indexes[:, :, :, 2], me[2], std[2] = normalize_array(array_indexes[:, :, :, 2], normalization=normalization, mask=mask_cli)
-
-    if weights is not None:
-        for feat in range(nb_features):
-            array_indexes[:, :, :, feat] = weights[feat] * array_indexes[:, :, :, feat]
-        me = me * weights
-    array_indexes[:, :, :, 0:2][mask_cli] = - 10   # - 10 is supposed to be less than standardized data
-
-    array_indexes[np.abs(array_indexes) < 1]=0
-
-    if return_m_s and return_mu:
-        return array_indexes, mu, me, std
-    elif return_mu and not return_m_s:
-        return array_indexes, mu
-    elif not return_mu and return_m_s:
-        return array_indexes, me, std
-    else:
-        return array_indexes
-
-
 def apply_smooth_threshold(x, th, order=2):
     return np.exp(-(x-th))
 
@@ -302,12 +169,12 @@ def get_array_3d_cos_zen(times, latitudes, longitudes):
     return sunpos.evaluate(times, latitudes, longitudes, ndim=2, n_cpus=2).cosz
 
 
-def get_variability_array(array, mask, step=1, return_mask=False):
+def compute_short_variability(array, mask, step=1, return_mask=False):
     step_left = step
     # array= array - roll(array, step_left, axis=0)
     # not so easy: there is
     array = array - np.roll(array, step_left, axis=0)
-    mask = mask + np.roll(mask, -step_left, axis=0) # mask of night and dawn. numpy.roll casts the mask to an array
+    mask = mask + np.roll(mask, -step_left, axis=0)  # mask of night and dawn. numpy.roll casts the mask to an array
     array[mask] = 0
     array[:step_left] = 0
     if return_mask:
@@ -346,7 +213,7 @@ def get_variability_array_modified(array, mask, step=1, th_1=0.02, th_2=0.3,
                                    positive_variation=True, negative_variation=True):
     print 'var array', np.var([~mask])
     print 'mean array', np.mean(array[~mask])
-    arr = get_variability_array(array, mask, step)[0]
+    arr = compute_short_variability(array, mask, step)[0]
     return arr
 
 
@@ -356,7 +223,6 @@ def get_features(type_channels, latitudes, longitudes, dfb_beginning, dfb_ending
                  normalization=None,
                  weights=None,
                  return_m_s=False,
-                 return_mu=False,
                  ):
     import json
     metadata = json.load(open('metadata.json'))
@@ -391,7 +257,6 @@ def get_features(type_channels, latitudes, longitudes, dfb_beginning, dfb_ending
                 normalization,
                 weights,
                 return_m_s,
-                return_mu,
             )
 
     elif type_channels == 'infrared':
@@ -419,7 +284,6 @@ def get_features(type_channels, latitudes, longitudes, dfb_beginning, dfb_ending
                 normalization,
                 weights,
                 return_m_s,
-                return_mu
             )
     else:
         raise AttributeError('The type of channels should be \'visible\' or \'infrared\'')

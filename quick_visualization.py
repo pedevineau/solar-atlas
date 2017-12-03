@@ -63,7 +63,6 @@ def visualize_map_time(array_map, bbox, vmin=0, vmax=1, title=None, subplot_titl
 
     interpolation_ = None
     ocean_mask_ = False
-    print array_map.size
     if len(np.shape(array_map)) == 4:
         (a, b, c, d) = np.shape(array_map)
         for var_index in range(d):
@@ -146,15 +145,15 @@ def visualize_hist(array_1d, title='Histogram', precision=50):
 if __name__ == '__main__':
     from get_data import get_features
     from utils import *
-    compute_indexes_ =True
-    type_channels = 'infrared'
+    compute_indexes_ = True
+    type_channels = 'visible'
     latitude_beginning = 35.
-    latitude_end = 36.
+    latitude_end = 45.
     longitude_beginning = 125.
     longitude_end = 130.
     dfb_beginning = 13533
     dfb_ending = dfb_beginning
-    print_date_from_dfb(dfb_beginning, dfb_ending)
+    date_begin, date_end = print_date_from_dfb(dfb_beginning, dfb_ending)
     lat, lon = get_latitudes_longitudes(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
     bbox = get_bbox(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
     features = get_features(type_channels, lat, lon, dfb_beginning, dfb_ending, compute_indexes_, slot_step=1,
@@ -204,7 +203,8 @@ if __name__ == '__main__':
     elif not compute_indexes_:
         visualize_map_time((features[:, :, :, :]), bbox, title=type_channels, vmin=-1, vmax=1, color='gray')
     else:
-        visualize_map_time(features[:, :, :, 0:4], bbox, title=type_channels, vmin=0, vmax=2, color='gray')
+        visualize_map_time(features[:, :, :, 0:4], bbox, title=type_channels, vmin=-2
+                           , vmax=2, color='gray')
     # visualize_map_time(4*features[:, :, :, 1:3], bbox, title='INFRARED', vmin=0, vmax=1, color='gray')
     raise Exception('stop here for now')
 

@@ -1,12 +1,80 @@
 from utils import *
-from ndsi_local_day_trend import recognize_pattern_ndsi
 
 
-def get_ndsi(vis, nir, maskv, mu, ocean_mask, threshold_denominator=0.02, threshold_mu=0.05, direct=False, return_m_s_mask=False):
-    if direct:
+def compute_visible(array_channels, ocean, times, latitudes, longitudes, satellite_step, slot_step,
+                    normalize, normalization, weights, return_m_s=False, return_mu=False):
+    from get_data import mask_channels, get_array_3d_cos_zen, compute_short_variability
+    from filter import median_filter_3d
+
+    array_data, mask = mask_channels(array_channels, normalize)
+    (nb_slots, nb_latitudes, nb_longitudes, nb_channels) = np.shape(array_data)
+
+    nb_features = 4
+    # VIS160_2000: 0,  VIS064_2000:1
+    mu = get_array_3d_cos_zen(times, latitudes, longitudes)
+
+    ocean_mask = (ocean == 0)
+    nb_slots_per_day = get_nb_slots_per_day(satellite_step, slot_step)
+
+    ndsi, m, s, mask_ndsi = get_snow_index(vis=array_data[:, :, :, 1], nir=array_data[:, :, :, 0], threshold_denominator=0.02,
+                                           maskv=mask, mu=mu, threshold_mu=0.05, ocean_mask=ocean_mask, return_m_s_mask=True)
+
+
+
+    me, std = np.zeros(nb_features), np.full(nb_features, 1.)
+
+    if normalization is not None:
+        ndsi, me[0], std[0] = normalize_array(ndsi, normalization=normalization, mask=mask_ndsi)
+
+    array_indexes = np.empty(shape=(nb_slots, nb_latitudes, nb_longitudes, nb_features))
+    ndsi_1 = compute_short_variability(array=ndsi, mask=mask, step=1, return_mask=False)
+    ndsi_3 = compute_short_variability(array=ndsi, mask=mask, step=3, return_mask=False)
+    array_indexes[:, :, :, 2] = median_filter_3d(np.maximum(ndsi_1,ndsi_3), scope=2)
+
+    threshold_strong_variability = 0.3
+    mask_strong_variability = np.maximum(ndsi_1, ndsi_3) > threshold_strong_variability
+
+    stressed_ndsi = get_stressed_ndsi(ndsi, mu, mask_ndsi, mask_strong_variability, nb_slots_per_day, tolerance=0.06,
+                                      slices_per_day=3, persistence_sigma=1.5)
+
+    array_indexes[:, :, :, 3] = get_cloudy_sea(vis=array_data[:, :, :, 1], ocean_mask=ocean_mask,
+                                               threshold_cloudy_sea=0.2)
+    del array_data, mask_strong_variability
+
+    # stressed_ndsi = recognize_pattern_vis(ndsi, array_data[:, :, :, 0], array_data[:, :, :, 1], mu, mask_ndsi, nb_slots_per_day, slices_by_day=1)
+    array_indexes[:, :, :, 1] = median_filter_3d(stressed_ndsi, scope=2)
+    array_indexes[:, :, :, 0] = median_filter_3d(ndsi, scope=2)
+
+
+
+
+    # array_indexes[:, :, :, 2], me[2], std[2] = normalize_array(array_indexes[:, :, :, 2], normalization=normalization, mask=mask_ndsi)
+    # array_indexes[:, :, :, 3], me[3], std[3] = normalize_array(array_indexes[:, :, :, 3], normalization=normalization, mask=mask_ndsi)
+
+    if weights is not None:
+        for feat in range(nb_features):
+            array_indexes[:, :, :, feat] = weights[feat] * array_indexes[:, :, :, feat]
+        # array_indexes[:, :, :, 2] = weights[2] * array_indexes[:, :, :, 2]
+        # array_indexes[:, :, :, 3] = weights[3] * array_indexes[:, :, :, 3]
+
+        me = me * weights
+    array_indexes[mask] = - 10
+    if return_m_s and return_mu:
+        return array_indexes, mu, me, std
+    elif not return_m_s and return_mu:
+        return array_indexes, mu
+    elif return_m_s and not return_mu:
+        return array_indexes, me, std
+    else:
+        return array_indexes
+
+
+def get_snow_index(vis, nir, maskv, mu, ocean_mask, threshold_denominator=0.02, threshold_mu=0.05, compute_ndsi=True,
+                   return_m_s_mask=False):
+    if compute_ndsi:
         ndsi = (vis - nir) / np.maximum(nir + vis, threshold_denominator)
     else:
-        ndsi = nir / np.maximum(vis, threshold_denominator)
+        ndsi = vis / np.maximum(nir, threshold_denominator)
     threshold_mu = 0.02
     blue_sea_mask = ocean_mask & (np.abs(vis-nir) < 5)
     mask_ndsi = (mu <= threshold_mu) | maskv | blue_sea_mask
@@ -18,8 +86,10 @@ def get_ndsi(vis, nir, maskv, mu, ocean_mask, threshold_denominator=0.02, thresh
         return ndsi
 
 
-def get_stressed_ndsi(ndsi, mu, mask, nb_slots_per_day, slices_per_day=4, tolerance=0.08, persistence_sigma=1.5):
-    return recognize_pattern_ndsi(ndsi, mu, mask, nb_slots_per_day, slices_per_day, tolerance, persistence_sigma)
+def get_stressed_ndsi(ndsi, mu, mask_ndsi, mask_high_variability,
+                      nb_slots_per_day, slices_per_day=4, tolerance=0.08, persistence_sigma=1.5):
+    from ndsi_local_day_trend import recognize_pattern_ndsi
+    return recognize_pattern_ndsi(ndsi, mu, mask_ndsi, mask_high_variability, nb_slots_per_day, slices_per_day, tolerance, persistence_sigma)
 
 
 def get_tricky_transformed_ndsi(snow_index, summit, gamma=4):
@@ -30,7 +100,7 @@ def get_tricky_transformed_ndsi(snow_index, summit, gamma=4):
     return normalize_array(np.exp(-gamma*recentered) - np.exp(-gamma*summit))
 
 
-def get_cloudy_sea(vis, ocean_mask, threshold_cloudy_sea=0.2):
+def get_cloudy_sea(vis, ocean_mask, threshold_cloudy_sea=0.1):
     to_return = np.zeros_like(vis)
     to_return[ocean_mask & (vis > threshold_cloudy_sea)] = 1
     return to_return
