@@ -26,32 +26,27 @@ def filter_nan_training_set(array, multi_channel_bool):
 
 
 ### build model ###
-def get_basis_model(process):
+def get_basis_model(process, nb_components=None, max_iter=None, means_init=None):
     if process == 'gaussian':
-        if multi_channels:
-            print '!!!!! gaussian init centers not implemented !!!!!!'
-            means_init_ = [
-                # to be completed
-            ]
-        else:
-            means_radiance_ = get_gaussian_init_means(nb_components_)
-            means_init_ = np.zeros((nb_components_, nb_selected_channels))
-            for compo in range(nb_components_):
-                means_init_[compo] = np.array([means_radiance_[chan][compo] for chan in selected_channels]).reshape(
-                    nb_selected_channels)
-
+    #     if
+    #         means_radiance_ = get_gaussian_init_means(nb_components_)
+    #         means_init_ = np.zeros((nb_components_, nb_selected_channels))
+    #         for compo in range(nb_components_):
+    #             means_init_[compo] = np.array([means_radiance_[chan][compo] for chan in selected_channels]).reshape(
+    #                 nb_selected_channels)
+    #
         model = mixture.GaussianMixture(
-            n_components=nb_components_,
-            covariance_type='full',
-            warm_start=True,
-            means_init=means_init_
-                                        )
-    elif process == 'bayesian':
-        model = mixture.BayesianGaussianMixture(
-            n_components=nb_components_,
+            n_components=nb_components,
             covariance_type='full',
             # warm_start=True,
-            max_iter=max_iter_,
+            means_init=means_init
+            )
+    elif process == 'bayesian':
+        model = mixture.BayesianGaussianMixture(
+            n_components=nb_components,
+            covariance_type='full',
+            # warm_start=True,
+            max_iter=max_iter,
             # weight_concentration_prior=1
             )
     elif process == 'DBSCAN':
@@ -62,12 +57,12 @@ def get_basis_model(process):
     elif process == 'kmeans':
         model = cluster.KMeans(
             n_init=20,
-            n_clusters=nb_components_,
-            max_iter=max_iter_
+            n_clusters=nb_components,
+            max_iter=max_iter
         )
     elif process == 'spectral':
         model = cluster.SpectralClustering(
-            n_clusters=nb_components_,
+            n_clusters=nb_components,
             assign_labels='discretize'
         )
     else:
@@ -89,18 +84,28 @@ def get_basis_model(process):
 
 
 def get_trained_model(training_array, model, process, display_means=True, verbose=True):
+    '''
+
+    :param training_array:
+    :param model:
+    :param process:
+    :param display_means:
+    :param verbose:
+    :return:
+    '''
     try:
         trained_model = model.fit(training_array)
         # print evaluate_model_quality(training_sample, gmm)
-        if process == 'bayesian' or process == 'gaussian':
-            trained_model.means_ = np.sort(trained_model.means_)
-            update_cano_evaluation(trained_model)
-            if not trained_model.converged_:
-                print 'Not converged'
+        # if process == 'bayesian' or process == 'gaussian':
+        #     trained_model.means_ = np.sort(trained_model.means_)
+        #     update_cano_evaluation(trained_model)
+        #     if not trained_model.converged_:
+        #         print 'Not converged'
         if display_means:
             if process in ['bayesian', 'gaussian']:
                 print trained_model.means_
                 print trained_model.weights_
+                print trained_model.covariances_
             elif process == 'kmeans':
                 print 'cluster_centers', trained_model.cluster_centers_
                 print 'inertia', model.inertia_
@@ -268,7 +273,7 @@ def testing(beginning, ending, latitudes, longitudes,
 
 
 def training(beginning, ending, latitudes, longitudes, process, compute_indexes, slot_step,
-             coef_randomization, normalize, normalization, weights, display_means, verbose):
+             coef_randomization, normalize, normalization, weights, display_means, verbose, nb_components, max_iter):
 
     print 'TRAINING'
     time_start_training = time.time()
@@ -366,7 +371,7 @@ def training(beginning, ending, latitudes, longitudes, process, compute_indexes,
     (nb_ech_, nb_latitudes_, nb_longitudes_, nb_features_) = np.shape(data_training)
     data_training = data_training.reshape(nb_ech_ * nb_latitudes_ * nb_longitudes_, nb_features_)
 
-    model_basis = get_basis_model(process)
+    model_basis = get_basis_model(process, nb_components, max_iter)
     model = get_trained_model(
         training_array=data_training,
         model=model_basis,
@@ -466,7 +471,9 @@ if __name__ == '__main__':
                              normalization=normalization_,
                              weights=weights_,
                              display_means=display_means_,
-                             verbose=verbose_)
+                             verbose=verbose_,
+                             nb_components=nb_components_,
+                             max_iter=max_iter_)
 
     print '__CONDITIONS__'
     print 'learning', print_date_from_dfb(dfb_beginning_training, dfb_ending_training)

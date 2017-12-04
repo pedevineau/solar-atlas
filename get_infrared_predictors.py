@@ -26,7 +26,7 @@ def compute_infrared(array_channels, ocean, times, latitudes, longitudes, satell
     array_indexes[:, :, :, 0] = median_filter_3d(cli, scope=3)
 
     array_indexes[:, :, :, 1] = median_filter_3d(
-        get_difference(mir=array_data[:, :, :, 1], fir=array_data[:, :, :, 0],
+        get_difference(mir=array_data[:, :, :, 1], fir=array_data[:, :, :, 0], without_bias=True,
                        maski=mask, mu=mu, ocean_mask=ocean_mask, return_m_s_mask=False),
         scope=3)
 
@@ -64,7 +64,7 @@ def compute_infrared(array_channels, ocean, times, latitudes, longitudes, satell
         for feat in range(nb_features):
             array_indexes[:, :, :, feat] = weights[feat] * array_indexes[:, :, :, feat]
         me = me * weights
-    array_indexes[:, :, :, 0:2][mask_cli] = - 10   # - 10 is supposed to be less than standardized data
+    # array_indexes[:, :, :, 0:2][mask_cli] = - 10   # - 10 is supposed to be less than standardized data
 
     # array_indexes[np.abs(array_indexes) < 0.5] = 0
 
@@ -87,7 +87,7 @@ def get_cli(mir, fir, maski, mu, treshold_mu, ocean_mask, satellite_step, slot_s
     shift_high_peak = 0  # after statisical analysis: no general shift has been detected
     # mask_cli = (mu < treshold_mu) | maski | (ocean_mask == 0)  # this mask consists of night, errors, mu_mask and sea
     cli = biased_difference / np.roll(mu, shift=shift_high_peak)
-    mask_cli = (np.roll(mu, shift_high_peak) < treshold_mu) | maski | ocean_mask  # this mask consists of night, errors, mu_mask and sea
+    mask_cli = (np.roll(mu, shift_high_peak) < treshold_mu) | maski  # | ocean_mask  # this mask consists of night, errors, mu_mask and sea
     cli[mask_cli] = 0
     cli, m, s = normalize_array(cli, mask_cli, normalization='max')
     if return_m_s_mask:
@@ -98,7 +98,7 @@ def get_cli(mir, fir, maski, mu, treshold_mu, ocean_mask, satellite_step, slot_s
 
 def get_difference(mir, fir, maski, mu, ocean_mask, without_bias=True, return_m_s_mask=False):
     biased_difference = mir - fir
-    maski = maski | ocean_mask | (mu <=0)
+    maski = maski | (mu <=0)  # | ocean_mask
     diffstd = normalize_array(biased_difference, maski, normalization='standard', return_m_s=False)
     mustd = normalize_array(mu, maski, normalization='standard', return_m_s=False)
     if without_bias:

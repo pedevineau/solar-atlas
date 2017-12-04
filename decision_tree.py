@@ -45,9 +45,16 @@ def get_classes_decision_tree(latitudes,
 
     # classes: cloudy, snow over the ground, other (ground, sea...), unknown
 
-    cli_or_biased = 1
+    cli_or_biased = 1  # biased difference better with seas ! Pb: high sensibility near 0
 
-    cloudy_mask = (infrared_features[:, :, :, cli_or_biased] > 0) | (visible_features[:, :, :, 3] == 1)
+    # cloudy_mask = (infrared_features[:, :, :, cli_or_biased] > 0)  # | (visible_features[:, :, :, 3] == 1)
+    from gaussian_classification_cli import classify_cloud_covertness
+    cloudy = classify_cloud_covertness(infrared_features[:, :, :, cli_or_biased])
+
+    cloudy_mask = (cloudy == 1)
+    slightly_cloudy_mask = (cloudy == 2)
+
+    undefined_mask = (visible_features[:, :, :, 0] == -10)
 
     ndsi_mask = (visible_features[:, :, :, 0] > 0.3)
 
@@ -55,7 +62,6 @@ def get_classes_decision_tree(latitudes,
 
     hot_mask = (infrared_features[:, :, :, 2] == 1)
 
-    undefined_mask = (visible_features[:, :, :, 0] == -10) & (infrared_features[:, :, :, cli_or_biased] == - 10)
 
     persistent_snow_mask = (visible_features[:, :, :, 1] > 0)
 
@@ -64,40 +70,43 @@ def get_classes_decision_tree(latitudes,
     classes = np.zeros((nb_slots, nb_latitudes, nb_longitudes))
 
     classes[cloudy_mask] = 1
-    classes[persistent_snow_mask & ~cloudy_mask] = 2
-    classes[persistent_snow_mask & cloudy_mask] = 3
-    classes[~persistent_snow_mask & ndsi_mask] = 4
-    classes[~persistent_snow_mask & ndsi_mask & ndsi_variable] = 5
-    classes[~persistent_snow_mask & ndsi_mask & hot_mask] = 6
-    classes[cloudy_mask & ndsi_mask] = 7
-    classes[undefined_mask] = 8
+    classes[slightly_cloudy_mask] = 2
+    classes[persistent_snow_mask & ~cloudy_mask] = 3
+    classes[persistent_snow_mask & cloudy_mask] = 4
+    classes[~persistent_snow_mask & ndsi_mask] = 5
+    classes[~persistent_snow_mask & ndsi_mask & ndsi_variable] = 6
+    classes[~persistent_snow_mask & ndsi_mask & ndsi_variable & hot_mask] = 7
+    classes[~persistent_snow_mask & ndsi_mask & hot_mask] = 8
+    classes[cloudy_mask & ndsi_mask] = 9
+    classes[undefined_mask] = 10
 
     print 'cloudy:1'
-    print 'persistent snow not covered:2'
-    print 'persistent snow covered:3'
-    print 'snowy stuff??:4'
-    print 'variable snowy stuff??:5'
-    print 'hot bright corpses:6'
-    print 'undecided cloudy or snowy stuff:7'
-    print 'undefined:8'
-
+    print 'slightly cloudy:2'
+    print 'persistent snow not covered:3'
+    print 'persistent snow covered:4'
+    print 'snowy stuff:5'
+    print 'variable snowy stuff or opaque clouds:6'
+    print 'hot bright corpses:7'
+    print 'hot bright variable corpses:8'
+    print 'undecided cloudy or snowy stuff:9'
+    print 'undefined:10'
 
     return classes
 
 
 if __name__ == '__main__':
-    nb_classes = 9
+    nb_classes = 11
 
     slot_step = 1
     beginning = 13516+17
-    nb_days = 2
+    nb_days = 1
     ending = beginning + nb_days - 1
     compute_indexes = True
     normalize = False
     normalization = 'standard'
 
     latitude_beginning = 35.
-    latitude_end = 45.
+    latitude_end = 40.
     longitude_beginning = 125.
     longitude_end = 130.
     latitudes, longitudes = get_latitudes_longitudes(latitude_beginning, latitude_end,

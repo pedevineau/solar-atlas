@@ -49,13 +49,13 @@ if __name__ == '__main__':
     from get_data import get_features
     from utils import *
 
-    type_output = 'visible'   # infrared, visible, classes
+    type_output = 'infrared'   # infrared, visible, classes
 
-    latitude_beginning = 35.+10  # salt lake mongolia  45.
-    latitude_end = 40.+15
+    latitude_beginning = 35.  # salt lake mongolia  45.
+    latitude_end = 40.
     longitude_beginning = 125.
     longitude_end = 130.
-    dfb_beginning = 13516
+    dfb_beginning = 13516+90
     nb_dfbs = 1
     satellite_timestep = 10
     slot_step_ = 1
