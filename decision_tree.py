@@ -79,10 +79,10 @@ def get_classes_decision_tree(latitudes,
     classes[persistent_snow_mask & cloudy_mask] = 4
     classes[~persistent_snow_mask & ndsi_mask] = 5
     classes[~persistent_snow_mask & ndsi_mask & ndsi_variable] = 6
-    classes[ndsi_mask & cold_mask] = 7
     classes[~persistent_snow_mask & ndsi_mask & ndsi_variable & hot_mask] = 8
     classes[~persistent_snow_mask & ndsi_mask & hot_mask] = 9
     classes[cloudy_mask & ndsi_mask] = 10
+    classes[ndsi_mask & cold_mask] = 7
     classes[cloudy_mask & ~hot_mask & (visible_features[:, :, :, 0] <-1.5) & ~ndsi_variable] = 11
     classes[undefined_mask] = 12
 
