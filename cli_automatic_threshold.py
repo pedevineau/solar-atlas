@@ -4,6 +4,7 @@ from scipy.stats import pearsonr
 
 
 # WARNING: the following function is utterly empirical. This correlation should be studied from physical point of view
+# TODO: to remove
 def looks_like_bare_land(cli_ref, mu_ref, tolerance=0.05):
     from quick_visualization import visualize_input
     # visualize_input(cli_ref, display_now=True)

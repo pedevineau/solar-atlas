@@ -2,31 +2,44 @@ from utils import *
 from dtw_computing import *
 
 
-def compute_infrared(array_channels, ocean, times, latitudes, longitudes, satellite_step, slot_step,
+def compute_infrared(array_channels, ocean_mask, times, latitudes, longitudes, satellite_step, slot_step,
                      normalize, weights, return_m_s=False, return_mu=False):
-    from get_data import mask_channels, get_array_3d_cos_zen
+    '''
+
+    :param array_channels: matrix with channels 3890nm and 12380nm
+    :param ocean_mask: a boolean matrix determining if a pixel is part of a large water body (sea, ocean, big lakes)
+    :param times: a datetime matrix giving the times of all sampled slots
+    :param latitudes: a float matrix giving the bottom latitudes of all pixels
+    :param longitudes: a float matrix giving the bottom longitudes of all pixels
+    :param satellite_step: the satellite characteristic time step between two slots (10 minutes for Himawari 8)
+    :param slot_step: the chosen sampling of slots. if slot_step = n, the sampled slots are s[0], s[n], s[2*n]...
+    :param normalize:
+    :param weights:
+    :param return_m_s:
+    :param return_mu:
+    :return: a matrix with all infrared predictors (shape: slots, latitudes, longitudes, predictors)
+    '''
+    from get_data import mask_channels
+    from cos_zen import get_array_cos_zen
     from filter import median_filter_3d
 
     array_data, mask = mask_channels(array_channels, normalize)
 
     (nb_slots, nb_latitudes, nb_longitudes, nb_channels) = np.shape(array_data)
 
-    nb_features = 3 # cli, diff cli, cold_mask
-    mu = get_array_3d_cos_zen(times, latitudes, longitudes)
+    nb_features = 4  # cli, diff cli, cold_mask
+    mu = get_array_cos_zen(times, latitudes, longitudes)
     mu[mu < 0] = 0
-
-    ocean_mask = (ocean == 0)
 
     array_indexes = np.empty(shape=(nb_slots, nb_latitudes, nb_longitudes, nb_features))
     array_indexes[:, :, :, 0] = median_filter_3d(
-        get_snow_index(mir=array_data[:, :, :, 1], fir=array_data[:, :, :, 0], method='mu-normalization',
-                       maski=mask, mu=mu, return_m_s_mask=False),
+        get_cloud_index(mir=array_data[:, :, :, 1], fir=array_data[:, :, :, 0], method='mu-normalization',
+                        maski=mask, mu=mu),
         scope=3)
 
-
     array_indexes[:, :, :, 1] = median_filter_3d(
-        get_snow_index(mir=array_data[:, :, :, 1], fir=array_data[:, :, :, 0], method='without-bias',
-                       maski=mask, mu=mu, return_m_s_mask=False),
+        get_cloud_index(mir=array_data[:, :, :, 1], fir=array_data[:, :, :, 0], method='without-bias',
+                        maski=mask, mu=mu),
         scope=3)
 
     # array_indexes[:, :, :, 3] = get_variability_array(array=array_indexes[:, :, :, 2], mask=mask_cli)
@@ -36,22 +49,15 @@ def compute_infrared(array_channels, ocean, times, latitudes, longitudes, satell
     # cli_20 = get_variability_array(array=cli, mask=mask_cli, step=20 / satellite_step,  # th_1=0.023,
     #                                         th_1=0.2, negative_variation=False)
 
-    # array_indexes[:, :, :, 1] = median_filter_3d(cli_10 + cli_20, scope=1)
-
-    # array_indexes[:, :, :, 0] = median_filter_3d(cli, scope=1)
-
     # from filter import digital_low_cut_filtering_time
     # array_indexes[:,:,:,2] = median_filter_3d(digital_low_cut_filtering_time(fir - mir, mask_cli, satellite_step=satellite_step), scope=1)
     array_indexes[:, :, :, 2] = get_warm_predictor(mir=array_data[:, :, :, 1], cos_zen=mu, satellite_step=satellite_step,
-                                                   slot_step=slot_step, cloudy_mask=array_indexes[:, :, :, 1] > 1,
+                                                   slot_step=slot_step, cloudy_mask=array_indexes[:, :, :, 1] > 0.5,
                                                    threshold_median=300)
 
-
-    # array_indexes[:, :, :, 2][cloudy_sea] = 2  # ground is 0, blue sea is 1 cloudy sea is 2
-
-
-    # from scipy.stats import pearsonr
-    # print 'redundancy cli and diff', pearsonr(array_indexes[10:40, :, :, 0].flatten(), array_indexes[10:40, :, :, 2].flatten())
+    array_indexes[:, :, :, 3] = get_cold_clouds(fir=array_data[:, :, :, 0], cos_zen=mu, satellite_step=satellite_step,
+                                                   slot_step=slot_step,
+                                                   threshold=250)
 
     me, std = np.zeros(nb_features), np.full(nb_features, 1.)
 
@@ -59,9 +65,6 @@ def compute_infrared(array_channels, ocean, times, latitudes, longitudes, satell
         for feat in range(nb_features):
             array_indexes[:, :, :, feat] = weights[feat] * array_indexes[:, :, :, feat]
         me = me * weights
-    # array_indexes[:, :, :, 0:2][mask_cli] = - 10   # - 10 is supposed to be less than standardized data
-
-    # array_indexes[np.abs(array_indexes) < 0.5] = 0
 
     if return_m_s and return_mu:
         return array_indexes, mu, me, std
@@ -73,23 +76,22 @@ def compute_infrared(array_channels, ocean, times, latitudes, longitudes, satell
         return array_indexes
 
 
-def get_snow_index(mir, fir, maski, mu, method='default', return_m_s_mask=False):
+def get_cloud_index(mir, fir, maski, mu, method='default'):
     '''
-
-    :param mir:
-    :param fir:
-    :param maski:
-    :param mu:
+    :param mir: medium infra-red band (centered on 3890nm for Himawari 8)
+    :param fir: far infra-red band (centered on 12380nm for Himawari 8)
+    :param maski: mask for outliers and missing isolated data
+    :param mu: cos of zenith angle matrix (shape: slots, latitudes, longitudes)
     :param method: {'default', 'mu-normalization', 'clear-sky', 'without-bias'}
-    :param return_m_s_mask:
-    :return:
+    :return: a cloud index matrix (shape: slots, latitudes, longitudes)
     '''
     difference = mir - fir
     maski = maski | (mu <= 0)
     if method == 'mu-normalization':
         mu_threshold = 0.02
         maski = maski | (mu <= mu_threshold)
-        cli = difference / np.maximum(mu, mu_threshold)
+        cli = normalize_array(difference / np.maximum(mu, mu_threshold),
+                              mask=maski, normalization='standard', return_m_s=False)
     else:
         diffstd = normalize_array(difference, maski, normalization='standard', return_m_s=False)
         mustd = normalize_array(mu, maski, normalization='standard', return_m_s=False)
@@ -115,13 +117,9 @@ def get_snow_index(mir, fir, maski, mu, method='default', return_m_s_mask=False)
             raise Exception('Please choose a valid method to compute cloud index')
         print 'remaining pearson', pearsonr(cli[~maski],
                                             mustd[~maski])  # objective: put it as close to zero as possible
-    cli[maski] = 0
+    cli[maski] = -10
     # cli, m, s = normalize_array(cli, maski, normalization='max')
-    if return_m_s_mask:
-        return cli, 0, 1, maski
-    else:
-        return cli
-
+    return cli
 
 # def get_cold_mask(mir, satellite_step, slot_step, threshold_median):
 #     # compute median temperature around noon and compare it with a threshold
@@ -139,9 +137,34 @@ def get_snow_index(mir, fir, maski, mu, method='default', return_m_s_mask=False)
 
 
 def get_warm_predictor(mir, cos_zen, satellite_step, slot_step, cloudy_mask, threshold_median):
+    '''
+    :param mir: medium infra-red band (centered on 3890nm for Himawari 8)
+    :param cos_zen: cos of zenith angle matrix (shape: slots, latitudes, longitudes)
+    :param satellite_step: the satellite characteristic time step between two slots (10 minutes for Himawari 8)
+    :param slot_step: the chosen sampling of slots. if slot_step = n, the sampled slots are s[0], s[n], s[2*n]...
+    :param cloudy_mask: the mask of supposed clouds, in order not to take them into account for median of temperature
+    :param threshold_median: an hyper-parameter giving the minimum median infra-red (3890nm) temperature to be considered as hot pixel
+    :return: a 0-1 integer matrix (shape: slots, latitudes, longitudes)
+    '''
     to_return = np.zeros_like(mir)
-    mask = get_warm_ground_mask(mir, cos_zen, satellite_step, slot_step, cloudy_mask, threshold_median)
-    to_return[mask] = 1
+    warm_mask = get_warm_ground_mask(mir, cos_zen, satellite_step, slot_step, cloudy_mask, threshold_median)
+    to_return[warm_mask] = 1
+    return to_return
+
+
+def get_cold_clouds(fir, cos_zen, satellite_step, slot_step, threshold):
+    '''
+    recognise some high altitudes clouds
+    we are not looking above Antartica... there is no likely risk of temperature inversion at these altitudes
+    :param fir: medium infra-red band (centered on 12380nm for Himawari 8)
+    :param cos_zen: cos of zenith angle matrix (shape: slots, latitudes, longitudes)
+    :param satellite_step: the satellite characteristic time step between two slots (10 minutes for Himawari 8)
+    :param slot_step: the chosen sampling of slots. if slot_step = n, the sampled slots are s[0], s[n], s[2*n]...
+    :return: a 0-1 integer matrix (shape: slots, latitudes, longitudes)
+    '''
+    # TODO: add some cos-zen correlation (correlation => it was not clouds)
+    to_return = np.zeros_like(fir)
+    to_return[fir < threshold] = 1
     return to_return
 
 
@@ -168,6 +191,7 @@ def get_warm_array_on_point(mir_point, mu_point, satellite_step, slot_step, clou
     width_window_in_minutes = 240
     width_window_in_slots = width_window_in_minutes/(slot_step*satellite_step)
 
+    from cos_zen import get_next_noon_slot
     noon = get_next_noon_slot(
         mu_point,
         nb_slots_per_day
@@ -190,14 +214,23 @@ def get_warm_array_on_point(mir_point, mu_point, satellite_step, slot_step, clou
     return is_warm_array
 
 
-def get_lag_high_peak(diff, mu, satellite_step, slot_step):
+def get_lag_high_peak(difference, cos_zen, satellite_step, slot_step):
+    '''
+    function to get high temperature peak, in order to do a proper mu-normalization
+    this function seems useless as it appears that clear-sky difference mir-fir has always a peak at noon
+    :param difference:
+    :param cos_zen:
+    :param satellite_step:
+    :param slot_step:
+    :return:
+    '''
     # lag is expected between 2:30 and 4:30
     start_lag_minutes = 10
     stop_lag_minutes = 240
     testing_lags = np.arange(start_lag_minutes, stop_lag_minutes,
                          step=slot_step*satellite_step, dtype=int)
 
-    nb_slots, nb_lats, nb_lons = np.shape(mu)[0:3]
+    nb_slots, nb_lats, nb_lons = np.shape(cos_zen)[0:3]
     nb_days = nb_slots / get_nb_slots_per_day(satellite_step, slot_step)
     n = 400
     computed_shifts = np.zeros(n)
@@ -211,8 +244,8 @@ def get_lag_high_peak(diff, mu, satellite_step, slot_step):
         lat = np.random.randint(0, nb_lats)
         lon = np.random.randint(0, nb_lons)
         day = np.random.randint(0, nb_days)
-        diff_1d = diff[1+144*day:60+144*day, lat, lon]
-        mu_1d = mu[1+144*day:60+144*day, lat, lon]
+        diff_1d = difference[1 + 144 * day:60 + 144 * day, lat, lon]
+        mu_1d = cos_zen[1 + 144 * day:60 + 144 * day, lat, lon]
 
         for lag in testing_lags:
             # negative shift of diff = diff is shifted to the past (to be coherent with mu because diff is late)

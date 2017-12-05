@@ -60,7 +60,7 @@ def get_ocean_mask(latitudes, longitudes):
                          file_pattern=pattern,
                          variable_name='Band1', interpolation='N', max_processes=0,
                          )
-    return ocean['data']
+    return ocean['data'] == 0
 
 
 def is_likely_outlier(point):
@@ -123,11 +123,6 @@ def apply_smooth_threshold(x, th, order=2):
     return np.exp(-(x-th))
 
 
-def get_array_3d_cos_zen(times, latitudes, longitudes):
-    import sunpos
-    return sunpos.evaluate(times, latitudes, longitudes, ndim=2, n_cpus=2).cosz
-
-
 def compute_short_variability(array, mask, step=1, return_mask=False):
     step_left = step
     # array= array - roll(array, step_left, axis=0)
@@ -136,6 +131,8 @@ def compute_short_variability(array, mask, step=1, return_mask=False):
     mask = mask + np.roll(mask, -step_left, axis=0)  # mask of night and dawn. numpy.roll casts the mask to an array
     array[mask] = 0
     array[:step_left] = 0
+    array = normalize_array(array, mask, normalization='standard')
+    array[mask] = -10
     if return_mask:
         return array, mask
     else:

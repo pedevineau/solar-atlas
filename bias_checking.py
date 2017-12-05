@@ -11,9 +11,11 @@ def statistics_classes(classes, display_now=True):
     for class_number in range(nb_classes):
         time_occurrence = np.empty(nb_slots)
         for slot in range(nb_slots):
-            time_occurrence[slot] = (classes[slot, :, :] == class_number).sum()
-        plt.plot(time_occurrence, color=colors[class_number])
-        patches.append(mpatches.Patch(color=colors[class_number], label='class '+str(class_number)))
+            time_occurrence[slot] = (classes[slot, :, :] == class_number).sum() / float(classes.size)
+        m = np.max(time_occurrence)
+        if m > 0 and np.log10(m) > -5: # if it is sometimes more than 1/10e-5
+            plt.plot(time_occurrence, color=colors[class_number])
+            patches.append(mpatches.Patch(color=colors[class_number], label='class '+str(class_number)))
     plt.legend(handles=patches)
     if display_now:
         plt.show()

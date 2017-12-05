@@ -97,17 +97,16 @@ def get_trained_model(training_array, model, process, display_means=True, verbos
         trained_model = model.fit(training_array)
         # print evaluate_model_quality(training_sample, gmm)
         # if process == 'bayesian' or process == 'gaussian':
-        #     trained_model.means_ = np.sort(trained_model.means_)
+        #     trained_get_centers(model, process) = np.sort(trained_get_centers(model, process))
         #     update_cano_evaluation(trained_model)
         #     if not trained_model.converged_:
         #         print 'Not converged'
         if display_means:
+            print get_centers(trained_model, process)
             if process in ['bayesian', 'gaussian']:
-                print trained_model.means_
                 print trained_model.weights_
                 print trained_model.covariances_
             elif process == 'kmeans':
-                print 'cluster_centers', trained_model.cluster_centers_
                 print 'inertia', model.inertia_
             elif process == 'DBSCAN':
                 print 'nb clusters:', len(trained_model.components_)

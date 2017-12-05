@@ -137,7 +137,7 @@ print 'pearson classical median', np.median(corrs_classical)
 # plt.plot(FX[:,0],'b')
 
 # plt.plot(FY[:,0],'c')
-print 'stop here', stop
+raise Exception('stop here')
 plt.show()
 
 

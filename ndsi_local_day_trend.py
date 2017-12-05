@@ -1,5 +1,4 @@
 from utils import *
-from scipy.ndimage.filters import gaussian_filter1d
 
 
 def recognize_pattern_ndsi(ndsi, mu, mask, mask_high_variability,
@@ -23,13 +22,15 @@ def recognize_pattern_ndsi(ndsi, mu, mask, mask_high_variability,
 
     nb_steps = int(np.ceil(nb_slots/nb_slots_per_step)) + 1 # +1 because first slot is not the darkest slot for every point
 
-    map_first_darkest_points = get_map_next_midnight_slots(mu, nb_slots_per_day, current_slot=0)
 
     stressed_ndsi = np.zeros_like(ndsi)
+    return stressed_ndsi
+    from cos_zen import get_map_next_midnight_slots
+    map_first_darkest_points = get_map_next_midnight_slots(mu, nb_slots_per_day, current_slot=0)
+
 
     ################# WARNING ##################
     ################ TEMPORARY BYPASS ##############
-    return stressed_ndsi
 
     persistence = persistence_sigma > 0
 
@@ -141,14 +142,6 @@ def recognize_pattern_ndsi(ndsi, mu, mask, mask_high_variability,
     return stressed_ndsi[:,:,:]
 
 
-def apply_gaussian_persistence(persistence_array_1d, persistence_mask_1d, persistence_sigma, persistence_scope):
-    persistence_sigma = float(persistence_sigma)
-    trunc = persistence_scope/persistence_sigma
-    return normalize_array(gaussian_filter1d(persistence_array_1d[~persistence_mask_1d],
-                             sigma=persistence_sigma, axis=0, truncate=trunc),
-                           normalization='maximum', return_m_s=False)
-
-
 def recognize_pattern_vis(ndsi, vis, nir, mu, mask, time_step_satellite, slot_step, slices_by_day=1, tolerance=0.15):
     print 'begin recognize pattern'
     from time import time
@@ -163,6 +156,7 @@ def recognize_pattern_vis(ndsi, vis, nir, mu, mask, time_step_satellite, slot_st
     nb_slots_per_day = get_nb_slots_per_day(time_step_satellite, slot_step)
     nb_slots_per_step = int(nb_slots_per_day / slices_by_day)
 
+    from cos_zen import get_map_next_midnight_slots
     map_first_darkest_points = get_map_next_midnight_slots(mu, nb_slots_per_day, current_slot=0)
 
     stressed_ndsi = ndsi

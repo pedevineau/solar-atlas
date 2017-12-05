@@ -13,53 +13,6 @@ def print_date_from_dfb(begin, ending):
 def get_nb_slots_per_day(timestep_satellite, step_sample):
     return int(24*60 / (timestep_satellite*step_sample))
 
-
-def get_next_midnight_slot(mu_point, nb_slots_per_day, current_slot=0):
-    return np.maximum(0,
-                      current_slot+nb_slots_per_day-5 +
-                      np.argmin(mu_point[current_slot+nb_slots_per_day-5:current_slot+nb_slots_per_day+5]))
-
-
-def get_next_noon_slot(mu_point, nb_slots_per_day, current_slot=0):
-    return np.maximum(0,
-                      current_slot+nb_slots_per_day-5 +
-                      np.argmax(mu_point[current_slot+nb_slots_per_day-5:current_slot+nb_slots_per_day+5]))
-
-
-def get_map_next_midnight_slots(mu, nb_slots_per_day, current_slot=0):
-    if current_slot == 0:   # means it is first iteration
-        return np.argmax(mu[0:nb_slots_per_day], axis=0)
-    else:
-        return np.maximum(0, current_slot+nb_slots_per_day - 5 +
-                          np.argmin(mu[current_slot+nb_slots_per_day-5:current_slot+nb_slots_per_day+5], axis=0))
-
-
-def get_map_next_noon_slots(mu, nb_slots_per_day, current_slot=0):
-    return (get_map_next_midnight_slots(mu, nb_slots_per_day, current_slot) + nb_slots_per_day/2) % nb_slots_per_day
-
-
-def get_map_next_dawn_slots(mu, nb_slots_per_day, current_slot=0):
-    if current_slot == 0:   # means it is first iteration
-        return np.argmin(mu[0:nb_slots_per_day], axis=0)
-    else:
-        return np.maximum(0, current_slot+nb_slots_per_day - 5 +
-                          np.argmin(mu[current_slot+nb_slots_per_day-5:current_slot+nb_slots_per_day+5], axis=0))
-
-
-def get_map_all_darkest_slots(mu, nb_slots_per_day):  # should be useless, since these slots are supposed to be
-                                                    # regularly distant from nb_slots_per_day
-    nb_slots, nb_latitudes, nb_longitudes = np.shape(mu)
-    nb_days = nb_slots / nb_slots_per_day
-    current_slots = np.zeros((nb_days, nb_latitudes, nb_longitudes), dtype=int)
-    current_slots[0, :, :] = get_map_next_midnight_slots(mu, nb_slots_per_day)
-    for lat in range(nb_latitudes):
-        for lon in range(nb_longitudes):
-            for day in range(1, nb_days):
-                current_slots[day, lat, lon] = get_next_darkest_slot(mu, nb_slots_per_day,
-                                                                     current_slots[day-1, lat, lon], lat, lon)
-    return current_slots
-
-
 def looks_like_night(point, me=None, std=None):
     ## wait for array such as [0,17,-25,3]
     # if me is None and std is None:
@@ -131,7 +84,7 @@ def upper_divisor_slot_step(slot_step, nb_slots_per_day):
     return slot_step
 
 
-def normalize_array(array, mask=None, normalization='max', return_m_s=True):
+def normalize_array(array, mask=None, normalization='max', return_m_s=False):
     # normalization: max, standard
     if normalization == 'max':
         if mask is None:
@@ -170,3 +123,21 @@ def normalize_array(array, mask=None, normalization='max', return_m_s=True):
         return to_return
     else:
         return to_return[0]
+
+
+def get_centers(model, process):
+    if process in ['gaussian', 'bayesian']:
+        return model.means_
+    elif process == 'kmeans':
+        return model.cluster_centers_
+    else:
+        raise Exception('not implemented classifier')
+
+
+def get_std(model, process, index):
+    if process in ['gaussian', 'bayesian']:
+        return np.sqrt(model.covariances_[index, 0, 0])
+    elif process == 'kmeans':
+        return 0
+    else:
+        raise Exception('not implemented classifier')

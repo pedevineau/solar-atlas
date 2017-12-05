@@ -2,7 +2,6 @@ from utils import *
 from get_data import get_features
 
 
-
 def get_classes_decision_tree(latitudes,
         longitudes,
         beginning,
@@ -43,24 +42,27 @@ def get_classes_decision_tree(latitudes,
         return_m_s
     )
 
-    # classes: cloudy, snow over the ground, other (ground, sea...), unknown
+    # classes: classified_cli, snow over the ground, other (ground, sea...), unknown
 
     cli_or_unbiased = 1  # biased difference better with seas ! Pb: high sensibility near 0
 
     # cloudy_mask = (infrared_features[:, :, :, cli_or_unbiased] > 0)  # | (visible_features[:, :, :, 3] == 1)
     from classification_cloud_index import classify_cloud_covertness
-    cloudy = classify_cloud_covertness(infrared_features[:, :, :, cli_or_unbiased])
+    classified_cli = classify_cloud_covertness(infrared_features[:, :, :, cli_or_unbiased])
+    from classification_snow_index import classify_brightness
+    classified_brightness = classify_brightness(visible_features[:, :, :, 0])
 
-    cloudy_mask = (cloudy == 1)
-
+    cloudy_mask = (classified_cli == 1)
 
     undefined_mask = (visible_features[:, :, :, 0] == -10)
 
-    ndsi_mask = (visible_features[:, :, :, 0] > 0.3)
+    ndsi_mask = (classified_brightness == 1)
 
     ndsi_variable = (np.abs(visible_features[:, :, :, 2]) > 0.2)
 
     hot_mask = (infrared_features[:, :, :, 2] == 1)
+
+    cold_mask = (infrared_features[:, :, :, 3] == 1)
 
     persistent_snow_mask = (visible_features[:, :, :, 1] > 0)
 
@@ -69,30 +71,33 @@ def get_classes_decision_tree(latitudes,
     classes = np.zeros((nb_slots, nb_latitudes, nb_longitudes))
 
     classes[cloudy_mask] = 1
-    if 2 in cloudy:
-        slightly_cloudy_mask = (cloudy == 2)
+    if 2 in classified_cli:
+        slightly_cloudy_mask = (classified_cli == 2)
         classes[slightly_cloudy_mask] = 2
+
     classes[persistent_snow_mask & ~cloudy_mask] = 3
     classes[persistent_snow_mask & cloudy_mask] = 4
     classes[~persistent_snow_mask & ndsi_mask] = 5
     classes[~persistent_snow_mask & ndsi_mask & ndsi_variable] = 6
-    classes[~persistent_snow_mask & ndsi_mask & ndsi_variable & hot_mask] = 7
-    classes[~persistent_snow_mask & ndsi_mask & hot_mask] = 8
-    classes[cloudy_mask & ndsi_mask] = 9
-    classes[cloudy_mask & ~hot_mask & (visible_features[:, :, :, 0] <-1.5) & ~ndsi_variable] = 10
-    classes[undefined_mask] = 11
+    classes[ndsi_mask & cold_mask] = 7
+    classes[~persistent_snow_mask & ndsi_mask & ndsi_variable & hot_mask] = 8
+    classes[~persistent_snow_mask & ndsi_mask & hot_mask] = 9
+    classes[cloudy_mask & ndsi_mask] = 10
+    classes[cloudy_mask & ~hot_mask & (visible_features[:, :, :, 0] <-1.5) & ~ndsi_variable] = 11
+    classes[undefined_mask] = 12
 
     print 'cloudy:1'
     print 'slightly cloudy:2'
     print 'persistent snow not covered:3'
     print 'persistent snow covered:4'
     print 'snowy stuff:5'
-    print 'variable snowy stuff or opaque clouds:6'
-    print 'hot bright corpses:7'
-    print 'hot bright variable corpses:8'
-    print 'undecided cloudy or snowy stuff:9'
-    print 'fog:10'
-    print 'undefined:11'
+    print 'variable snowy stuff'
+    print 'opaque clouds:7'
+    print 'hot bright corpses:8'
+    print 'hot bright variable corpses:9'
+    print 'undecided classified_cli or snowy stuff:10'
+    print 'fog:11'
+    print 'undefined:12'
 
     return classes
 

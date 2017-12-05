@@ -145,8 +145,10 @@ def visualize_hist(array_1d, title='Histogram', precision=50):
 if __name__ == '__main__':
     from get_data import get_features
     from utils import *
-    compute_indexes_ = True
-    type_channels = 'infrared'
+    compute_indexes_ = False
+    types_channel = ['infrared', 'visible']
+    channel_number = 0
+    type_channels = types_channel[channel_number]
     latitude_beginning = 35.+5
     latitude_end = 40.+5
     longitude_beginning = 125.
@@ -182,19 +184,19 @@ if __name__ == '__main__':
     # times = get_times(dfb_beginning, dfb_ending, satellite_timestep=10, slot_step=1)
     # latitudes, longitudes = get_latitudes_longitudes(latitude_beginning, latitude_end, longitude_beginning, longitude_end, 2./60)
     # mu = get_array_3d_cos_zen(times, latitudes, longitudes)
-    # # # # output = zeros((len(features), 2))
-    for k in range(25):
-        lat_pix = randint(0, 140)
-        lon_pix = randint(0, 140)
-        # lat_pix, lon_pix=20,61
-        print lat_pix, lon_pix
-        # print 'lat, lon', lat0, lon0
-        # lat_pix, lon_pix = int((lat0 - latitude_beginning) * 60 / 2.), int((lon0 - longitude_beginning) * 60 / 2.)
-        # output[:,0] = mu[:,lat_pix, lon_pix]*10+10
-        # output[:,1] = indexes[:,1]-indexes[:,0]
-        # print output
-
-        visualize_input(features[:, lat_pix, lon_pix, 0:2], display_now=True, style='^')
+    # # output = zeros((len(features), 2))
+    # for k in range(25):
+    #     lat_pix = randint(0, 140)
+    #     lon_pix = randint(0, 140)
+    #     # lat_pix, lon_pix=20,61
+    #     print lat_pix, lon_pix
+    #     # print 'lat, lon', lat0, lon0
+    #     # lat_pix, lon_pix = int((lat0 - latitude_beginning) * 60 / 2.), int((lon0 - longitude_beginning) * 60 / 2.)
+    #     # output[:,0] = mu[:,lat_pix, lon_pix]*10+10
+    #     # output[:,1] = indexes[:,1]-indexes[:,0]
+    #     # print output
+    #
+    #     visualize_input(features[:, lat_pix, lon_pix, 0:2], display_now=True, style='^')
 
 
     if type_channels == 'infrared' and not compute_indexes_:
