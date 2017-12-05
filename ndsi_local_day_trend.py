@@ -27,6 +27,10 @@ def recognize_pattern_ndsi(ndsi, mu, mask, mask_high_variability,
 
     stressed_ndsi = np.zeros_like(ndsi)
 
+    ################# WARNING ##################
+    ################ TEMPORARY BYPASS ##############
+    return stressed_ndsi
+
     persistence = persistence_sigma > 0
 
     if persistence:

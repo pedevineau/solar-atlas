@@ -51,11 +51,11 @@ if __name__ == '__main__':
 
     type_output = 'infrared'   # infrared, visible, classes
 
-    latitude_beginning = 35.  # salt lake mongolia  45.
-    latitude_end = 40.
+    latitude_beginning = 40.  # salt lake mongolia  45.
+    latitude_end = 45.
     longitude_beginning = 125.
     longitude_end = 130.
-    dfb_beginning = 13516+90
+    dfb_beginning = 13533
     nb_dfbs = 1
     satellite_timestep = 10
     slot_step_ = 1

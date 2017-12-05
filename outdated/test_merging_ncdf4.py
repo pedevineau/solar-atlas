@@ -107,7 +107,7 @@ for variable in variables:
 
 from nclib2.dataset import DataSet
 from nclib2.visualization import show_raw, visualize_map_3d
-from draft import *
+from draft_cloud_simulation import *
 
 
 datasets = list()

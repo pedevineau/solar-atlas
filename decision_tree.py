@@ -45,14 +45,14 @@ def get_classes_decision_tree(latitudes,
 
     # classes: cloudy, snow over the ground, other (ground, sea...), unknown
 
-    cli_or_biased = 1  # biased difference better with seas ! Pb: high sensibility near 0
+    cli_or_unbiased = 1  # biased difference better with seas ! Pb: high sensibility near 0
 
-    # cloudy_mask = (infrared_features[:, :, :, cli_or_biased] > 0)  # | (visible_features[:, :, :, 3] == 1)
-    from gaussian_classification_cli import classify_cloud_covertness
-    cloudy = classify_cloud_covertness(infrared_features[:, :, :, cli_or_biased])
+    # cloudy_mask = (infrared_features[:, :, :, cli_or_unbiased] > 0)  # | (visible_features[:, :, :, 3] == 1)
+    from classification_cloud_index import classify_cloud_covertness
+    cloudy = classify_cloud_covertness(infrared_features[:, :, :, cli_or_unbiased])
 
     cloudy_mask = (cloudy == 1)
-    slightly_cloudy_mask = (cloudy == 2)
+
 
     undefined_mask = (visible_features[:, :, :, 0] == -10)
 
@@ -62,7 +62,6 @@ def get_classes_decision_tree(latitudes,
 
     hot_mask = (infrared_features[:, :, :, 2] == 1)
 
-
     persistent_snow_mask = (visible_features[:, :, :, 1] > 0)
 
 
@@ -70,7 +69,9 @@ def get_classes_decision_tree(latitudes,
     classes = np.zeros((nb_slots, nb_latitudes, nb_longitudes))
 
     classes[cloudy_mask] = 1
-    classes[slightly_cloudy_mask] = 2
+    if 2 in cloudy:
+        slightly_cloudy_mask = (cloudy == 2)
+        classes[slightly_cloudy_mask] = 2
     classes[persistent_snow_mask & ~cloudy_mask] = 3
     classes[persistent_snow_mask & cloudy_mask] = 4
     classes[~persistent_snow_mask & ndsi_mask] = 5
@@ -78,7 +79,8 @@ def get_classes_decision_tree(latitudes,
     classes[~persistent_snow_mask & ndsi_mask & ndsi_variable & hot_mask] = 7
     classes[~persistent_snow_mask & ndsi_mask & hot_mask] = 8
     classes[cloudy_mask & ndsi_mask] = 9
-    classes[undefined_mask] = 10
+    classes[cloudy_mask & ~hot_mask & (visible_features[:, :, :, 0] <-1.5) & ~ndsi_variable] = 10
+    classes[undefined_mask] = 11
 
     print 'cloudy:1'
     print 'slightly cloudy:2'
@@ -89,24 +91,25 @@ def get_classes_decision_tree(latitudes,
     print 'hot bright corpses:7'
     print 'hot bright variable corpses:8'
     print 'undecided cloudy or snowy stuff:9'
-    print 'undefined:10'
+    print 'fog:10'
+    print 'undefined:11'
 
     return classes
 
 
 if __name__ == '__main__':
-    nb_classes = 11
+    nb_classes = 12
 
     slot_step = 1
-    beginning = 13516+17
+    beginning = 13534
     nb_days = 1
     ending = beginning + nb_days - 1
     compute_indexes = True
     normalize = False
     normalization = 'standard'
 
-    latitude_beginning = 35.
-    latitude_end = 40.
+    latitude_beginning = 35.+5
+    latitude_end = 40.+5
     longitude_beginning = 125.
     longitude_end = 130.
     latitudes, longitudes = get_latitudes_longitudes(latitude_beginning, latitude_end,
@@ -126,8 +129,12 @@ if __name__ == '__main__':
     from quick_visualization import visualize_map_time, get_bbox
 
     bbox = get_bbox(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
+
+    from bias_checking import statistics_classes
+
     visualize_map_time(classes, bbox, vmin=0, vmax=nb_classes-1, title='Classes 0-'+str(nb_classes-1)+
                                                                        ' from' + str(date_begin))
+    statistics_classes(classes, display_now=True)
 
 
 

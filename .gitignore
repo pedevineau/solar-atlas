@@ -1,5 +1,5 @@
 *.json
-outdated/draft.py
+outdated/draft_cloud_simulation.py
 outdated/testing_nclib2.py
 *.pyc
 .idea

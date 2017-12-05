@@ -36,47 +36,6 @@ def get_dfb_tuple(dfb_beginning, nb_days, ask_dfb=False):
     return [begin, ending]
 
 
-# reading data
-def get_array_channels_content(channels, latitudes, longitudes, dfb_beginning, dfb_ending, slot_step=1):
-    import json
-    metadata = json.load(open('metadata.json'))
-    satellite = metadata["satellite"]
-    pattern = metadata["channels"]["pattern"]
-    patterns = [pattern.replace("{SATELLITE}", satellite).replace('{CHANNEL}', chan) for chan in channels]
-    dir = metadata["channels"]["dir"]
-
-    nb_days = dfb_ending - dfb_beginning + 1
-    nb_slots = 144 / slot_step
-    slots = [k*slot_step for k in range(nb_slots)]
-    from nclib2.dataset import DataSet
-    content = np.empty((nb_slots * nb_days, len(latitudes), len(longitudes), len(patterns)))
-
-    for k in range(len(patterns)):
-        pattern = patterns[k]
-        chan = channels[k]
-        dataset = DataSet.read(dirs=dir,
-                               extent={
-                                   'latitude': latitudes,
-                                   'longitude': longitudes,
-                                   'dfb': {'start': dfb_beginning, 'end': dfb_ending, "end_inclusive": True,
-                                           'start_inclusive': True, },
-                                   'slot': slots
-                               },
-                               file_pattern=pattern,
-                               variable_name=chan,
-                               fill_value=np.nan, interpolation='N', max_processes=0,
-                               )
-
-        data = dataset['data'].data
-        day_slot_b = 0
-        day_slot_e = nb_slots
-        for day in range(nb_days):
-            content[day_slot_b:day_slot_e,:,:,k] = data[day]
-            day_slot_b += nb_slots
-            day_slot_e += nb_slots
-    return content
-
-
 # precomputing data and indexes
 def get_mask_outliers(array):
     maskup = array > 350
@@ -225,6 +184,7 @@ def get_features(type_channels, latitudes, longitudes, dfb_beginning, dfb_ending
                  return_m_s=False,
                  ):
     import json
+    from read_netcdf import read_channels
     metadata = json.load(open('metadata.json'))
     satellite = metadata["satellite"]
     satellite_step = metadata["time_steps"][satellite]
@@ -234,7 +194,7 @@ def get_features(type_channels, latitudes, longitudes, dfb_beginning, dfb_ending
 
     if type_channels == 'visible':
         channels_visible = ['VIS160_2000', 'VIS064_2000']
-        content_visible = get_array_channels_content(
+        content_visible = read_channels(
             channels_visible,
             latitudes,
             longitudes,
@@ -261,7 +221,7 @@ def get_features(type_channels, latitudes, longitudes, dfb_beginning, dfb_ending
 
     elif type_channels == 'infrared':
         channels_infrared = ['IR124_2000', 'IR390_2000']
-        content_infrared = get_array_channels_content(
+        content_infrared = read_channels(
             channels_infrared,
             latitudes,
             longitudes,
@@ -281,7 +241,6 @@ def get_features(type_channels, latitudes, longitudes, dfb_beginning, dfb_ending
                 satellite_step,
                 slot_step,
                 normalize,
-                normalization,
                 weights,
                 return_m_s,
             )

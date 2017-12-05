@@ -1,0 +1,1 @@
+# def classify_snow_variability()
