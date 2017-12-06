@@ -3,12 +3,11 @@ from utils import *
 
 
 def read_channels(channels, latitudes, longitudes, dfb_beginning, dfb_ending, slot_step=1):
-    from json import load
-    metadata = load(open('metadata.json'))
-    satellite = metadata["satellite"]
-    pattern = metadata["channels"]["pattern"]
+    from read_metadata import read_channels_dir_and_pattern, read_satellite_name
+    dir, pattern, = read_channels_dir_and_pattern()
+    satellite = read_satellite_name()
+
     patterns = [pattern.replace("{SATELLITE}", satellite).replace('{CHANNEL}', chan) for chan in channels]
-    dir = metadata["channels"]["dir"]
 
     nb_days = dfb_ending - dfb_beginning + 1
     nb_slots = 144 / slot_step
@@ -43,10 +42,8 @@ def read_channels(channels, latitudes, longitudes, dfb_beginning, dfb_ending, sl
 
 
 def read_classes(latitudes, longitudes, dfb_beginning, dfb_ending, slot_step=1):
-    from json import load
-    metadata = load(open('metadata.json'))
-    pattern = metadata["indexes"]["classes"]["pattern"]
-    dir = metadata["indexes"]["classes"]["dir"]
+    from read_metadata import read_indexes_dir_and_pattern
+    dir, pattern = read_indexes_dir_and_pattern('classes')
     nb_days = dfb_ending - dfb_beginning + 1
     nb_slots = 144 / slot_step
     slots = [k*slot_step for k in range(nb_slots)]

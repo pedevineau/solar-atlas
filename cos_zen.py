@@ -20,31 +20,34 @@ def apply_gaussian_persistence(persistence_array_1d, persistence_mask_1d, persis
     trunc = persistence_scope/persistence_sigma
     return normalize_array(gaussian_filter1d(persistence_array_1d[~persistence_mask_1d],
                                              sigma=persistence_sigma, axis=0, truncate=trunc),
-                           normalization='maximum')
+                           normalization='max')
 
 
-def look_like_cos_zen_1d(variable, cos_zen, tolerance, mask=None):
+def look_like_cos_zen_1d(variable, cos_zen, under_bound, upper_bound, mask=None):
     '''
 
     :param variable: 1-d array representing the variable to test
     :param cos_zen: 1-d array with cos of zenith angle
     :param mask: mask associated with the variable
-    :param tolerance: hyper-parameter between -1 and 1 (eg: 0.93)
+    :param under_bound: hyper-parameter between -1 and 1 (eg: -1. or 0.93)
+    :param upper_bound: hyper-parameter between -1 and 1 (eg: -0.89 or 1.)
     :return: integer 0-1
     '''
-    from scipy.stats import pearsonr
+    from scipy.stats import pearsonr, linregress
     if mask is None:
         r, p = pearsonr(variable, cos_zen)
     else:
-        r, p = pearsonr(variable[~mask], cos_zen[~mask])
-    if r > 1-tolerance:
+        # r, p = pearsonr(variable[~mask], cos_zen[~mask])
+        slope, intercept = linregress(cos_zen[~mask], variable[~mask])[0:2]
+    if upper_bound >= slope >= under_bound:
+        print slope, intercept
         return 1
     else:
         return 0
 
 
-def get_likelihood_variable_cos_zen(variable, cos_zen, tolerance, nb_slots_per_day, nb_slices_per_day=1,
-                                    mask=None, persistence_sigma=0.):
+def get_likelihood_variable_cos_zen(variable, cos_zen, under_bound, upper_bound, nb_slots_per_day,
+                                    nb_slices_per_day=1, mask=None, persistence_sigma=0.):
     '''
 
     :param variable: 1-d or 3-d array representing the variable to test
@@ -57,7 +60,7 @@ def get_likelihood_variable_cos_zen(variable, cos_zen, tolerance, nb_slots_per_d
     :return: matrix of likelihood (same shape as variable and cos_zen arrays)
     '''
     if len(variable.shape) == 1 and variable.shape == cos_zen.shape:
-        return look_like_cos_zen_1d(variable, cos_zen, tolerance, mask)
+        return look_like_cos_zen_1d(variable, cos_zen, under_bound, upper_bound, mask)
     elif len(variable.shape) == 3 and variable.shape == cos_zen.shape:
         to_return = np.zeros_like(cos_zen)
         from time import time
@@ -93,22 +96,24 @@ def get_likelihood_variable_cos_zen(variable, cos_zen, tolerance, nb_slots_per_d
                     if slice_variable[~slice_mask].size > minimal_nb_unmasked_slots:
                         if persistence:
                             persistence_mask_1d[step] = False
-                            persistence_array[step, lat, lon] = look_like_cos_zen_1d(variable=slice_variable,
-                                                                                     cos_zen=slice_cos_zen,
-                                                                                     tolerance=tolerance,
-                                                                                     mask=slice_mask)
+                            persistence_array[step, lat, lon] = look_like_cos_zen_1d(slice_variable,
+                                                                                     slice_cos_zen,
+                                                                                     under_bound,
+                                                                                     upper_bound,
+                                                                                     slice_mask)
                         else:
                             to_return[slot_beginning_slice: slot_ending_slice, lat, lon][~slice_mask] = \
-                                look_like_cos_zen_1d(variable=slice_variable,
-                                                     cos_zen=slice_cos_zen,
-                                                     tolerance=tolerance,
-                                                     mask=slice_mask)
+                                look_like_cos_zen_1d(slice_variable,
+                                                     slice_cos_zen,
+                                                     under_bound,
+                                                     upper_bound,
+                                                     slice_mask)
                     step += 1
                     slot_beginning_slice = slot_ending_slice
                     slot_ending_slice += nb_slots_per_step
 
                 if persistence:
-                    if not np.all(persistence_mask_1d == 0):
+                    if not np.all(persistence_mask_1d):
                         persistence_array[:, lat, lon][~persistence_mask_1d] = \
                             apply_gaussian_persistence(persistence_array[:, lat, lon], persistence_mask_1d,
                                                        persistence_sigma, persistence_scope=nb_slices_per_day)

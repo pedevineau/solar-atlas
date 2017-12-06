@@ -9,12 +9,11 @@ def get_classes_decision_tree(latitudes,
         compute_indexes,
         slot_step,
         normalize,
-        normalization,
         weights=None,
         return_m_s=False
    ):
 
-    visible_features = get_features(
+    visible_features, mu = get_features(
         'visible',
         latitudes,
         longitudes,
@@ -23,9 +22,8 @@ def get_classes_decision_tree(latitudes,
         compute_indexes,
         slot_step,
         normalize,
-        normalization,
         weights,
-        return_m_s
+        return_mu=True
     )
 
     infrared_features = get_features(
@@ -37,55 +35,80 @@ def get_classes_decision_tree(latitudes,
         compute_indexes,
         slot_step,
         normalize,
-        normalization,
         weights,
-        return_m_s
     )
+    #
+    # nir = get_features(
+    #     'visible',
+    #     latitudes,
+    #     longitudes,
+    #     beginning,
+    #     ending,
+    #     False,
+    #     slot_step,
+    #     normalize,
+    #     weights,
+    # )[:, :, :, 0]
 
     # classes: classified_cli, snow over the ground, other (ground, sea...), unknown
 
     cli_or_unbiased = 1  # biased difference better with seas ! Pb: high sensibility near 0
 
-    # water_clouds_mask = (infrared_features[:, :, :, cli_or_unbiased] > 0)  # | (visible_features[:, :, :, 3] == 1)
+    # water_clouds = (infrared_features[:, :, :, cli_or_unbiased] > 0)  # | (visible_features[:, :, :, 3] == 1)
     from classification_cloud_index import classify_cloud_covertness
     classified_cli = classify_cloud_covertness(infrared_features[:, :, :, cli_or_unbiased])
     from classification_snow_index import classify_brightness
     classified_brightness = classify_brightness(visible_features[:, :, :, 0])
 
-    water_clouds_mask = (classified_cli == 1)
+    water_clouds = (classified_cli == 1)
 
-    undefined_mask = (visible_features[:, :, :, 0] == -10)
+    mask_ndsi = (visible_features[:, :, :, 0] == -10)
 
-    ndsi_mask = (classified_brightness == 1)
+    bright = (classified_brightness == 1)
 
-    ndsi_variable = (np.abs(visible_features[:, :, :, 2]) > 0.2)
+    variable_brigthness = (np.abs(visible_features[:, :, :, 1]) > 0.2)
 
-    hot_mask = (infrared_features[:, :, :, 2] == 1)
+    warm = (infrared_features[:, :, :, 2] == 1)
 
-    cold_opaque_clouds_mask = ndsi_mask & (infrared_features[:, :, :, 3] == 1)
+    cold_opaque_clouds = bright & (infrared_features[:, :, :, 3] == 1)
 
-    persistent_snow_mask = (visible_features[:, :, :, 1] > 0)
+    from visible_predictors import get_flat_nir
+    from read_metadata import read_satellite_step
+    satellite_step = read_satellite_step()
+    # persistent_snow = (get_flat_nir(
+    #     variable=nir,
+    #     cos_zen=mu,
+    #     mask=mask_ndsi,
+    #     nb_slots_per_day=get_nb_slots_per_day(satellite_step, slot_step),
+    #     slices_per_day=1,
+    #     tolerance=0.1,
+    #     persistence_sigma=2.0,
+    #     mask_not_proper_weather=(water_clouds | cold_opaque_clouds | warm)
+    # ) > 0.3)
+    # (visible_features[:, :, :, 1] > 0)
+    # print persistent_snow
+    # print len(persistent_snow[persistent_snow])
 
-    fog_mask = water_clouds_mask & ~hot_mask & (visible_features[:, :, :, 0] < -1.5) & ~ndsi_variable
+    foggy = water_clouds & ~warm & (visible_features[:, :, :, 0] < -1.5) & ~variable_brigthness
 
     (nb_slots, nb_latitudes, nb_longitudes) = np.shape(visible_features)[0:3]
     classes = np.zeros((nb_slots, nb_latitudes, nb_longitudes))
 
-    classes[water_clouds_mask] = 1
+    classes[water_clouds] = 1
     if 2 in classified_cli:
-        slightly_cloudy_mask = (classified_cli == 2)
-        classes[slightly_cloudy_mask] = 2
+        slight_clouds = (classified_cli == 2)
+        classes[slight_clouds] = 2
 
-    classes[persistent_snow_mask & ~(water_clouds_mask | cold_opaque_clouds_mask)] = 3
-    classes[~persistent_snow_mask & ndsi_mask] = 5
-    classes[~persistent_snow_mask & ndsi_mask & ndsi_variable] = 6
-    classes[~persistent_snow_mask & ndsi_mask & ndsi_variable & hot_mask] = 8
-    classes[~persistent_snow_mask & ndsi_mask & hot_mask] = 9
-    classes[~persistent_snow_mask & water_clouds_mask & ndsi_mask] = 10
-    classes[~persistent_snow_mask & cold_opaque_clouds_mask] = 7
-    classes[persistent_snow_mask & (water_clouds_mask | cold_opaque_clouds_mask)] = 4
-    classes[fog_mask] = 11
-    classes[undefined_mask] = 12
+    # classes[persistent_snow & ~(water_clouds | cold_opaque_clouds)] = 3
+    classes[bright] = 5
+    classes[bright & variable_brigthness] = 6
+    classes[bright & warm] = 9
+    classes[bright & variable_brigthness & warm] = 8
+    classes[water_clouds & bright] = 10
+    classes[cold_opaque_clouds] = 7
+    # classes[persistent_snow & (water_clouds | cold_opaque_clouds)] = 4
+    classes[foggy] = 11
+    classes[mask_ndsi] = 12
 
     print 'water clouds:1'
     print 'slight water clouds:2'
@@ -97,7 +120,7 @@ def get_classes_decision_tree(latitudes,
     print 'hot bright corpses:8'
     print 'hot bright variable corpses:9'
     print 'undecided classified_cli or snowy stuff:10'
-    print 'fog:11'
+    print 'foggy:11'
     print 'undefined:12'
 
     return classes
@@ -124,13 +147,13 @@ if __name__ == '__main__':
     date_begin, date_end = print_date_from_dfb(beginning, ending)
 
     classes = get_classes_decision_tree(latitudes,
-        longitudes,
-        beginning,
-        ending,
-        compute_indexes,
-        slot_step,
-        normalize,
-        normalization)
+                                        longitudes,
+                                        beginning,
+                                        ending,
+                                        compute_indexes,
+                                        slot_step,
+                                        normalize,
+                                        )
 
     from quick_visualization import visualize_map_time, get_bbox
 

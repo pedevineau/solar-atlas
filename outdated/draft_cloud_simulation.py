@@ -16,17 +16,10 @@ from scipy.misc import derivative
 T = 144
 ignore_sun_low_angle = 7
 lis = np.arange(ignore_sun_low_angle, T-ignore_sun_low_angle)
-
-
-
-
 mu = np.sin(np.pi * (lis) / T)
 muprim = mu - np.roll(mu, shift=-1)
 x1 = mu
 mustd = normalize_array(mu, normalization='standard', return_m_s=False)
-
-
-
 
 
 r1 = 0.08*(np.random.random_sample(len(lis))-0.5)

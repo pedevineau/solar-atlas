@@ -176,15 +176,14 @@ def get_variability_array_modified(array, mask, step=1, th_1=0.02, th_2=0.3,
 def get_features(type_channels, latitudes, longitudes, dfb_beginning, dfb_ending, compute_indexes,
                  slot_step=1,
                  normalize=False,
-                 normalization=None,
                  weights=None,
                  return_m_s=False,
+                 return_mu=False
                  ):
     import json
     from read_netcdf import read_channels
-    metadata = json.load(open('metadata.json'))
-    satellite = metadata["satellite"]
-    satellite_step = metadata["time_steps"][satellite]
+    from read_metadata import read_satellite_name, read_satellite_step
+    satellite_step = read_satellite_step()
 
     ocean = get_ocean_mask(latitudes, longitudes)
     times = get_times(dfb_beginning, dfb_ending, satellite_step, slot_step)
@@ -199,22 +198,18 @@ def get_features(type_channels, latitudes, longitudes, dfb_beginning, dfb_ending
             dfb_ending,
             slot_step
         )
-        if not compute_indexes:
-            return content_visible
-        else:
-            return get_visible_predictors(
-                content_visible,
-                ocean,
-                times,
-                latitudes,
-                longitudes,
-                satellite_step,
-                slot_step,
-                normalize,
-                normalization,
-                weights,
-                return_m_s,
-            )
+        return get_visible_predictors(
+            content_visible,
+            ocean,
+            times,
+            latitudes,
+            longitudes,
+            compute_indexes,
+            normalize,
+            weights,
+            return_m_s,
+            return_mu
+        )
 
     elif type_channels == 'infrared':
         channels_infrared = ['IR124_2000', 'IR390_2000']
@@ -226,20 +221,17 @@ def get_features(type_channels, latitudes, longitudes, dfb_beginning, dfb_ending
             dfb_ending,
             slot_step
         )
-        if not compute_indexes:
-            return content_infrared
-        else:
-            return get_infrared_predictors(
-                content_infrared,
-                ocean,
-                times,
-                latitudes,
-                longitudes,
-                satellite_step,
-                slot_step,
-                normalize,
-                weights,
-                return_m_s,
-            )
+        return get_infrared_predictors(
+            content_infrared,
+            times,
+            latitudes,
+            longitudes,
+            satellite_step,
+            slot_step,
+            compute_indexes,
+            normalize,
+            weights,
+            return_m_s,
+        )
     else:
         raise AttributeError('The type of channels should be \'visible\' or \'infrared\'')

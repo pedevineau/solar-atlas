@@ -2,7 +2,7 @@ from utils import *
 from dtw_computing import *
 
 
-def get_infrared_predictors(array_channels, ocean_mask, times, latitudes, longitudes, satellite_step, slot_step,
+def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_step, slot_step, compute_indexes,
                             normalize, weights, return_m_s=False, return_mu=False):
     '''
 
@@ -23,7 +23,9 @@ def get_infrared_predictors(array_channels, ocean_mask, times, latitudes, longit
     from cos_zen import get_array_cos_zen
     from filter import median_filter_3d
 
-    array_data, mask = mask_channels(array_channels, normalize)
+    array_data, mask = mask_channels(array_data, normalize)
+    if not compute_indexes:
+        return array_data
 
     (nb_slots, nb_latitudes, nb_longitudes, nb_channels) = np.shape(array_data)
 
@@ -34,12 +36,12 @@ def get_infrared_predictors(array_channels, ocean_mask, times, latitudes, longit
     array_indexes = np.empty(shape=(nb_slots, nb_latitudes, nb_longitudes, nb_features))
     array_indexes[:, :, :, 0] = median_filter_3d(
         get_cloud_index(mir=array_data[:, :, :, 1], fir=array_data[:, :, :, 0], method='mu-normalization',
-                        maski=mask, mu=mu),
+                        maski=mask, cos_zen=mu),
         scope=3)
 
     array_indexes[:, :, :, 1] = median_filter_3d(
         get_cloud_index(mir=array_data[:, :, :, 1], fir=array_data[:, :, :, 0], method='without-bias',
-                        maski=mask, mu=mu),
+                        maski=mask, cos_zen=mu),
         scope=3)
 
     # array_indexes[:, :, :, 3] = get_variability_array(array=array_indexes[:, :, :, 2], mask=mask_cli)
@@ -56,8 +58,8 @@ def get_infrared_predictors(array_channels, ocean_mask, times, latitudes, longit
                                                    threshold_median=300)
 
     array_indexes[:, :, :, 3] = get_cold_clouds(fir=array_data[:, :, :, 0], cos_zen=mu, satellite_step=satellite_step,
-                                                   slot_step=slot_step,
-                                                   threshold=250)
+                                                slot_step=slot_step,
+                                                threshold=250)
 
     me, std = np.zeros(nb_features), np.full(nb_features, 1.)
 
@@ -76,25 +78,25 @@ def get_infrared_predictors(array_channels, ocean_mask, times, latitudes, longit
         return array_indexes
 
 
-def get_cloud_index(mir, fir, maski, mu, method='default'):
+def get_cloud_index(mir, fir, maski, cos_zen, method='default'):
     '''
     :param mir: medium infra-red band (centered on 3890nm for Himawari 8)
     :param fir: far infra-red band (centered on 12380nm for Himawari 8)
     :param maski: mask for outliers and missing isolated data
-    :param mu: cos of zenith angle matrix (shape: slots, latitudes, longitudes)
+    :param cos_zen: cos of zenith angle matrix (shape: slots, latitudes, longitudes)
     :param method: {'default', 'mu-normalization', 'clear-sky', 'without-bias'}
     :return: a cloud index matrix (shape: slots, latitudes, longitudes)
     '''
     difference = mir - fir
-    maski = maski | (mu <= 0)
+    maski = maski | (cos_zen <= 0)
     if method == 'mu-normalization':
         mu_threshold = 0.02
-        maski = maski | (mu <= mu_threshold)
-        cli = normalize_array(difference / np.maximum(mu, mu_threshold),
+        maski = maski | (cos_zen <= mu_threshold)
+        cli = normalize_array(difference / np.maximum(cos_zen, mu_threshold),
                               mask=maski, normalization='standard', return_m_s=False)
     else:
         diffstd = normalize_array(difference, maski, normalization='standard', return_m_s=False)
-        mustd = normalize_array(mu, maski, normalization='standard', return_m_s=False)
+        mustd = normalize_array(cos_zen, maski, normalization='standard', return_m_s=False)
         if method == 'without-bias':
             cli = np.zeros_like(difference)
             (nb_slots, nb_latitudes, nb_longitudes) = np.shape(cli)

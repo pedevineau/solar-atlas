@@ -94,7 +94,6 @@ if __name__ == '__main__':
     ending = beginning + nb_days - 1
     compute_indexes = True
     normalize = False
-    normalization = 'standard'
 
     latitude_beginning = 35.0
     latitude_end = 40.
@@ -112,7 +111,6 @@ if __name__ == '__main__':
         compute_indexes,
         slot_step,
         normalize,
-        normalization,
         return_mu=True
     )
 

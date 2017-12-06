@@ -1,26 +1,25 @@
 from utils import *
 
 
-def get_visible_predictors(array_channels, ocean_mask, times, latitudes, longitudes, satellite_step, slot_step,
-                           normalize, normalization, weights, return_m_s=False, return_mu=False):
+def get_visible_predictors(array_data, ocean_mask, times, latitudes, longitudes, compute_indexes,
+                           normalize, weights, return_m_s=False, return_mu=False):
     from get_data import mask_channels, compute_short_variability
     from filter import median_filter_3d
     from cos_zen import get_array_cos_zen
 
-    array_data, mask = mask_channels(array_channels, normalize)
+    array_data, mask = mask_channels(array_data, normalize)
+    if not compute_indexes:
+        return array_data
     (nb_slots, nb_latitudes, nb_longitudes, nb_channels) = np.shape(array_data)
 
-    nb_features = 4
+    nb_features = 3
     # VIS160_2000: 0,  VIS064_2000:1
     mu = get_array_cos_zen(times, latitudes, longitudes)
-
-    nb_slots_per_day = get_nb_slots_per_day(satellite_step, slot_step)
-
     array_indexes = np.empty(shape=(nb_slots, nb_latitudes, nb_longitudes, nb_features))
-    array_indexes[:, :, :, 3] = get_cloudy_sea(vis=array_data[:, :, :, 1], ocean_mask=ocean_mask,
+    array_indexes[:, :, :, 2] = get_cloudy_sea(vis=array_data[:, :, :, 1], ocean_mask=ocean_mask,
                                                threshold_cloudy_sea=0.1)
 
-    blue_sea = ocean_mask & (array_indexes[:, :, :, 3] == 0)
+    blue_sea = ocean_mask & (array_indexes[:, :, :, 2] == 0)
 
     ndsi, m, s, mask_ndsi = get_snow_index(vis=array_data[:, :, :, 1], nir=array_data[:, :, :, 0], threshold_denominator=0.02,
                                            maskv=mask, mu=mu, threshold_mu=0.02, blue_sea_mask=blue_sea,
@@ -30,30 +29,15 @@ def get_visible_predictors(array_channels, ocean_mask, times, latitudes, longitu
 
     ndsi_1 = compute_short_variability(array=ndsi, mask=mask_ndsi, step=1, return_mask=False)
     ndsi_3 = compute_short_variability(array=ndsi, mask=mask_ndsi, step=3, return_mask=False)
-    array_indexes[:, :, :, 2] = median_filter_3d(np.maximum(ndsi_1, ndsi_3), scope=2)
+    array_indexes[:, :, :, 1] = median_filter_3d(np.maximum(ndsi_1, ndsi_3), scope=2)
 
-    threshold_strong_variability = 0.3
-
-    stressed_ndsi = get_stressed_ndsi(ndsi, mu, mask_ndsi,
-                                      mask_strong_variability=(np.maximum(ndsi_1, ndsi_3) > threshold_strong_variability),
-                                      nb_slots_per_day=nb_slots_per_day, tolerance=0.1,
-                                      slices_per_day=1, persistence_sigma=2)
-
-
-    # stressed_ndsi = recognize_pattern_vis(ndsi, array_data[:, :, :, 0], array_data[:, :, :, 1], mu, mask_ndsi, nb_slots_per_day, slices_by_day=1)
-    array_indexes[:, :, :, 1] = median_filter_3d(stressed_ndsi, scope=2)
     array_indexes[:, :, :, 0] = median_filter_3d(ndsi, scope=2)
 
-    # array_indexes[:, :, :, 2], me[2], std[2] = normalize_array(array_indexes[:, :, :, 2], normalization=normalization, mask=mask_ndsi)
-    # array_indexes[:, :, :, 3], me[3], std[3] = normalize_array(array_indexes[:, :, :, 3], normalization=normalization, mask=mask_ndsi)
     me, std = np.zeros(nb_features), np.full(nb_features, 1.)
 
     if weights is not None:
         for feat in range(nb_features):
             array_indexes[:, :, :, feat] = weights[feat] * array_indexes[:, :, :, feat]
-        # array_indexes[:, :, :, 2] = weights[2] * array_indexes[:, :, :, 2]
-        # array_indexes[:, :, :, 3] = weights[3] * array_indexes[:, :, :, 3]
-
         me = me * weights
     if return_m_s and return_mu:
         return array_indexes, mu, me, std
@@ -81,17 +65,19 @@ def get_snow_index(vis, nir, maskv, mu, blue_sea_mask, threshold_denominator=0.0
         return ndsi
 
 
-def get_stressed_ndsi(ndsi, mu, mask_ndsi, mask_strong_variability,
-                      nb_slots_per_day, slices_per_day, tolerance, persistence_sigma):
+def get_flat_nir(variable, cos_zen, mask, nb_slots_per_day, slices_per_day, tolerance, persistence_sigma,
+                 mask_not_proper_weather=None):
+    if mask_not_proper_weather is not None:
+        mask = mask | mask_not_proper_weather
     from cos_zen import get_likelihood_variable_cos_zen
     return get_likelihood_variable_cos_zen(
-        variable=ndsi,
-        cos_zen=mu,
-        mask=mask_ndsi,
-        # mask_strong_variability,
+        variable=variable,
+        cos_zen=cos_zen,
+        mask=mask,
         nb_slots_per_day=nb_slots_per_day,
         nb_slices_per_day=slices_per_day,
-        tolerance=tolerance,
+        under_bound=-tolerance,
+        upper_bound=tolerance,
         persistence_sigma=persistence_sigma)
 
 

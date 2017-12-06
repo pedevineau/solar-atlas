@@ -148,6 +148,7 @@ if __name__ == '__main__':
     compute_indexes_ = False
     types_channel = ['infrared', 'visible']
     channel_number = 1
+    display_curves = False
     type_channels = types_channel[channel_number]
     latitude_beginning = 35.+5
     latitude_end = 40.+5
@@ -159,8 +160,7 @@ if __name__ == '__main__':
     lat, lon = get_latitudes_longitudes(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
     bbox = get_bbox(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
     features = get_features(type_channels, lat, lon, dfb_beginning, dfb_ending, compute_indexes_, slot_step=1,
-                            normalize=False,
-                            normalization='standard')
+                            normalize=False)
 
     from numpy.random import randint
 
@@ -185,18 +185,21 @@ if __name__ == '__main__':
     # latitudes, longitudes = get_latitudes_longitudes(latitude_beginning, latitude_end, longitude_beginning, longitude_end, 2./60)
     # mu = get_array_3d_cos_zen(times, latitudes, longitudes)
     # # output = zeros((len(features), 2))
-    # for k in range(25):
-    #     lat_pix = randint(0, 140)
-    #     lon_pix = randint(0, 140)
-    #     # lat_pix, lon_pix=20,61
-    #     print lat_pix, lon_pix
-    #     # print 'lat, lon', lat0, lon0
-    #     # lat_pix, lon_pix = int((lat0 - latitude_beginning) * 60 / 2.), int((lon0 - longitude_beginning) * 60 / 2.)
-    #     # output[:,0] = mu[:,lat_pix, lon_pix]*10+10
-    #     # output[:,1] = indexes[:,1]-indexes[:,0]
-    #     # print output
-    #
-    #     visualize_input(features[:, lat_pix, lon_pix, 0:2], display_now=True, style='^')
+    from get_data import mask_channels
+    features = mask_channels(features, False)[0]
+    if display_curves:
+        for k in range(25):
+            lat_pix = randint(0, 140)
+            lon_pix = randint(0, 140)
+            # lat_pix, lon_pix=20,61
+            print lat_pix, lon_pix
+            # print 'lat, lon', lat0, lon0
+            # lat_pix, lon_pix = int((lat0 - latitude_beginning) * 60 / 2.), int((lon0 - longitude_beginning) * 60 / 2.)
+            # output[:,0] = mu[:,lat_pix, lon_pix]*10+10
+            # output[:,1] = indexes[:,1]-indexes[:,0]
+            # print output
+
+            visualize_input(features[:, lat_pix, lon_pix, 0:2], display_now=True, style='^')
 
 
     if type_channels == 'infrared' and not compute_indexes_:

@@ -47,6 +47,7 @@ def classify_brightness(bright_index):
             print 'good separation between bright and dark'
 
     del brightness
+
     cloud_covertness[cloud_covertness == bright] = nb_components + 1
     cloud_covertness[cloud_covertness == dark] = nb_components
     if nb_components >= 4:

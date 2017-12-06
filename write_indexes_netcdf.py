@@ -1,9 +1,7 @@
 def write(type_chan, variables_definitions_, variables_data_, dfbs, slots, latitudes, longitudes):
     from nclib2.dataset import DataSet, DC, NCError, WritingError
-    import json
-    metadata = json.load(open('metadata.json'))
-    pattern = metadata["indexes"][type_chan]["pattern"]
-    dir = metadata["indexes"][type_chan]["dir"]
+    from read_metadata import read_indexes_dir_and_pattern
+    dir, pattern = read_indexes_dir_and_pattern(type_chan)
 
     try:
         ds = DataSet.create(file_pattern=pattern,
@@ -82,7 +80,6 @@ if __name__ == '__main__':
             compute_indexes=True,
             slot_step=slot_step_,
             normalize=False,
-            normalization='standard',
             weights=None,
             return_m_s=False,
         )
@@ -127,7 +124,6 @@ if __name__ == '__main__':
             compute_indexes=True,
             slot_step=slot_step_,
             normalize=False,
-            normalization='standard',
             weights=None,
             return_m_s=False,
         )
@@ -135,30 +131,21 @@ if __name__ == '__main__':
         features = np.flip(features, axis=1)
 
         ndsi = features[:, :, :, 0]
-        stressed_ndsi = features[:, :, :, 1]
-        var_ndsi = features[:, :, :, 2]
-        cloudy_sea = features[:, :, :, 3]
+        var_ndsi = features[:, :, :, 1]
+        cloudy_sea = features[:, :, :, 2]
 
         ndsi = np.reshape(ndsi, (nb_dfbs, nb_slots_per_day, nb_latitudes, nb_longitudes))
-        stressed_ndsi = np.reshape(stressed_ndsi, (nb_dfbs, nb_slots_per_day, nb_latitudes, nb_longitudes))
         var_ndsi = np.reshape(var_ndsi, (nb_dfbs, nb_slots_per_day, nb_latitudes, nb_longitudes))
         cloudy_sea = np.reshape(cloudy_sea, (nb_dfbs, nb_slots_per_day, nb_latitudes, nb_longitudes))
 
-
         variables_ndsi = {
             "NDSI": ndsi,
-            "Stressed_NDSI": stressed_ndsi,
             "Var_NDSI": var_ndsi,
             "Cloudy_sea": cloudy_sea
         }
 
         variables_definitions_ndsi = {
             "NDSI": {"_FillValue": -999., "units": "no unit", "long_name": "snow index",
-                     "datatype": "f8",
-                     "cell_methods": "time: mean (interval: 1 day comment: hourly sum averages) latitude: mean longitude: mean",
-                     "grid_mapping": "coordinate_reference_system",
-                     "dimensions": ("dfb", "slot", "latitude", "longitude")},
-            "Stressed_NDSI": {"_FillValue": -999., "units": "no unit", "long_name": "4-period stressed snow index",
                      "datatype": "f8",
                      "cell_methods": "time: mean (interval: 1 day comment: hourly sum averages) latitude: mean longitude: mean",
                      "grid_mapping": "coordinate_reference_system",
@@ -189,7 +176,6 @@ if __name__ == '__main__':
             compute_indexes=True,
             slot_step=slot_step_,
             normalize=False,
-            normalization='standard',
             weights=None,
             return_m_s=False
         )
@@ -197,7 +183,6 @@ if __name__ == '__main__':
         classes = np.flip(classes, axis=1)
 
         classes = np.reshape(classes, (nb_dfbs, nb_slots_per_day, nb_latitudes, nb_longitudes))
-
 
         variables_definitions_classes = {
             "Classes": {"_FillValue": -999., "units": "no unit", "long_name": "Decision tree classification",

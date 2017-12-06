@@ -208,7 +208,7 @@ def reject_model():
 
 
 def testing(beginning, ending, latitudes, longitudes,
-            compute_indexes, process, slot_step, model, normalize, normalization, weights, verbose, display_counts):
+            compute_indexes, process, slot_step, model, normalize, weights, verbose, display_counts):
     print 'TESTING'
     time_begin_testing = time.time()
 
@@ -236,7 +236,6 @@ def testing(beginning, ending, latitudes, longitudes,
         compute_indexes,
         slot_step,
         normalize,
-        normalization,
         weights,
     )
     visible_array_testing = get_features(
@@ -248,7 +247,6 @@ def testing(beginning, ending, latitudes, longitudes,
         compute_indexes,
         slot_step,
         normalize,
-        normalization,
         weights,
     )
     nb_features = np.shape(infrared_array_testing)[-1] + np.shape(visible_array_testing)[-1]
@@ -272,7 +270,7 @@ def testing(beginning, ending, latitudes, longitudes,
 
 
 def training(beginning, ending, latitudes, longitudes, process, compute_indexes, slot_step,
-             coef_randomization, normalize, normalization, weights, display_means, verbose, nb_components, max_iter):
+             coef_randomization, normalize, weights, display_means, verbose, nb_components, max_iter):
 
     print 'TRAINING'
     time_start_training = time.time()
@@ -302,7 +300,6 @@ def training(beginning, ending, latitudes, longitudes, process, compute_indexes,
             compute_indexes,
             slot_step,
             normalize,
-            normalization,
             weights,
             return_m_s=True
         )
@@ -315,7 +312,6 @@ def training(beginning, ending, latitudes, longitudes, process, compute_indexes,
             compute_indexes,
             slot_step,
             normalize,
-            normalization,
             weights,
             return_m_s=True
         )
@@ -330,7 +326,6 @@ def training(beginning, ending, latitudes, longitudes, process, compute_indexes,
             compute_indexes,
             slot_step,
             normalize,
-            normalization,
             weights,
         )
         visible_samples_for_training = get_features(
@@ -342,7 +337,6 @@ def training(beginning, ending, latitudes, longitudes, process, compute_indexes,
             compute_indexes,
             slot_step,
             normalize,
-            normalization,
             weights,
         )
         nb_features = np.shape(infrared_samples_for_training)[-1]+np.shape(visible_samples_for_training)[-1]
@@ -422,7 +416,6 @@ if __name__ == '__main__':
     compute_indexes_ = True
     process_ = 'kmeans'  # bayesian (not good), gaussian, DBSCAN or kmeans
     normalize_ = False   # should stay False as long as thresholds has not be computed !?
-    normalization_ = 'none'
     # weights_ = None
     weights_array = [
         None,
@@ -467,7 +460,6 @@ if __name__ == '__main__':
                              slot_step=slot_step_training,
                              coef_randomization=coef_randomization_,
                              normalize=normalize_,
-                             normalization=normalization_,
                              weights=weights_,
                              display_means=display_means_,
                              verbose=verbose_,
@@ -484,8 +476,6 @@ if __name__ == '__main__':
     print 'n_components', nb_components_
     print 'shuffle', randomization
     print 'multi channels', multi_channels
-    if normalize_:
-        print 'normalization', normalization_
     print 'weights', weights_
 
     testing(beginning=dfb_beginning_testing,
@@ -497,7 +487,6 @@ if __name__ == '__main__':
             slot_step=slot_step_testing,
             model=single_model_,
             normalize=normalize_,
-            normalization=normalization_,
             weights=weights_,
             verbose=verbose_,
             display_counts=display_counts_)
