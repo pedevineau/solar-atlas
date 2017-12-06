@@ -20,11 +20,13 @@ def get_visible_predictors(array_data, ocean_mask, times, latitudes, longitudes,
                                                threshold_cloudy_sea=0.1)
 
     blue_sea = ocean_mask & (array_indexes[:, :, :, 2] == 0)
+    me, std = np.zeros(nb_features), np.full(nb_features, 1.)
 
     ndsi, m, s, mask_ndsi = get_snow_index(vis=array_data[:, :, :, 1], nir=array_data[:, :, :, 0], threshold_denominator=0.02,
                                            maskv=mask, mu=mu, threshold_mu=0.02, blue_sea_mask=blue_sea,
                                            return_m_s_mask=True)
-
+    me[0] = m
+    std[0] = s
     del array_data
 
     ndsi_1 = compute_short_variability(array=ndsi, mask=mask_ndsi, step=1, return_mask=False)
@@ -33,7 +35,6 @@ def get_visible_predictors(array_data, ocean_mask, times, latitudes, longitudes,
 
     array_indexes[:, :, :, 0] = median_filter_3d(ndsi, scope=2)
 
-    me, std = np.zeros(nb_features), np.full(nb_features, 1.)
 
     if weights is not None:
         for feat in range(nb_features):
@@ -60,7 +61,7 @@ def get_snow_index(vis, nir, maskv, mu, blue_sea_mask, threshold_denominator=0.0
     ndsi, m, s = normalize_array(ndsi, mask_ndsi, normalization='standard', return_m_s=True)  # normalization take into account the mask
     ndsi[mask_ndsi] = -10
     if return_m_s_mask:
-        return ndsi, 0, 1, mask_ndsi
+        return ndsi, m, s, mask_ndsi
     else:
         return ndsi
 
@@ -77,7 +78,7 @@ def get_flat_nir(variable, cos_zen, mask, nb_slots_per_day, slices_per_day, tole
         nb_slots_per_day=nb_slots_per_day,
         nb_slices_per_day=slices_per_day,
         under_bound=-tolerance,
-        upper_so=tolerance,
+        upper_bound=tolerance,
         persistence_sigma=persistence_sigma)
 
 

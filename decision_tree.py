@@ -13,7 +13,7 @@ def get_classes_decision_tree(latitudes,
         return_m_s=False
    ):
 
-    visible_features, mu = get_features(
+    visible_features, m, s, mu = get_features(
         'visible',
         latitudes,
         longitudes,
@@ -23,6 +23,7 @@ def get_classes_decision_tree(latitudes,
         slot_step,
         normalize,
         weights,
+        return_m_s=True,
         return_mu=True
     )
 
@@ -58,7 +59,7 @@ def get_classes_decision_tree(latitudes,
     from classification_cloud_index import classify_cloud_covertness
     classified_cli = classify_cloud_covertness(infrared_features[:, :, :, cli_or_unbiased])
     from classification_snow_index import classify_brightness
-    classified_brightness = classify_brightness(visible_features[:, :, :, 0])
+    classified_brightness = classify_brightness(visible_features[:, :, :, 0], m[0], s[0])
 
     water_clouds = (classified_cli == 1)
 

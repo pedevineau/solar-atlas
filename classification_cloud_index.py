@@ -25,7 +25,7 @@ def classify_cloud_covertness(cloud_index):
     model = get_trained_model(cloud_index_1d_training, model, process)
     cloud_covertness = model.predict(cloud_index).reshape((nb_slots, nb_latitudes, nb_longitudes))
     undefined = np.argmin(get_centers(model, process))
-    cloudless = np.argmin(np.where(get_centers(model, process))[1] > -9)
+    cloudless = np.argmin(np.where(get_centers(model, process) > -9))
     cloudy = np.argmax(get_centers(model, process))
 
     if get_centers(model, process)[cloudless, 0] + get_std(model, process, cloudless) >\
@@ -43,6 +43,8 @@ def classify_cloud_covertness(cloud_index):
         if get_centers(model, process)[cloudless, 0] + get_std(model, process, cloudless) > \
                 get_centers(model, process)[cloudy, 0]:
             print 'good separation between cloudy and cloudless'
+        else:
+            print 'bad separation between cloudy and cloudless, again'
 
     del cloud_index
     cloud_covertness[cloud_covertness == cloudy] = nb_components + 1
