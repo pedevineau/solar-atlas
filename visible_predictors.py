@@ -1,8 +1,8 @@
 from utils import *
 
 
-def compute_visible(array_channels, ocean_mask, times, latitudes, longitudes, satellite_step, slot_step,
-                    normalize, normalization, weights, return_m_s=False, return_mu=False):
+def get_visible_predictors(array_channels, ocean_mask, times, latitudes, longitudes, satellite_step, slot_step,
+                           normalize, normalization, weights, return_m_s=False, return_mu=False):
     from get_data import mask_channels, compute_short_variability
     from filter import median_filter_3d
     from cos_zen import get_array_cos_zen
@@ -33,12 +33,12 @@ def compute_visible(array_channels, ocean_mask, times, latitudes, longitudes, sa
     array_indexes[:, :, :, 2] = median_filter_3d(np.maximum(ndsi_1, ndsi_3), scope=2)
 
     threshold_strong_variability = 0.3
-    mask_strong_variability = np.maximum(ndsi_1, ndsi_3) > threshold_strong_variability
 
-    stressed_ndsi = get_stressed_ndsi(ndsi, mu, mask_ndsi, mask_strong_variability, nb_slots_per_day, tolerance=0.06,
-                                      slices_per_day=3, persistence_sigma=1.5)
+    stressed_ndsi = get_stressed_ndsi(ndsi, mu, mask_ndsi,
+                                      mask_strong_variability=(np.maximum(ndsi_1, ndsi_3) > threshold_strong_variability),
+                                      nb_slots_per_day=nb_slots_per_day, tolerance=0.1,
+                                      slices_per_day=1, persistence_sigma=2)
 
-    del mask_strong_variability
 
     # stressed_ndsi = recognize_pattern_vis(ndsi, array_data[:, :, :, 0], array_data[:, :, :, 1], mu, mask_ndsi, nb_slots_per_day, slices_by_day=1)
     array_indexes[:, :, :, 1] = median_filter_3d(stressed_ndsi, scope=2)
@@ -81,10 +81,18 @@ def get_snow_index(vis, nir, maskv, mu, blue_sea_mask, threshold_denominator=0.0
         return ndsi
 
 
-def get_stressed_ndsi(ndsi, mu, mask_ndsi, mask_high_variability,
-                      nb_slots_per_day, slices_per_day=4, tolerance=0.08, persistence_sigma=1.5):
-    from ndsi_local_day_trend import recognize_pattern_ndsi
-    return recognize_pattern_ndsi(ndsi, mu, mask_ndsi, mask_high_variability, nb_slots_per_day, slices_per_day, tolerance, persistence_sigma)
+def get_stressed_ndsi(ndsi, mu, mask_ndsi, mask_strong_variability,
+                      nb_slots_per_day, slices_per_day, tolerance, persistence_sigma):
+    from cos_zen import get_likelihood_variable_cos_zen
+    return get_likelihood_variable_cos_zen(
+        variable=ndsi,
+        cos_zen=mu,
+        mask=mask_ndsi,
+        # mask_strong_variability,
+        nb_slots_per_day=nb_slots_per_day,
+        nb_slices_per_day=slices_per_day,
+        tolerance=tolerance,
+        persistence_sigma=persistence_sigma)
 
 
 def get_tricky_transformed_ndsi(snow_index, summit, gamma=4):

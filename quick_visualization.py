@@ -147,13 +147,13 @@ if __name__ == '__main__':
     from utils import *
     compute_indexes_ = False
     types_channel = ['infrared', 'visible']
-    channel_number = 0
+    channel_number = 1
     type_channels = types_channel[channel_number]
     latitude_beginning = 35.+5
     latitude_end = 40.+5
     longitude_beginning = 125.
     longitude_end = 130.
-    dfb_beginning = 13534
+    dfb_beginning = 13542
     dfb_ending = dfb_beginning
     date_begin, date_end = print_date_from_dfb(dfb_beginning, dfb_ending)
     lat, lon = get_latitudes_longitudes(latitude_beginning, latitude_end, longitude_beginning, longitude_end)

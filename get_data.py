@@ -1,8 +1,8 @@
 ### user input ###
 
 from utils import *
-from get_visible_predictors import compute_visible
-from get_infrared_predictors import compute_infrared
+from visible_predictors import get_visible_predictors
+from infrared_predictors import get_infrared_predictors
 
 
 def get_selected_channels(all_channels, ask_channels=True):
@@ -202,7 +202,7 @@ def get_features(type_channels, latitudes, longitudes, dfb_beginning, dfb_ending
         if not compute_indexes:
             return content_visible
         else:
-            return compute_visible(
+            return get_visible_predictors(
                 content_visible,
                 ocean,
                 times,
@@ -229,7 +229,7 @@ def get_features(type_channels, latitudes, longitudes, dfb_beginning, dfb_ending
         if not compute_indexes:
             return content_infrared
         else:
-            return compute_infrared(
+            return get_infrared_predictors(
                 content_infrared,
                 ocean,
                 times,

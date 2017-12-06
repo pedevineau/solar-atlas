@@ -11,8 +11,8 @@ def apply_gaussian_persistence(persistence_array_1d, persistence_mask_1d, persis
 
     :param persistence_array_1d:
     :param persistence_mask_1d:
-    :param persistence_sigma:
-    :param persistence_scope:
+    :param persistence_sigma: standard deviation of time-expanding gaussian. persistance_sigma=0. => no expanding
+    :param persistence_scope: number of slots where applying persistence
     :return: array of float between 0. and 1.
     '''
     from scipy.ndimage.filters import gaussian_filter1d
@@ -29,28 +29,31 @@ def look_like_cos_zen_1d(variable, cos_zen, tolerance, mask=None):
     :param variable: 1-d array representing the variable to test
     :param cos_zen: 1-d array with cos of zenith angle
     :param mask: mask associated with the variable
-    :param tolerance: hyper-parameter between -1 and 1 (eg: 0.95)
+    :param tolerance: hyper-parameter between -1 and 1 (eg: 0.93)
     :return: integer 0-1
     '''
     from scipy.stats import pearsonr
     if mask is None:
         r, p = pearsonr(variable, cos_zen)
     else:
-        r, p = pearsonr(variable[mask], cos_zen[mask])
-    if r > tolerance:
+        r, p = pearsonr(variable[~mask], cos_zen[~mask])
+    if r > 1-tolerance:
         return 1
     else:
         return 0
 
 
-def likelihood_variable_cos_zen(variable, cos_zen, tolerance, satellite_step, slot_step, nb_slices_per_day=1,
-                                mask=None, persistence_sigma=0.):
+def get_likelihood_variable_cos_zen(variable, cos_zen, tolerance, nb_slots_per_day, nb_slices_per_day=1,
+                                    mask=None, persistence_sigma=0.):
     '''
 
     :param variable: 1-d or 3-d array representing the variable to test
     :param cos_zen: 1-d or 3-d array with cos of zenith angle
+    :param tolerance: hyper-parameter between -1 and 1 (eg: 0.93)
+    :param nb_slots_per_day
+    :param nb_slices_per_day
     :param mask: mask associated with the variable
-    :param tolerance: hyper-parameter between -1 and 1 (eg: 0.95)
+    :param persistence_sigma: standard deviation of time-expanding gaussian. persistance_sigma=0. => no expanding
     :return: matrix of likelihood (same shape as variable and cos_zen arrays)
     '''
     if len(variable.shape) == 1 and variable.shape == cos_zen.shape:
@@ -58,8 +61,7 @@ def likelihood_variable_cos_zen(variable, cos_zen, tolerance, satellite_step, sl
     elif len(variable.shape) == 3 and variable.shape == cos_zen.shape:
         to_return = np.zeros_like(cos_zen)
         from time import time
-        print 'begin recognize pattern'
-        nb_slots_per_day = get_nb_slots_per_day(satellite_step, slot_step)
+        print 'begin recognizing pattern'
         t_begin_reco = time()
         # https://docs.scipy.org/doc/scipy-0.14.0/reference/generated/scipy.stats.pearsonr.html
         # computing of correlation need enough temporal information. If we have data on a too small window, ignore it
@@ -71,7 +73,7 @@ def likelihood_variable_cos_zen(variable, cos_zen, tolerance, satellite_step, sl
         nb_steps = int(np.ceil(
             nb_slots / nb_slots_per_step)) + 1  # +1 because first slot is not the darkest slot for every point
 
-        map_first_darkest_points = get_map_next_midnight_slots(cos_zen, nb_slots_per_day, current_slot=0)
+        map_first_midnight = get_map_next_midnight(cos_zen, nb_slots_per_day, current_midnight=0)
 
         persistence = persistence_sigma > 0
 
@@ -81,82 +83,117 @@ def likelihood_variable_cos_zen(variable, cos_zen, tolerance, satellite_step, sl
         for lat in range(nb_latitudes):
             for lon in range(nb_longitudes):
                 slot_beginning_slice = 0
-                slot_ending_slice = map_first_darkest_points[lat, lon] % nb_slots_per_step
+                slot_ending_slice = map_first_midnight[lat, lon] % nb_slots_per_step
                 step = 0
+                persistence_mask_1d = np.ones(nb_steps, dtype=bool)
                 while slot_beginning_slice < nb_slots:
                     slice_variable = variable[slot_beginning_slice:slot_ending_slice, lat, lon]
                     slice_cos_zen = cos_zen[slot_beginning_slice:slot_ending_slice, lat, lon]
                     slice_mask = mask[slot_beginning_slice:slot_ending_slice, lat, lon]
                     if slice_variable[~slice_mask].size > minimal_nb_unmasked_slots:
                         if persistence:
-                            persistence_array[step, lat, lon] = look_like_cos_zen_1d(slice_variable, slice_cos_zen,
-                                                                                     tolerance, mask)
+                            persistence_mask_1d[step] = False
+                            persistence_array[step, lat, lon] = look_like_cos_zen_1d(variable=slice_variable,
+                                                                                     cos_zen=slice_cos_zen,
+                                                                                     tolerance=tolerance,
+                                                                                     mask=slice_mask)
                         else:
                             to_return[slot_beginning_slice: slot_ending_slice, lat, lon][~slice_mask] = \
-                                look_like_cos_zen_1d(slice_variable, slice_cos_zen,
-                                                     tolerance, mask)
+                                look_like_cos_zen_1d(variable=slice_variable,
+                                                     cos_zen=slice_cos_zen,
+                                                     tolerance=tolerance,
+                                                     mask=slice_mask)
                     step += 1
                     slot_beginning_slice = slot_ending_slice
                     slot_ending_slice += nb_slots_per_step
 
                 if persistence:
-                    persistence_array[:, lat, lon] = \
-                        apply_gaussian_persistence(persistence_array[:, lat, lon], slice_mask,
-                                                   persistence_sigma, persistence_scope=nb_slices_per_day)
+                    if not np.all(persistence_mask_1d == 0):
+                        persistence_array[:, lat, lon][~persistence_mask_1d] = \
+                            apply_gaussian_persistence(persistence_array[:, lat, lon], persistence_mask_1d,
+                                                       persistence_sigma, persistence_scope=nb_slices_per_day)
 
-                    # TODO: add soome spatial information
-                    to_return[slot_beginning_slice: slot_ending_slice, lat, lon][~slice_mask] = \
-                        persistence_array[step, lat, lon]
+                    # TODO: add some spatial information
+                step = 0
+                slot_beginning_slice = 0
+                slot_ending_slice = map_first_midnight[lat, lon] % nb_slots_per_step
+                if not np.all(persistence_array[:, lat, lon] == 0):
+                    while slot_beginning_slice < nb_slots:
+                        slice_mask = mask[slot_beginning_slice:slot_ending_slice, lat, lon]
+                        to_return[slot_beginning_slice: slot_ending_slice, lat, lon][~slice_mask] = \
+                            persistence_array[step, lat, lon]
+                        step += 1
+                        slot_beginning_slice = slot_ending_slice
+                        slot_ending_slice += nb_slots_per_step
 
         print 'time recognition', time() - t_begin_reco
         return to_return
 
     else:
-        raise Exception('You have to give two 1-d or 3-d array of the same shape')
+        raise Exception('You have to give two 1-d or 3-d arrays of the same shape')
 
 
-def get_next_midnight_slot(mu_point, nb_slots_per_day, current_slot=0):
+def get_next_midnight(mu_point, nb_slots_per_day, current_slot=0):
     return np.maximum(0,
-                      current_slot+nb_slots_per_day-5 +
-                      np.argmin(mu_point[current_slot+nb_slots_per_day-5:current_slot+nb_slots_per_day+5]))
+                      current_slot+nb_slots_per_day-3 +
+                      np.argmin(mu_point[current_slot+nb_slots_per_day-3:current_slot+nb_slots_per_day+3]))
 
 
-def get_next_noon_slot(mu_point, nb_slots_per_day, current_slot=0):
+def get_next_midday(mu_point, nb_slots_per_day, current_midday=0):
     return np.maximum(0,
-                      current_slot+nb_slots_per_day-5 +
-                      np.argmax(mu_point[current_slot+nb_slots_per_day-5:current_slot+nb_slots_per_day+5]))
+                      current_midday + nb_slots_per_day - 3 +
+                      np.argmax(mu_point[current_midday + nb_slots_per_day - 3:current_midday + nb_slots_per_day + 3]))
 
 
-def get_map_next_midnight_slots(mu, nb_slots_per_day, current_slot=0):
-    if current_slot == 0:   # means it is first iteration
-        return np.argmax(mu[0:nb_slots_per_day], axis=0)
-    else:
-        return np.maximum(0, current_slot+nb_slots_per_day - 5 +
-                          np.argmin(mu[current_slot+nb_slots_per_day-5:current_slot+nb_slots_per_day+5], axis=0))
-
-
-def get_map_next_noon_slots(mu, nb_slots_per_day, current_slot=0):
-    return (get_map_next_midnight_slots(mu, nb_slots_per_day, current_slot) + nb_slots_per_day/2) % nb_slots_per_day
-
-
-def get_map_next_dawn_slots(mu, nb_slots_per_day, current_slot=0):
-    if current_slot == 0:   # means it is first iteration
+def get_map_next_midnight(mu, nb_slots_per_day, current_midnight=0):
+    if current_midnight == 0:   # means it is first iteration
         return np.argmin(mu[0:nb_slots_per_day], axis=0)
     else:
-        return np.maximum(0, current_slot+nb_slots_per_day - 5 +
-                          np.argmin(mu[current_slot+nb_slots_per_day-5:current_slot+nb_slots_per_day+5], axis=0))
+        return np.maximum(0, current_midnight + nb_slots_per_day - 3 +
+                          np.argmin(mu[current_midnight + nb_slots_per_day - 3:current_midnight + nb_slots_per_day + 3], axis=0))
+
+
+def get_map_next_midday(mu, nb_slots_per_day, current_slot=0):
+    return (get_map_next_midnight(mu, nb_slots_per_day, current_slot) + nb_slots_per_day / 2) % nb_slots_per_day
+
+
+def get_map_next_sunrise(mu, nb_slots_per_day, current_dawn=0):
+    # derivative of cos-zen angle = 1
+    if current_dawn == 0:   # means it is first iteration
+        derivative = mu[0:nb_slots_per_day]-np.roll(mu[0:nb_slots_per_day], shift=-1)
+        return np.argmax(derivative, axis=0)
+    else:
+        derivative = mu[current_dawn + nb_slots_per_day - 3:current_dawn + nb_slots_per_day + 3]\
+                     - np.roll(mu[current_dawn + nb_slots_per_day - 3:current_dawn + nb_slots_per_day + 3], shift=-1)
+        return np.maximum(0, current_dawn + nb_slots_per_day - 3 +
+                          np.argmax(derivative, axis=0))
 
 
  # should be useless, since these slots are supposed to be regularly distant from nb_slots_per_day
+
+
+def get_map_next_sunset(mu, nb_slots_per_day, current_dawn=0):
+    # derivative of cos-zen angle = -1
+    if current_dawn == 0:  # means it is first iteration
+        derivative = mu[0:nb_slots_per_day] - np.roll(mu[0:nb_slots_per_day], shift=-1)
+        return np.argmin(derivative, axis=0)
+    else:
+        derivative = mu[current_dawn + nb_slots_per_day - 3:current_dawn + nb_slots_per_day + 3] \
+                     - np.roll(mu[current_dawn + nb_slots_per_day - 3:current_dawn + nb_slots_per_day + 3],
+                               shift=-1)
+        return np.maximum(0, current_dawn + nb_slots_per_day - 3 +
+                          np.argmin(derivative, axis=0))
+
+
 def get_map_all_midnight_slots(mu, nb_slots_per_day):
     nb_slots, nb_latitudes, nb_longitudes = np.shape(mu)
     nb_days = nb_slots / nb_slots_per_day
     current_slots = np.zeros((nb_days, nb_latitudes, nb_longitudes), dtype=int)
-    current_slots[0, :, :] = get_map_next_midnight_slots(mu, nb_slots_per_day)
+    current_slots[0, :, :] = get_map_next_midnight(mu, nb_slots_per_day)
     for lat in range(nb_latitudes):
         for lon in range(nb_longitudes):
             for day in range(1, nb_days):
-                current_slots[day, lat, lon] = get_next_midnight_slot(mu, nb_slots_per_day,
-                                                                      current_slots[day-1, lat, lon])
+                current_slots[day, lat, lon] = get_next_midnight(mu, nb_slots_per_day,
+                                                                 current_slots[day-1, lat, lon])
     return current_slots
 

@@ -2,8 +2,8 @@ from utils import *
 from dtw_computing import *
 
 
-def compute_infrared(array_channels, ocean_mask, times, latitudes, longitudes, satellite_step, slot_step,
-                     normalize, weights, return_m_s=False, return_mu=False):
+def get_infrared_predictors(array_channels, ocean_mask, times, latitudes, longitudes, satellite_step, slot_step,
+                            normalize, weights, return_m_s=False, return_mu=False):
     '''
 
     :param array_channels: matrix with channels 3890nm and 12380nm
@@ -191,8 +191,8 @@ def get_warm_array_on_point(mir_point, mu_point, satellite_step, slot_step, clou
     width_window_in_minutes = 240
     width_window_in_slots = width_window_in_minutes/(slot_step*satellite_step)
 
-    from cos_zen import get_next_noon_slot
-    noon = get_next_noon_slot(
+    from cos_zen import get_next_midday
+    noon = get_next_midday(
         mu_point,
         nb_slots_per_day
     )
