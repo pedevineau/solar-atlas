@@ -60,7 +60,7 @@ def get_snow_index(vis, nir, maskv, mu, blue_sea_mask, threshold_denominator=0.0
     ndsi, m, s = normalize_array(ndsi, mask_ndsi, normalization='standard', return_m_s=True)  # normalization take into account the mask
     ndsi[mask_ndsi] = -10
     if return_m_s_mask:
-        return ndsi, m, s, mask_ndsi
+        return ndsi, 0, 1, mask_ndsi
     else:
         return ndsi
 
@@ -77,7 +77,7 @@ def get_flat_nir(variable, cos_zen, mask, nb_slots_per_day, slices_per_day, tole
         nb_slots_per_day=nb_slots_per_day,
         nb_slices_per_day=slices_per_day,
         under_bound=-tolerance,
-        upper_bound=tolerance,
+        upper_so=tolerance,
         persistence_sigma=persistence_sigma)
 
 

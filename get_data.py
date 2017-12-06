@@ -180,9 +180,8 @@ def get_features(type_channels, latitudes, longitudes, dfb_beginning, dfb_ending
                  return_m_s=False,
                  return_mu=False
                  ):
-    import json
     from read_netcdf import read_channels
-    from read_metadata import read_satellite_name, read_satellite_step
+    from read_metadata import read_satellite_step
     satellite_step = read_satellite_step()
 
     ocean = get_ocean_mask(latitudes, longitudes)
