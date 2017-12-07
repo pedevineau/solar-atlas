@@ -1,12 +1,14 @@
 from utils import np, get_nb_slots_per_day
 
+
 def median_filter_3d(array, scope=5):
     from scipy import ndimage
-    if scope == 1:
+    if scope <= 1:
         return array
     for k in range(len(array)):
         array[k] = ndimage.median_filter(array[k], scope)
     return array
+
 
 # low pass spatial filter case use: NOT ndsi, perhaps CLI or stressed NDSI
 def low_pass_filter_3d(array, cutoff, omega=0):

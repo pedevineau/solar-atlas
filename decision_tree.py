@@ -95,9 +95,11 @@ def get_classes_decision_tree(latitudes,
     (nb_slots, nb_latitudes, nb_longitudes) = np.shape(visible_features)[0:3]
     classes = np.zeros((nb_slots, nb_latitudes, nb_longitudes))
 
+    classes[mask_ndsi] = 12
     classes[water_clouds] = 1
     if 2 in classified_cli:
         slight_clouds = (classified_cli == 2)
+        print 'slightly cloudy activated'
         classes[slight_clouds] = 2
 
     # classes[persistent_snow & ~(water_clouds | cold_opaque_clouds)] = 3
@@ -109,7 +111,6 @@ def get_classes_decision_tree(latitudes,
     classes[cold_opaque_clouds] = 7
     # classes[persistent_snow & (water_clouds | cold_opaque_clouds)] = 4
     classes[foggy] = 11
-    classes[mask_ndsi] = 12
 
     print 'water clouds:1'
     print 'slight water clouds:2'
@@ -146,6 +147,7 @@ if __name__ == '__main__':
                                                      longitude_beginning, longitude_end)
 
     date_begin, date_end = print_date_from_dfb(beginning, ending)
+    print beginning, ending
 
     classes = get_classes_decision_tree(latitudes,
                                         longitudes,

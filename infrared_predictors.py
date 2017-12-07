@@ -36,12 +36,12 @@ def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_
     array_indexes = np.empty(shape=(nb_slots, nb_latitudes, nb_longitudes, nb_features))
     array_indexes[:, :, :, 0] = median_filter_3d(
         get_cloud_index(mir=array_data[:, :, :, 1], fir=array_data[:, :, :, 0], method='mu-normalization',
-                        maski=mask, cos_zen=mu),
+                        mask=mask, cos_zen=mu),
         scope=3)
 
     array_indexes[:, :, :, 1] = median_filter_3d(
         get_cloud_index(mir=array_data[:, :, :, 1], fir=array_data[:, :, :, 0], method='without-bias',
-                        maski=mask, cos_zen=mu),
+                        mask=mask, cos_zen=mu),
         scope=3)
 
     # array_indexes[:, :, :, 3] = get_variability_array(array=array_indexes[:, :, :, 2], mask=mask_cli)
@@ -78,25 +78,25 @@ def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_
         return array_indexes
 
 
-def get_cloud_index(mir, fir, maski, cos_zen, method='default'):
+def get_cloud_index(mir, fir, mask, cos_zen, method='default'):
     '''
     :param mir: medium infra-red band (centered on 3890nm for Himawari 8)
     :param fir: far infra-red band (centered on 12380nm for Himawari 8)
-    :param maski: mask for outliers and missing isolated data
+    :param mask: mask for outliers and missing isolated data
     :param cos_zen: cos of zenith angle matrix (shape: slots, latitudes, longitudes)
     :param method: {'default', 'mu-normalization', 'clear-sky', 'without-bias'}
     :return: a cloud index matrix (shape: slots, latitudes, longitudes)
     '''
     difference = mir - fir
-    maski = maski | (cos_zen <= 0)
+    mask = mask | (cos_zen <= 0)
     if method == 'mu-normalization':
-        mu_threshold = 0.02
-        maski = maski | (cos_zen <= mu_threshold)
+        mu_threshold = 0.05
+        mask = mask | (cos_zen <= mu_threshold)
         cli = normalize_array(difference / np.maximum(cos_zen, mu_threshold),
-                              mask=maski, normalization='standard', return_m_s=False)
+                              mask=mask, normalization='standard', return_m_s=False)
     else:
-        diffstd = normalize_array(difference, maski, normalization='standard', return_m_s=False)
-        mustd = normalize_array(cos_zen, maski, normalization='standard', return_m_s=False)
+        diffstd = normalize_array(difference, mask, normalization='standard', return_m_s=False)
+        mustd = normalize_array(cos_zen, mask, normalization='standard', return_m_s=False)
         if method == 'without-bias':
             cli = np.zeros_like(difference)
             (nb_slots, nb_latitudes, nb_longitudes) = np.shape(cli)
@@ -104,7 +104,7 @@ def get_cloud_index(mir, fir, maski, cos_zen, method='default'):
                 for lon in range(nb_longitudes):
                     slice_diffstd = diffstd[:, lat, lon]
                     slice_mustd = mustd[:, lat, lon]
-                    slice_maski = maski[:, lat, lon]
+                    slice_maski = mask[:, lat, lon]
                     if not np.all(slice_maski):
                         local_cov_matrix = np.cov(slice_diffstd[~slice_maski], slice_mustd[~slice_maski])
                         local_cov = local_cov_matrix[0, 1]
@@ -117,9 +117,9 @@ def get_cloud_index(mir, fir, maski, cos_zen, method='default'):
             cli = diffstd
         else:
             raise Exception('Please choose a valid method to compute cloud index')
-        print 'remaining pearson', pearsonr(cli[~maski],
-                                            mustd[~maski])  # objective: put it as close to zero as possible
-    cli[maski] = -10
+        print 'remaining pearson', pearsonr(cli[~mask],
+                                            mustd[~mask])  # objective: put it as close to zero as possible
+    cli[mask] = -10
     # cli, m, s = normalize_array(cli, maski, normalization='max')
     return cli
 

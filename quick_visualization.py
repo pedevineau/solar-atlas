@@ -145,13 +145,13 @@ def visualize_hist(array_1d, title='Histogram', precision=50):
 if __name__ == '__main__':
     from get_data import get_features
     from utils import *
-    compute_indexes_ = False
+    compute_indexes_ = True
     types_channel = ['infrared', 'visible']
     channel_number = 1
-    display_curves = False
+    display_curves = True
     type_channels = types_channel[channel_number]
-    latitude_beginning = 35.+5
-    latitude_end = 40.+5
+    latitude_beginning = 35.
+    latitude_end = 40.
     longitude_beginning = 125.
     longitude_end = 130.
     dfb_beginning = 13542
@@ -186,7 +186,6 @@ if __name__ == '__main__':
     # mu = get_array_3d_cos_zen(times, latitudes, longitudes)
     # # output = zeros((len(features), 2))
     from get_data import mask_channels
-    features = mask_channels(features, False)[0]
     if display_curves:
         for k in range(25):
             lat_pix = randint(0, 140)
@@ -207,7 +206,7 @@ if __name__ == '__main__':
     elif not compute_indexes_:
         visualize_map_time((features[:, :, :, :]), bbox, title=type_channels, vmin=-1, vmax=1, color='gray')
     else:
-        visualize_map_time(features[:, :, :, 0:4], bbox, title=type_channels, vmin=-2
+        visualize_map_time(features[:, :, :, 0:1], bbox, title=type_channels, vmin=-2
                            , vmax=2, color='gray')
     # visualize_map_time(4*features[:, :, :, 1:3], bbox, title='INFRARED', vmin=0, vmax=1, color='gray')
     raise Exception('stop here for now')
