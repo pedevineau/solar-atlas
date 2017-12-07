@@ -1,6 +1,5 @@
-*.json
-outdated/draft_cloud_simulation.py
-outdated/testing_nclib2.py
+metadata.json
+outdated
 *.pyc
 .idea
 general_utils
