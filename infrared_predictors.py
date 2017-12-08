@@ -98,19 +98,8 @@ def get_cloud_index(mir, fir, mask, cos_zen, method='default'):
         diffstd = normalize_array(difference, mask, normalization='standard', return_m_s=False)
         mustd = normalize_array(cos_zen, mask, normalization='standard', return_m_s=False)
         if method == 'without-bias':
-            cli = np.zeros_like(difference)
-            (nb_slots, nb_latitudes, nb_longitudes) = np.shape(cli)
-            for lat in range(nb_latitudes):
-                for lon in range(nb_longitudes):
-                    slice_diffstd = diffstd[:, lat, lon]
-                    slice_mustd = mustd[:, lat, lon]
-                    slice_maski = mask[:, lat, lon]
-                    if not np.all(slice_maski):
-                        local_cov_matrix = np.cov(slice_diffstd[~slice_maski], slice_mustd[~slice_maski])
-                        local_cov = local_cov_matrix[0, 1]
-                        local_var_mu = local_cov_matrix[1, 1]
-                        local_var_cli = local_cov_matrix[0, 0]
-                        cli[:, lat, lon] = slice_diffstd - local_cov/np.sqrt(local_var_mu * local_var_cli) * slice_mustd
+            from get_data import remove_cos_zen_correlation
+            cli = remove_cos_zen_correlation(diffstd,  mustd, mask)
         elif method == 'clear-sky':
             cli = diffstd-mustd
         elif method == 'default':
@@ -122,6 +111,7 @@ def get_cloud_index(mir, fir, mask, cos_zen, method='default'):
     cli[mask] = -10
     # cli, m, s = normalize_array(cli, maski, normalization='max')
     return cli
+
 
 # def get_cold_mask(mir, satellite_step, slot_step, threshold_median):
 #     # compute median temperature around noon and compare it with a threshold

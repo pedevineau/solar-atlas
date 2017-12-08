@@ -58,8 +58,8 @@ def get_classes_decision_tree(latitudes,
     # water_clouds = (infrared_features[:, :, :, cli_or_unbiased] > 0)  # | (visible_features[:, :, :, 3] == 1)
 
     from classification_snow_index import classify_brightness, classifiy_brightness_variability
-    classified_brightness = classify_brightness(visible_features[:, :, :, 0], m[0], s[0])
-    variable_brightness = classifiy_brightness_variability(visible_features[:, :, :, 1])
+    bright = (classify_brightness(visible_features[:, :, :, 0], m[0], s[0]) == 1)
+    variable_brightness = (classifiy_brightness_variability(visible_features[:, :, :, 1]) == 1)
     from quick_visualization import visualize_map_time, get_bbox
     visualize_map_time(variable_brightness, get_bbox(latitudes[0], latitudes[-1], longitudes[0], longitudes[-1]))
 
@@ -98,10 +98,9 @@ def get_classes_decision_tree(latitudes,
         print 'slightly cloudy activated'
         classes[slight_clouds] = 2
     print 'ending test'
-
+    del classified_cli
     from time import time
     begin_affectation = time()
-    bright = (classified_brightness == 1)
     classes[(visible_features[:, :, :, 0] == -10)] = 13
     classes[(infrared_features[:, :, :, 0] == -10)] = 14
     classes[water_clouds & ~bright] = 1

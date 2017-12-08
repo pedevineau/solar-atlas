@@ -123,22 +123,40 @@ def apply_smooth_threshold(x, th, order=2):
     return np.exp(-(x-th))
 
 
-def compute_short_variability(array, mask, step=1, return_mask=False, abs_value=False):
+def compute_short_variability(array, cos_zen, mask, step=1, return_mask=False, abs_value=False, normalization='standard'):
     step_left = step
-    # array= array - roll(array, step_left, axis=0)
-    # not so easy: there is
-    array = array - np.roll(array, step_left, axis=0)
-    mask = mask + np.roll(mask, step_left, axis=0)  # mask of night and dawn. numpy.roll casts the mask to an array
-    array[mask] = 0
+    array = remove_cos_zen_correlation(array, normalize_array(cos_zen, mask, normalization='standard'), mask)
+    previous = np.roll(array, step_left, axis=0)
+    array = array - previous
+    if mask is not None:
+        mask = mask + np.roll(mask, step_left, axis=0)  # mask of night and dawn. numpy.roll casts the mask to an array
     array[:step_left] = 0
-    array = normalize_array(array, mask, normalization='standard')
     if abs_value:
         array = np.abs(array)
-    array[mask] = -10
+    if mask is not None:
+        array[mask] = -10
+    array = normalize_array(array, mask=mask, normalization=normalization)
     if return_mask:
         return array, mask
     else:
         return array
+
+
+def remove_cos_zen_correlation(indexstd, mustd, mask):
+    to_return = np.zeros_like(indexstd)
+    (nb_slots, nb_latitudes, nb_longitudes) = np.shape(to_return)
+    for lat in range(nb_latitudes):
+        for lon in range(nb_longitudes):
+            slice_diffstd = indexstd[:, lat, lon]
+            slice_mustd = mustd[:, lat, lon]
+            slice_maski = mask[:, lat, lon]
+            if not np.all(slice_maski):
+                local_cov_matrix = np.cov(slice_diffstd[~slice_maski], slice_mustd[~slice_maski])
+                local_cov = local_cov_matrix[0, 1]
+                local_var_mu = local_cov_matrix[1, 1]
+                local_var_cli = local_cov_matrix[0, 0]
+                to_return[:, lat, lon] = slice_diffstd - local_cov / np.sqrt(local_var_mu * local_var_cli) * slice_mustd
+    return to_return
 
 
 def get_variability_parameters_manually(array, step, th_2, positive_variation=True, negative_variation=True):
@@ -171,7 +189,7 @@ def get_variability_array_modified(array, mask, step=1, th_1=0.02, th_2=0.3,
                                    positive_variation=True, negative_variation=True):
     print 'var array', np.var([~mask])
     print 'mean array', np.mean(array[~mask])
-    arr = compute_short_variability(array, mask, step)[0]
+    arr = compute_short_variability(array, mask=mask, step=step)[0]
     return arr
 
 

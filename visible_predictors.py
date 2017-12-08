@@ -24,14 +24,15 @@ def get_visible_predictors(array_data, ocean_mask, times, latitudes, longitudes,
                                            mask=mask, mu=mu, threshold_mu=0.02, ocean_mask=ocean_mask,
                                            return_m_s_mask=True)
 
-    me[0] = m
-    std[0] = s
     del array_data
 
-    ndsi_1 = compute_short_variability(array=ndsi, mask=mask_ndsi, step=1, return_mask=False, abs_value=True)
-    ndsi_2 = compute_short_variability(array=ndsi, mask=mask_ndsi, step=2, return_mask=False, abs_value=True)
-    array_indexes[:, :, :, 1] = median_filter_3d(np.maximum(ndsi_1, ndsi_2), scope=2)
-    array_indexes[:, :, :, 0] = median_filter_3d(ndsi, scope=2)
+    var_ndsi_1 = compute_short_variability(array=ndsi, cos_zen=mu, mask=mask_ndsi, step=1, return_mask=False, abs_value=True)
+    # var_ndsi_2 = compute_short_variability(array=ndsi, mask=mask_ndsi, step=2, return_mask=False, abs_value=True)
+
+
+    # array_indexes[:, :, :, 1] = median_filter_3d(np.maximum(var_ndsi_1, var_ndsi_2), scope=0)
+    array_indexes[:, :, :, 1] = var_ndsi_1
+    array_indexes[:, :, :, 0] = median_filter_3d(ndsi, scope=0)
 
     if weights is not None:
         for feat in range(nb_features):
