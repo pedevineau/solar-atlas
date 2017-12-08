@@ -141,16 +141,16 @@ if __name__ == '__main__':
     nb_classes = 15
 
     slot_step = 1
-    beginning = 13544
-    nb_days = 3
+    beginning = 13548
+    nb_days = 8
     ending = beginning + nb_days - 1
     compute_indexes = True
     normalize = False
 
-    latitude_beginning = 35.+5
-    latitude_end = 40.+5
-    longitude_beginning = 125.
-    longitude_end = 130.
+    latitude_beginning = 55.
+    latitude_end = 60.
+    longitude_beginning = 100.
+    longitude_end = 105.
     latitudes, longitudes = get_latitudes_longitudes(latitude_beginning, latitude_end,
                                                      longitude_beginning, longitude_end)
 

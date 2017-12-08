@@ -27,7 +27,7 @@ def get_visible_predictors(array_data, ocean_mask, times, latitudes, longitudes,
     del array_data
 
     var_ndsi_1 = compute_short_variability(array=ndsi, cos_zen=mu, mask=mask_ndsi, step=1, return_mask=False, abs_value=True)
-    var_ndsi_144 = compute_short_variability(array=ndsi, mask=mask_ndsi, step=144, return_mask=False, abs_value=True)
+    var_ndsi_144 = compute_short_variability(array=ndsi, cos_zen=mu, mask=mask_ndsi, step=144, return_mask=False, abs_value=True)
 
 
     # array_indexes[:, :, :, 1] = median_filter_3d(np.maximum(var_ndsi_1, var_ndsi_2), scope=0)

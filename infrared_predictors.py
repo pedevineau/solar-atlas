@@ -59,7 +59,7 @@ def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_
 
     array_indexes[:, :, :, 3] = get_cold_clouds(fir=array_data[:, :, :, 0], cos_zen=mu, satellite_step=satellite_step,
                                                 slot_step=slot_step,
-                                                threshold=250)
+                                                threshold=235)
 
     me, std = np.zeros(nb_features), np.full(nb_features, 1.)
 
