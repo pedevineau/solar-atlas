@@ -18,10 +18,6 @@ def get_visible_predictors(array_data, ocean_mask, times, latitudes, longitudes,
     array_indexes = np.empty(shape=(nb_slots, nb_latitudes, nb_longitudes, nb_features))
     array_indexes[:, :, :, 2] = get_cloudy_sea(vis=array_data[:, :, :, 1], ocean_mask=ocean_mask,
                                                threshold_cloudy_sea=0.1)
-
-
-    blue_sea = ocean_mask & (array_indexes[:, :, :, 2] == 0)
-
     me, std = np.zeros(nb_features), np.full(nb_features, 1.)
 
     ndsi, m, s, mask_ndsi = get_snow_index(vis=array_data[:, :, :, 1], nir=array_data[:, :, :, 0], threshold_denominator=0.02,
@@ -32,11 +28,10 @@ def get_visible_predictors(array_data, ocean_mask, times, latitudes, longitudes,
     std[0] = s
     del array_data
 
-    ndsi_1 = compute_short_variability(array=ndsi, mask=mask_ndsi, step=1, return_mask=False)
-    ndsi_3 = compute_short_variability(array=ndsi, mask=mask_ndsi, step=3, return_mask=False)
-    array_indexes[:, :, :, 1] = median_filter_3d(np.maximum(ndsi_1, ndsi_3), scope=2)
-
-    array_indexes[:, :, :, 0] = median_filter_3d(ndsi, scope=0)
+    ndsi_1 = compute_short_variability(array=ndsi, mask=mask_ndsi, step=1, return_mask=False, abs_value=True)
+    ndsi_2 = compute_short_variability(array=ndsi, mask=mask_ndsi, step=2, return_mask=False, abs_value=True)
+    array_indexes[:, :, :, 1] = median_filter_3d(np.maximum(ndsi_1, ndsi_2), scope=2)
+    array_indexes[:, :, :, 0] = median_filter_3d(ndsi, scope=2)
 
     if weights is not None:
         for feat in range(nb_features):
@@ -58,7 +53,7 @@ def get_snow_index(vis, nir, mask, mu, ocean_mask, threshold_denominator=0.02, t
         ndsi = (vis - nir) / np.maximum(nir + vis, threshold_denominator)
     else:
         ndsi = vis / np.maximum(nir, threshold_denominator)
-    threshold_mu = 0.02
+    threshold_mu = 0.15
     mask_ndsi = (mu <= threshold_mu) | mask | ocean_mask
     ndsi, m, s = normalize_array(ndsi, mask_ndsi, normalization='standard', return_m_s=True)  # normalization take into account the mask
     ndsi[mask_ndsi] = -10

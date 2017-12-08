@@ -148,14 +148,14 @@ if __name__ == '__main__':
     compute_indexes_ = True
     types_channel = ['infrared', 'visible']
     channel_number = 1
-    display_curves = True
+    display_curves = False
     type_channels = types_channel[channel_number]
-    latitude_beginning = 35.
-    latitude_end = 40.
+    latitude_beginning = 35.+5
+    latitude_end = 40.+5
     longitude_beginning = 125.
     longitude_end = 130.
     dfb_beginning = 13542
-    dfb_ending = dfb_beginning
+    dfb_ending = dfb_beginning+4
     date_begin, date_end = print_date_from_dfb(dfb_beginning, dfb_ending)
     lat, lon = get_latitudes_longitudes(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
     bbox = get_bbox(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
@@ -206,7 +206,7 @@ if __name__ == '__main__':
     elif not compute_indexes_:
         visualize_map_time((features[:, :, :, :]), bbox, title=type_channels, vmin=-1, vmax=1, color='gray')
     else:
-        visualize_map_time(features[:, :, :, 0:1], bbox, title=type_channels, vmin=-2
+        visualize_map_time(features[:, :, :, :], bbox, title=type_channels, vmin=-2
                            , vmax=2, color='gray')
     # visualize_map_time(4*features[:, :, :, 1:3], bbox, title='INFRARED', vmin=0, vmax=1, color='gray')
     raise Exception('stop here for now')

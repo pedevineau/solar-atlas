@@ -123,15 +123,17 @@ def apply_smooth_threshold(x, th, order=2):
     return np.exp(-(x-th))
 
 
-def compute_short_variability(array, mask, step=1, return_mask=False):
+def compute_short_variability(array, mask, step=1, return_mask=False, abs_value=False):
     step_left = step
     # array= array - roll(array, step_left, axis=0)
     # not so easy: there is
     array = array - np.roll(array, step_left, axis=0)
-    mask = mask + np.roll(mask, -step_left, axis=0)  # mask of night and dawn. numpy.roll casts the mask to an array
+    mask = mask + np.roll(mask, step_left, axis=0)  # mask of night and dawn. numpy.roll casts the mask to an array
     array[mask] = 0
     array[:step_left] = 0
     array = normalize_array(array, mask, normalization='standard')
+    if abs_value:
+        array = np.abs(array)
     array[mask] = -10
     if return_mask:
         return array, mask

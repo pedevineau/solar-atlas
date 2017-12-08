@@ -7,7 +7,8 @@ def statistics_classes(classes, display_now=True):
     import matplotlib.pyplot as plt
     import matplotlib.patches as mpatches
     patches = []
-    colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k', 'burlywood', 'chartreuse', '#cccccc', '#444444', '#333333']
+    colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k', 'burlywood', 'chartreuse', '#cccccc', '#444444', '#333333',
+              '#666666', '#777777', '#888888', '#999999', '#aaaaaa', '#bbbbbb', '#222222']
     for class_number in range(nb_classes):
         time_occurrence = np.empty(nb_slots)
         for slot in range(nb_slots):
