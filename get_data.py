@@ -130,11 +130,11 @@ def compute_short_variability(array, cos_zen, mask, step=1, return_mask=False, a
     array = array - previous
     if mask is not None:
         mask = mask + np.roll(mask, step_left, axis=0)  # mask of night and dawn. numpy.roll casts the mask to an array
-    array[:step_left] = 0
+    # array[:step_left] = 0
     if abs_value:
         array = np.abs(array)
     if mask is not None:
-        array[mask] = -10
+        array[mask] = 0
     array = normalize_array(array, mask=mask, normalization=normalization)
     if return_mask:
         return array, mask
