@@ -24,15 +24,20 @@ def get_visible_predictors(array_data, ocean_mask, times, latitudes, longitudes,
                                            mask=mask, mu=mu, threshold_mu=0.02, ocean_mask=ocean_mask,
                                            return_m_s_mask=True)
 
+    # print 'replace NDSI by VIS (en sekrd)'
+    # ndsi, m, s = normalize_array(array=array_data[:, :, :, 1], mask=mask_ndsi, normalization='standard', return_m_s=True)
+
     del array_data
 
-    var_ndsi_1 = compute_short_variability(array=ndsi, cos_zen=mu, mask=mask_ndsi, step=1, return_mask=False, abs_value=True)
-    var_ndsi_144 = compute_short_variability(array=ndsi, cos_zen=mu, mask=mask_ndsi, step=144, return_mask=False, abs_value=True)
+    var_ndsi_1 = compute_short_variability(array=ndsi, cos_zen=mu, mask=mask_ndsi,
+                                           step=1, option='without-bias', return_mask=False, abs_value=True)
+    # var_ndsi_144 = compute_short_variability(array=ndsi, cos_zen=mu, mask=mask_ndsi, step=144, return_mask=False, abs_value=True)
 
 
     # array_indexes[:, :, :, 1] = median_filter_3d(np.maximum(var_ndsi_1, var_ndsi_2), scope=0)
-    array_indexes[:, :, :, 1] = np.maximum(var_ndsi_1, var_ndsi_144)
-    array_indexes[:, :, :, 0] = median_filter_3d(ndsi, scope=0)
+    # array_indexes[:, :, :, 1] = np.maximum(var_ndsi_1, var_ndsi_144)
+    array_indexes[:, :, :, 1] = var_ndsi_1
+    array_indexes[:, :, :, 0] = ndsi
 
     if weights is not None:
         for feat in range(nb_features):

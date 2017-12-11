@@ -123,18 +123,21 @@ def apply_smooth_threshold(x, th, order=2):
     return np.exp(-(x-th))
 
 
-def compute_short_variability(array, cos_zen, mask, step=1, return_mask=False, abs_value=False, normalization='standard'):
+def compute_short_variability(array, cos_zen, mask, step=1, return_mask=False, abs_value=False,
+                              option=None,  # [None, 'without-bias']
+                              normalization='standard'):
     step_left = step
-    array = remove_cos_zen_correlation(array, normalize_array(cos_zen, mask, normalization='standard'), mask)
+    if option == 'without-bias':
+        array = remove_cos_zen_correlation(array, cos_zen, mask)
     previous = np.roll(array, step_left, axis=0)
     array = array - previous
     if mask is not None:
         mask = mask + np.roll(mask, step_left, axis=0)  # mask of night and dawn. numpy.roll casts the mask to an array
-    # array[:step_left] = 0
+        mask[:step_left] = True
     if abs_value:
         array = np.abs(array)
     if mask is not None:
-        array[mask] = 0
+        array[mask] = -10
     array = normalize_array(array, mask=mask, normalization=normalization)
     if return_mask:
         return array, mask
@@ -142,20 +145,25 @@ def compute_short_variability(array, cos_zen, mask, step=1, return_mask=False, a
         return array
 
 
-def remove_cos_zen_correlation(indexstd, mustd, mask):
-    to_return = np.zeros_like(indexstd)
+# def compute_intra_variability(*groups):
+#     intra = []
+#     inter = 0
+#     for group in groups:
+
+
+
+def remove_cos_zen_correlation(index, cos_zen, mask):
+    to_return = index.copy()
     (nb_slots, nb_latitudes, nb_longitudes) = np.shape(to_return)
+    from scipy.stats import linregress
     for lat in range(nb_latitudes):
         for lon in range(nb_longitudes):
-            slice_diffstd = indexstd[:, lat, lon]
-            slice_mustd = mustd[:, lat, lon]
             slice_maski = mask[:, lat, lon]
+            slice_diffstd = index[:, lat, lon][~slice_maski]
+            slice_mustd = cos_zen[:, lat, lon][~slice_maski]
             if not np.all(slice_maski):
-                local_cov_matrix = np.cov(slice_diffstd[~slice_maski], slice_mustd[~slice_maski])
-                local_cov = local_cov_matrix[0, 1]
-                local_var_mu = local_cov_matrix[1, 1]
-                local_var_cli = local_cov_matrix[0, 0]
-                to_return[:, lat, lon] = slice_diffstd - local_cov / np.sqrt(local_var_mu * local_var_cli) * slice_mustd
+                slope = linregress(slice_mustd, slice_diffstd)[0]
+                to_return[:, lat, lon][~slice_maski] -= slope * slice_mustd
     return to_return
 
 

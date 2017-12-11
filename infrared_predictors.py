@@ -34,15 +34,16 @@ def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_
     mu[mu < 0] = 0
 
     array_indexes = np.empty(shape=(nb_slots, nb_latitudes, nb_longitudes, nb_features))
-    array_indexes[:, :, :, 0] = median_filter_3d(
+    # remove spatial smoothing
+    array_indexes[:, :, :, 0] = \
         get_cloud_index(mir=array_data[:, :, :, 1], fir=array_data[:, :, :, 0], method='mu-normalization',
-                        mask=mask, cos_zen=mu),
-        scope=3)
+                        mask=mask, cos_zen=mu)
 
-    array_indexes[:, :, :, 1] = median_filter_3d(
+
+    array_indexes[:, :, :, 1] = \
         get_cloud_index(mir=array_data[:, :, :, 1], fir=array_data[:, :, :, 0], method='without-bias',
-                        mask=mask, cos_zen=mu),
-        scope=3)
+                        mask=mask, cos_zen=mu)
+
 
     # array_indexes[:, :, :, 3] = get_variability_array(array=array_indexes[:, :, :, 2], mask=mask_cli)
     #
@@ -95,19 +96,16 @@ def get_cloud_index(mir, fir, mask, cos_zen, method='default'):
         cli = normalize_array(difference / np.maximum(cos_zen, mu_threshold),
                               mask=mask, normalization='standard', return_m_s=False)
     else:
-        diffstd = normalize_array(difference, mask, normalization='standard', return_m_s=False)
-        mustd = normalize_array(cos_zen, mask, normalization='standard', return_m_s=False)
+        diffstd = normalize_array(difference, mask, normalization='standard')
         if method == 'without-bias':
             from get_data import remove_cos_zen_correlation
-            cli = remove_cos_zen_correlation(diffstd,  mustd, mask)
+            cli = remove_cos_zen_correlation(diffstd,  cos_zen, mask)
         elif method == 'clear-sky':
-            cli = diffstd-mustd
+                cli = diffstd-normalize_array(cos_zen, mask, normalization='standard')
         elif method == 'default':
             cli = diffstd
         else:
             raise Exception('Please choose a valid method to compute cloud index')
-        print 'remaining pearson', pearsonr(cli[~mask],
-                                            mustd[~mask])  # objective: put it as close to zero as possible
     cli[mask] = -10
     # cli, m, s = normalize_array(cli, maski, normalization='max')
     return cli

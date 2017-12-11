@@ -26,28 +26,25 @@ def classify_cloud_covertness(cloud_index):
     cloud_covertness = model.predict(cloud_index).reshape((nb_slots, nb_latitudes, nb_longitudes))
     centers3 = get_centers(model, process)
     [undefined, cloudless, cloudy] = np.argsort(centers3.flatten())
-    if centers3[cloudless, 0] + get_std(model, process, cloudless) >\
-            centers3[cloudy, 0]:
-        print 'bad separation between cloudy and cloudless'
+    if centers3[cloudy, 0] - centers3[cloudless, 0] < \
+            max(get_std(model, process, cloudless), get_std(model, process, cloudy)):
+        print 'bad separation between cloudy and cloudless. It might be due to snowy clouds'
         print 'retraining it...'
         nb_components = 4
         model = get_basis_model(process, nb_components, max_iter, means_init)
         model = get_trained_model(cloud_index_1d_training, model, process)
         cloud_covertness = model.predict(cloud_index).reshape((nb_slots, nb_latitudes, nb_longitudes))
         centers4 = get_centers(model, process)
-        [undefined, cloudless, in_between, cloudy] = np.argsort(centers4.flatten())
-        if centers4[cloudless, 0] + get_std(model, process, cloudless) < \
-                centers4[in_between, 0]:
+        [undefined, dark_cli, cloudless, cloudy] = np.argsort(centers4.flatten())
+        cloud_covertness[cloud_covertness == dark_cli] = nb_components+2
+        if centers4[cloudy, 0] - centers4[cloudless, 0] < \
+                max(get_std(model, process, cloudless), get_std(model, process, cloudy)):
             print 'good separation between cloudy and cloudless'
         else:
             print 'bad separation between cloudy and cloudless, again'
-
     del cloud_index
-    cloud_covertness[cloud_covertness == cloudy] = nb_components + 1
     cloud_covertness[cloud_covertness == cloudless] = nb_components
-    if nb_components >= 4:
-        in_between = nb_components*(nb_components-1)/2 - cloudless-cloudy-undefined
-        cloud_covertness[cloud_covertness == in_between] = nb_components+2
+    cloud_covertness[cloud_covertness == cloudy] = nb_components + 1
     return cloud_covertness-nb_components
 
 

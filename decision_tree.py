@@ -94,12 +94,16 @@ def get_classes_decision_tree(latitudes,
 
     print 'beginning test'
     if 2 in classified_cli:
-        slight_clouds = (classified_cli == 2)
-        print 'slightly cloudy activated'
-        classes[slight_clouds] = 2
+        dark_cli = (classified_cli == 2)
+
+        from quick_visualization import visualize_map_time, get_bbox
+        visualize_map_time(dark_cli, get_bbox(latitudes[0], latitudes[-1], longitudes[0], longitudes[-1]))
+        print 'dark cli mask activated'
     print 'ending test'
     del classified_cli
     from time import time
+
+
     begin_affectation = time()
     classes[(visible_features[:, :, :, 0] == -10)] = 13
     classes[(infrared_features[:, :, :, 0] == -10)] = 14
@@ -120,7 +124,7 @@ def get_classes_decision_tree(latitudes,
 
     print 'allegedly uncovered lands'
     print 'water clouds:1'
-    print 'slight water clouds:2'
+    print 'dark cli class:2'
     print 'persistent snow not covered:3'
     print 'persistent snow covered by water or snowy clouds:4'
     print 'undetermined snowy stuff:5'
@@ -147,10 +151,10 @@ if __name__ == '__main__':
     compute_indexes = True
     normalize = False
 
-    latitude_beginning = 55.
-    latitude_end = 60.
-    longitude_beginning = 100.
-    longitude_end = 105.
+    latitude_beginning = 45.
+    latitude_end = 50.
+    longitude_beginning = 125.
+    longitude_end = 130.
     latitudes, longitudes = get_latitudes_longitudes(latitude_beginning, latitude_end,
                                                      longitude_beginning, longitude_end)
 

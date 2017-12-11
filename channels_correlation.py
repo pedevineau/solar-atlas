@@ -16,7 +16,7 @@ if __name__ == '__main__':
     date_begin, date_end = print_date_from_dfb(beginning, ending)
     print beginning, ending
 
-    type_channels = 1  # 0: infrared, 1: visible
+    type_channels = 0  # 0: infrared, 1: visible
 
     if type_channels == 0:
         infra = get_features(

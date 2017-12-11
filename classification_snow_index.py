@@ -29,8 +29,8 @@ def classify_brightness(bright_index, m, s):
     brightness = model.predict(bright_index_1d).reshape((nb_slots, nb_latitudes, nb_longitudes))
     centers3 = get_centers(model, process)
     [undefined, dark, bright] = np.argsort(centers3.flatten())
-    if centers3[dark, 0] + get_std(model, process, dark) >\
-            centers3[bright, 0]:
+    if centers3[bright, 0] - centers3[dark, 0] < \
+            1.2*max(get_std(model, process, dark), get_std(model, process, bright)):
         print 'bad separation between bright and dark'
         print 'using awful thresholds instead'
         brightness = np.zeros((nb_slots, nb_latitudes, nb_longitudes))
@@ -61,7 +61,7 @@ def classifiy_brightness_variability(bright_variability):
     bright_index_training = brightness_copy[:nb_samples]
     del brightness_copy
     from naive_gaussian_classification import get_basis_model, get_trained_model
-    process = 'kmeans'
+    process = 'bayesian'
     print 'classify brightness_variability variability', process
     nb_components = 3
     max_iter = 300
