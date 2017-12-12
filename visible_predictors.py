@@ -1,8 +1,8 @@
 from utils import *
 
 
-def get_visible_predictors(array_data, ocean_mask, times, latitudes, longitudes, compute_indexes,
-                           normalize, weights, return_m_s=False, return_mu=False):
+def get_visible_predictors(array_data, ocean_mask, times, latitudes, longitudes, satellite_step, slot_step,
+                           compute_indexes, normalize, weights, return_m_s=False, return_mu=False):
     from get_data import mask_channels, compute_short_variability
     from filter import median_filter_3d
     from cos_zen import get_array_cos_zen
@@ -31,12 +31,19 @@ def get_visible_predictors(array_data, ocean_mask, times, latitudes, longitudes,
 
     var_ndsi_1 = compute_short_variability(array=ndsi, cos_zen=mu, mask=mask_ndsi,
                                            step=1, option='without-bias', return_mask=False, abs_value=True)
-    # var_ndsi_144 = compute_short_variability(array=ndsi, cos_zen=mu, mask=mask_ndsi, step=144, return_mask=False, abs_value=True)
+
+    nb_slots_per_day = get_nb_slots_per_day(satellite_step, slot_step)
+    var_ndsi_1d_past = compute_short_variability(array=ndsi, mask=mask_ndsi, step=nb_slots_per_day, abs_value=True)
+    var_ndsi_2d_past = compute_short_variability(array=ndsi, mask=mask_ndsi, step=nb_slots_per_day*2, abs_value=True)
+    var_ndsi_1d_future = compute_short_variability(array=ndsi, mask=mask_ndsi, step=-nb_slots_per_day, abs_value=True)
+    var_ndsi_2d_future = compute_short_variability(array=ndsi, mask=mask_ndsi, step=-2*nb_slots_per_day, abs_value=True)
+    array_indexes[:, :, :, 1] = np.maximum(var_ndsi_1d_past,
+                                           np.maximum(var_ndsi_2d_past,
+                                                      np.maximum(var_ndsi_1d_future, var_ndsi_2d_future)))
 
 
-    # array_indexes[:, :, :, 1] = median_filter_3d(np.maximum(var_ndsi_1, var_ndsi_2), scope=0)
     # array_indexes[:, :, :, 1] = np.maximum(var_ndsi_1, var_ndsi_144)
-    array_indexes[:, :, :, 1] = var_ndsi_1
+    # array_indexes[:, :, :, 1] = var_ndsi_1
     array_indexes[:, :, :, 0] = ndsi
 
     if weights is not None:

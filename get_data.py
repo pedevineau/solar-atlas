@@ -123,12 +123,15 @@ def apply_smooth_threshold(x, th, order=2):
     return np.exp(-(x-th))
 
 
-def compute_short_variability(array, cos_zen, mask, step=1, return_mask=False, abs_value=False,
-                              option=None,  # [None, 'without-bias']
+def compute_short_variability(array, mask=None, cos_zen=None,  step=1, return_mask=False, abs_value=False,
+                              option='default',  # ['default, 'without-bias']
                               normalization='standard'):
     step_left = step
     if option == 'without-bias':
-        array = remove_cos_zen_correlation(array, cos_zen, mask)
+        try:
+            array = remove_cos_zen_correlation(array, cos_zen, mask)
+        except:
+            raise Exception('Cos-zen is compulsory to compute without-bias')
     previous = np.roll(array, step_left, axis=0)
     array = array - previous
     if mask is not None:
@@ -149,7 +152,6 @@ def compute_short_variability(array, cos_zen, mask, step=1, return_mask=False, a
 #     intra = []
 #     inter = 0
 #     for group in groups:
-
 
 
 def remove_cos_zen_correlation(index, cos_zen, mask):
@@ -231,6 +233,8 @@ def get_features(type_channels, latitudes, longitudes, dfb_beginning, dfb_ending
             times,
             latitudes,
             longitudes,
+            satellite_step,
+            slot_step,
             compute_indexes,
             normalize,
             weights,
