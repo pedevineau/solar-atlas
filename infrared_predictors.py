@@ -35,11 +35,11 @@ def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_
 
     array_indexes = np.empty(shape=(nb_slots, nb_latitudes, nb_longitudes, nb_features))
     # remove spatial smoothing
-    array_indexes[:, :, :, 0] = \
-        get_cloud_index(mir=array_data[:, :, :, 1], fir=array_data[:, :, :, 0], method='mu-normalization',
+    array_indexes[:, :, :, 0], m, s = \
+        get_cloud_index(mir=array_data[:, :, :, 1], fir=array_data[:, :, :, 0], return_m_s=True, method='mu-normalization',
                         mask=mask, cos_zen=mu)
 
-    pre_cloud_mask = (array_indexes[:, :, :, 0] > 0)
+    pre_cloud_mask = (array_indexes[:, :, :, 0] > (50-m)/s)
 
     array_indexes[:, :, :, 1] = \
         get_cloud_index(mir=array_data[:, :, :, 1], fir=array_data[:, :, :, 0], method='without-bias',
@@ -80,12 +80,13 @@ def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_
         return array_indexes
 
 
-def get_cloud_index(mir, fir, mask, cos_zen, pre_cloud_mask=None, method='default'):
+def get_cloud_index(mir, fir, mask, cos_zen, return_m_s=False, pre_cloud_mask=None, method='default'):
     '''
     :param mir: medium infra-red band (centered on 3890nm for Himawari 8)
     :param fir: far infra-red band (centered on 12380nm for Himawari 8)
     :param mask: mask for outliers and missing isolated data
     :param cos_zen: cos of zenith angle matrix (shape: slots, latitudes, longitudes)
+    :param pre_cloud_mask:
     :param method: {'default', 'mu-normalization', 'clear-sky', 'without-bias'}
     :return: a cloud index matrix (shape: slots, latitudes, longitudes)
     '''
@@ -94,8 +95,10 @@ def get_cloud_index(mir, fir, mask, cos_zen, pre_cloud_mask=None, method='defaul
     if method == 'mu-normalization':
         mu_threshold = 0.05
         mask = mask | (cos_zen <= mu_threshold)
-        cli = normalize_array(difference / np.maximum(cos_zen, mu_threshold),
-                              mask=mask, normalization='standard', return_m_s=False)
+        cli, m, s, = normalize_array(difference / np.maximum(cos_zen, mu_threshold),
+                              mask=mask, normalization='standard', return_m_s=True)
+        if return_m_s:
+            return cli, m, s
     else:
         diffstd = normalize_array(difference, mask, normalization='standard')
         if method == 'without-bias':
