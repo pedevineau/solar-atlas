@@ -1,5 +1,4 @@
 import numpy as np
-from scipy.stats import pearsonr
 
 
 def print_date_from_dfb(begin, ending):
@@ -10,8 +9,15 @@ def print_date_from_dfb(begin, ending):
     return d_beginning, d_ending
 
 
-def get_nb_slots_per_day(timestep_satellite, step_sample):
-    return int(24*60 / (timestep_satellite*step_sample))
+def get_nb_slots_per_day(satellite_step, slot_step):
+    '''
+
+    :param satellite_step: the satellite characteristic time step between two slots (10 minutes for Himawari 8)
+    :param slot_step: the chosen sampling of slots. if slot_step = n, the sampled slots are s[0], s[n], s[2*n]...
+    :return: number of slots per day for this satellite and the chosen sampling step
+    '''
+    return int(24 * 60 / (satellite_step * slot_step))
+
 
 def looks_like_night(point, me=None, std=None):
     ## wait for array such as [0,17,-25,3]
