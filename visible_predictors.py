@@ -3,8 +3,7 @@ from utils import *
 
 def get_visible_predictors(array_data, ocean_mask, times, latitudes, longitudes, satellite_step, slot_step,
                            compute_indexes, normalize, weights, return_m_s=False, return_mu=False):
-    from get_data import mask_channels, compute_short_variability
-    from filter import median_filter_3d
+    from get_data import mask_channels
     from cos_zen import get_array_cos_zen
 
     array_data, mask = mask_channels(array_data, normalize)
@@ -29,17 +28,10 @@ def get_visible_predictors(array_data, ocean_mask, times, latitudes, longitudes,
 
     del array_data
 
-    var_ndsi_1 = compute_short_variability(array=ndsi, cos_zen=mu, mask=mask_ndsi,
-                                           step=1, option='without-bias', return_mask=False, abs_value=True)
+    # var_ndsi_1 = compute_short_variability(array=ndsi, cos_zen=mu, mask=mask_ndsi,
+    #                                        step=1, option='without-bias', return_mask=False, abs_value=True)
 
-    nb_slots_per_day = get_nb_slots_per_day(satellite_step, slot_step)
-    var_ndsi_1d_past = compute_short_variability(array=ndsi, mask=mask_ndsi, step=nb_slots_per_day, abs_value=True)
-    var_ndsi_2d_past = compute_short_variability(array=ndsi, mask=mask_ndsi, step=nb_slots_per_day*2, abs_value=True)
-    var_ndsi_1d_future = compute_short_variability(array=ndsi, mask=mask_ndsi, step=-nb_slots_per_day, abs_value=True)
-    var_ndsi_2d_future = compute_short_variability(array=ndsi, mask=mask_ndsi, step=-2*nb_slots_per_day, abs_value=True)
-    array_indexes[:, :, :, 1] = np.maximum(var_ndsi_1d_past,
-                                           np.maximum(var_ndsi_2d_past,
-                                                      np.maximum(var_ndsi_1d_future, var_ndsi_2d_future)))
+    array_indexes[:, :, :, 1] = get_bright_variability_5d(ndsi, mask_ndsi, satellite_step, slot_step)
 
 
     # array_indexes[:, :, :, 1] = np.maximum(var_ndsi_1, var_ndsi_144)
@@ -58,6 +50,63 @@ def get_visible_predictors(array_data, ocean_mask, times, latitudes, longitudes,
         return array_indexes, me, std
     else:
         return array_indexes
+
+
+def get_bright_variability_5d(ndsi, mask_ndsi, satellite_step, slot_step):
+    from get_data import compute_short_variability
+    nb_slots_per_day = get_nb_slots_per_day(satellite_step, slot_step)
+    nb_days = np.shape(ndsi)[0] / nb_slots_per_day
+    to_return = np.full_like(ndsi, -10)
+    if nb_days >= 2:
+        var_ndsi_1d_past = compute_short_variability(array=ndsi, mask=mask_ndsi,
+                                                     step=nb_slots_per_day, abs_value=True)
+
+        var_ndsi_1d_future = compute_short_variability(array=ndsi, mask=mask_ndsi,
+                                                       step=-nb_slots_per_day, abs_value=True)
+        if nb_days == 2:
+            to_return[:nb_slots_per_day] = var_ndsi_1d_future[:nb_slots_per_day]
+            to_return[nb_slots_per_day:] = var_ndsi_1d_past[nb_slots_per_day:]
+        else:  # nb_days >=3
+            var_ndsi_2d_past = compute_short_variability(array=ndsi, mask=mask_ndsi,
+                                                         step=nb_slots_per_day * 2, abs_value=True)
+            var_ndsi_2d_future = compute_short_variability(array=ndsi, mask=mask_ndsi,
+                                                           step=-2 * nb_slots_per_day, abs_value=True)
+
+            # first day
+            to_return[:nb_slots_per_day] = np.minimum(var_ndsi_1d_future[:nb_slots_per_day],
+                                                      var_ndsi_2d_future[:nb_slots_per_day])
+            # last day
+            to_return[-nb_slots_per_day:] = np.minimum(var_ndsi_1d_past[-nb_slots_per_day:],
+                                                       var_ndsi_2d_past[-nb_slots_per_day:])
+
+            if nb_days == 3:
+                # second day
+                to_return[nb_slots_per_day:2*nb_slots_per_day] = np.minimum(
+                    var_ndsi_1d_past[nb_slots_per_day:2*nb_slots_per_day],
+                    var_ndsi_1d_future[nb_slots_per_day:2*nb_slots_per_day])
+            else:  # nb_days >= 4
+                # the day previous the last one
+                to_return[-2*nb_slots_per_day:-nb_slots_per_day] = np.minimum(
+                    np.minimum(
+                        var_ndsi_1d_past[-2*nb_slots_per_day:-nb_slots_per_day],
+                        var_ndsi_2d_past[-2*nb_slots_per_day:-nb_slots_per_day]),
+                    var_ndsi_1d_future[-2*nb_slots_per_day:-nb_slots_per_day])
+                # second day
+                to_return[nb_slots_per_day:2*nb_slots_per_day] = np.minimum(
+                    np.minimum(
+                        var_ndsi_1d_future[nb_slots_per_day:2*nb_slots_per_day],
+                        var_ndsi_2d_future[nb_slots_per_day:2*nb_slots_per_day]),
+                    var_ndsi_1d_past[nb_slots_per_day:2*nb_slots_per_day])
+                if nb_days >= 5:
+                    to_return[2*nb_slots_per_day:-2*nb_slots_per_day] = np.minimum(
+                        np.minimum(
+                            var_ndsi_1d_past[2*nb_slots_per_day:-2*nb_slots_per_day],
+                            var_ndsi_2d_past[2*nb_slots_per_day:-2*nb_slots_per_day]),
+                        np.minimum(
+                            var_ndsi_1d_future[2*nb_slots_per_day:-2*nb_slots_per_day],
+                            var_ndsi_2d_future[2*nb_slots_per_day:-2*nb_slots_per_day])
+                    )
+    return to_return
 
 
 def get_snow_index(vis, nir, mask, mu, ocean_mask, threshold_denominator=0.02, threshold_mu=0.05, compute_ndsi=True,

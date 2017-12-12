@@ -125,7 +125,7 @@ def apply_smooth_threshold(x, th, order=2):
 
 def compute_short_variability(array, mask=None, cos_zen=None,  step=1, return_mask=False, abs_value=False,
                               option='default',  # ['default, 'without-bias']
-                              normalization='standard'):
+                              normalization='none'):
     step_left = step
     if option == 'without-bias':
         try:
@@ -136,7 +136,10 @@ def compute_short_variability(array, mask=None, cos_zen=None,  step=1, return_ma
     array = array - previous
     if mask is not None:
         mask = mask + np.roll(mask, step_left, axis=0)  # mask of night and dawn. numpy.roll casts the mask to an array
-        mask[:step_left] = True
+        if step_left >= 0:
+            mask[:step_left] = True
+        else:
+            mask[step_left:] = True
     if abs_value:
         array = np.abs(array)
     if mask is not None:
