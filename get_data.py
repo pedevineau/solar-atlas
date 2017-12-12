@@ -158,17 +158,24 @@ def compute_short_variability(array, mask=None, cos_zen=None,  step=1, return_ma
 
 
 def remove_cos_zen_correlation(index, cos_zen, mask):
+    '''
+
+    :param index: 3-d array representing the variable to test
+    :param cos_zen: 3-d array with cos of zenith angle
+    :param mask: mask associated with the variable
+    :return: the index minus its average cos(zenith) component
+    '''
     to_return = index.copy()
     (nb_slots, nb_latitudes, nb_longitudes) = np.shape(to_return)
     from scipy.stats import linregress
     for lat in range(nb_latitudes):
         for lon in range(nb_longitudes):
-            slice_maski = mask[:, lat, lon]
-            slice_diffstd = index[:, lat, lon][~slice_maski]
-            slice_mustd = cos_zen[:, lat, lon][~slice_maski]
-            if not np.all(slice_maski):
-                slope = linregress(slice_mustd, slice_diffstd)[0]
-                to_return[:, lat, lon][~slice_maski] -= slope * slice_mustd
+            slice_mask = mask[:, lat, lon]
+            slice_index = index[:, lat, lon][~slice_mask]
+            slice_mu = cos_zen[:, lat, lon][~slice_mask]
+            if not np.all(slice_mask):
+                slope = linregress(slice_mu, slice_index)[0]
+                to_return[:, lat, lon][~slice_mask] -= slope * slice_mu
     return to_return
 
 
