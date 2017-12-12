@@ -39,10 +39,11 @@ def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_
         get_cloud_index(mir=array_data[:, :, :, 1], fir=array_data[:, :, :, 0], method='mu-normalization',
                         mask=mask, cos_zen=mu)
 
+    pre_cloud_mask = (array_indexes[:, :, :, 0] > 0)
 
     array_indexes[:, :, :, 1] = \
         get_cloud_index(mir=array_data[:, :, :, 1], fir=array_data[:, :, :, 0], method='without-bias',
-                        mask=mask, cos_zen=mu)
+                        mask=mask, pre_cloud_mask=pre_cloud_mask, cos_zen=mu)
 
 
     # array_indexes[:, :, :, 3] = get_variability_array(array=array_indexes[:, :, :, 2], mask=mask_cli)
@@ -79,7 +80,7 @@ def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_
         return array_indexes
 
 
-def get_cloud_index(mir, fir, mask, cos_zen, method='default'):
+def get_cloud_index(mir, fir, mask, cos_zen, pre_cloud_mask=None, method='default'):
     '''
     :param mir: medium infra-red band (centered on 3890nm for Himawari 8)
     :param fir: far infra-red band (centered on 12380nm for Himawari 8)
@@ -99,7 +100,10 @@ def get_cloud_index(mir, fir, mask, cos_zen, method='default'):
         diffstd = normalize_array(difference, mask, normalization='standard')
         if method == 'without-bias':
             from get_data import remove_cos_zen_correlation
-            cli = remove_cos_zen_correlation(diffstd,  cos_zen, mask)
+            if pre_cloud_mask is not None:
+                cli = remove_cos_zen_correlation(diffstd, cos_zen, mask | pre_cloud_mask)
+            else:
+                cli = remove_cos_zen_correlation(diffstd,  cos_zen, mask)
         elif method == 'clear-sky':
                 cli = diffstd-normalize_array(cos_zen, mask, normalization='standard')
         elif method == 'default':
@@ -214,6 +218,7 @@ def get_lag_high_peak(difference, cos_zen, satellite_step, slot_step):
     :param slot_step:
     :return:
     '''
+    from scipy.stats import pearsonr
     # lag is expected between 2:30 and 4:30
     start_lag_minutes = 10
     stop_lag_minutes = 240
