@@ -98,6 +98,7 @@ def get_cloud_index(mir, fir, mask, cos_zen, return_m_s=False, pre_cloud_mask=No
         cli, m, s, = normalize_array(difference / np.maximum(cos_zen, mu_threshold),
                               mask=mask, normalization='standard', return_m_s=True)
         if return_m_s:
+            cli[mask] = -10
             return cli, m, s
     else:
         diffstd = normalize_array(difference, mask, normalization='standard')
