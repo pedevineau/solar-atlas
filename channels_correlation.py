@@ -95,7 +95,6 @@ if __name__ == '__main__':
                 unbiased_means[lat, lon] = np.mean(unbiased[:, lat, lon][~mask])
 
             elif type_channels == 1:
-                mask = (ndsi[:, lat, lon] == -10)
                 mask_mu = ((mu[:, lat, lon] < 0.05) | (visible_features[:, lat, lon, 0] == -1)
                            | (visible_features[:, lat, lon, 1] == -1))
                 visible_means[lat, lon] = np.mean(ndsi[:, lat, lon][~mask])
@@ -112,6 +111,9 @@ if __name__ == '__main__':
         visualize_map(infrared_means)
         visualize_map(cli_means)
         visualize_map(unbiased_means)
+        bias = normalize_array(infrared_means, normalization='standard') - \
+                         normalize_array(unbiased_means, normalization='standard')
+        visualize_map(bias)
     elif type_channels == 1:
         visualize_map(visible_correlations)
         visualize_map(visible_means)
