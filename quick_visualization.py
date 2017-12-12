@@ -154,38 +154,34 @@ if __name__ == '__main__':
     latitude_end = 40.+5
     longitude_beginning = 125.
     longitude_end = 130.
-    dfb_beginning = 13542
-    dfb_ending = dfb_beginning+4
+    dfb_beginning = 13552
+    dfb_ending = dfb_beginning
     date_begin, date_end = print_date_from_dfb(dfb_beginning, dfb_ending)
     lat, lon = get_latitudes_longitudes(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
     bbox = get_bbox(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
     features = get_features(type_channels, lat, lon, dfb_beginning, dfb_ending, compute_indexes_, slot_step=1,
                             normalize=False)
 
-    from numpy.random import randint
+    gra = True
+    if gra:
+        from scipy.ndimage import sobel, prewitt
+        (slots, lats, lons) = np.shape(features)[0:3]
+        from numpy.random import randint
+        grad = np.empty((slots, lats, lons, 2))
+        for slot in range(slots):
+            # Find contours at a constant value of 0.8
+            from skimage import measure
+            import matplotlib.pyplot as plt
+            contours = measure.find_contours(features[slot,:,:,0], 0.8)
+            # Display the image and plot all contours found
+            fig, ax = plt.subplots()
+            ax.imshow(features[slot,:,:,0], interpolation='nearest', cmap=plt.cm.gray)
 
-    # visualize_hist(array_1d=ext[(ext!=-10) & (abs(ext) > 0.001)], precision=150)
-    # print ext[abs(ext)<0.001]
-    # vars = features[:, lat_pix, lon_pix, 1:4:2]
-    # chans = features[:, lat_pix, lon_pix, 2:]
-
-    # lat0 = 36.6
-    # lon0 = 128.04
-    #
-    # if compute_indexes_:
-    #     # lat0, lon0 = 39.67, 126.5
-    #     print 'lat, lon', lat0, lon0
-    #     lat_pix, lon_pix = int((lat0 - latitude_beginning) * 60 / 2.), int((lon0 - longitude_beginning) * 60 / 2.)
-    #     print 'pixs', lat_pix, lon_pix
-    #     indexes = features[:, lat_pix, lon_pix, :1]
-    #     visualize_input(indexes, display_now=False, style='^')
+            for n, contour in enumerate(contours):
+                ax.plot(contour[:, 1], contour[:, 0], linewidth=2)
+            plt.show()
 
 
-    # times = get_times(dfb_beginning, dfb_ending, satellite_timestep=10, slot_step=1)
-    # latitudes, longitudes = get_latitudes_longitudes(latitude_beginning, latitude_end, longitude_beginning, longitude_end, 2./60)
-    # mu = get_array_3d_cos_zen(times, latitudes, longitudes)
-    # # output = zeros((len(features), 2))
-    from get_data import mask_channels
     if display_curves:
         for k in range(25):
             lat_pix = randint(0, 140)
@@ -218,3 +214,25 @@ if __name__ == '__main__':
 
         # visualize_map_time(blu, bbox, title='median filter', vmin=-1, vmax=1, color='gray')
 
+
+    gra = True
+    if gra:
+        from scipy.ndimage import sobel, prewitt
+        (slots, lats, lons) = np.shape(features)[0:3]
+        from numpy.random import randint
+        grad = np.empty((slots, lats, lons, 2))
+        for slot in range(slots):
+            # Find contours at a constant value of 0.8
+            from skimage import measure
+            import matplotlib.pyplot as plt
+            contours = measure.find_contours(r, 0.8)
+            fig, ax = plt.subplots()
+            # Display the image and plot all contours found
+            fig, ax = plt.subplots()
+            ax.imshow(features[slot,:,:,0], interpolation='nearest', cmap=plt.cm.gray)
+        #
+        # for n, contour in enumerate(contours):
+        #     ax.plot(contour[:, 1], contour[:, 0], linewidth=2)
+        #     gr = np.gradient(features[slot,:,:,0])
+        #     grad[slot, :, :, 0] = gr[0]
+        #     grad[slot, :, :, 1] = gr[1]
