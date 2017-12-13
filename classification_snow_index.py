@@ -9,6 +9,9 @@ def classify_brightness(bright_index, m, s):
     :param s: the standard deviation of ndsi without normalization (for potential thresholds...)
     :return: array slots*latitudes*longitudes with 1 for bright, 0 for dark, and 2 for undetermined
     '''
+
+    default_threshold = (0.35-m)/s
+
     (nb_slots, nb_latitudes, nb_longitudes) = np.shape(bright_index)[0:3]
     bright_index_1d = bright_index.reshape(nb_slots * nb_latitudes * nb_longitudes)
     bright_index_1d = bright_index_1d[~np.isnan(bright_index_1d)].reshape(-1, 1)
@@ -29,12 +32,16 @@ def classify_brightness(bright_index, m, s):
     brightness = model.predict(bright_index_1d).reshape((nb_slots, nb_latitudes, nb_longitudes))
     centers3 = get_centers(model, process)
     [undefined, dark, bright] = np.argsort(centers3.flatten())
-    if centers3[bright, 0] - centers3[dark, 0] < \
-            1.2*max(get_std(model, process, dark), get_std(model, process, bright)):
+
+    better_than_threshold = (centers3[bright, 0] + get_std(model, process, bright)/2) > default_threshold
+    separability_condition = centers3[bright, 0] - centers3[dark, 0] > \
+            1.2*max(get_std(model, process, dark), get_std(model, process, bright))
+
+    if not better_than_threshold or not separability_condition:
         print 'bad separation between bright and dark'
         print 'using awful thresholds instead'
         brightness = np.zeros((nb_slots, nb_latitudes, nb_longitudes))
-        brightness[bright_index > (0.4-m)/s] = 1
+        brightness[bright_index > default_threshold] = 1
         return brightness
     else:
         brightness[brightness == bright] = nb_components + 1
