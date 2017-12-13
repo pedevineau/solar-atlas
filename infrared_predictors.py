@@ -61,14 +61,6 @@ def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_
                                                                         pre_cloud_mask=(cli > (30-m)/s) | (cold == 1),
                                                                         satellite_step=satellite_step,
                                                                         slot_step=slot_step)
-
-    # array_indexes[:, :, :, 3] = get_variability_array(array=array_indexes[:, :, :, 2], mask=mask_cli)
-    #
-    # cli_10 = get_variability_array(array=cli, mask=mask_cli, step=10 / satellite_step,  #th_1=0.018,
-    #                                         th_1=0.2, negative_variation=False)
-    # cli_20 = get_variability_array(array=cli, mask=mask_cli, step=20 / satellite_step,  # th_1=0.023,
-    #                                         th_1=0.2, negative_variation=False)
-
     # from filter import digital_low_cut_filtering_time
     # array_indexes[:,:,:,2] = median_filter_3d(digital_low_cut_filtering_time(fir - mir, mask_cli, satellite_step=satellite_step), scope=1)
     array_indexes[:, :, :, 2] = get_warm_predictor(mir=array_data[:, :, :, 1], cos_zen=mu, satellite_step=satellite_step,
@@ -76,6 +68,8 @@ def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_
                                                    threshold_median=300)
 
     me, std = np.zeros(nb_features), np.full(nb_features, 1.)
+    me[0] = m
+    std[0] = s
 
     if weights is not None:
         for feat in range(nb_features):

@@ -28,15 +28,11 @@ def get_visible_predictors(array_data, ocean_mask, times, latitudes, longitudes,
 
     del array_data
 
-    # var_ndsi_1 = compute_short_variability(array=ndsi, cos_zen=mu, mask=mask_ndsi,
-    #                                        step=1, option='without-bias', return_mask=False, abs_value=True)
-
     array_indexes[:, :, :, 1] = get_bright_variability_5d(ndsi, mask_ndsi, satellite_step, slot_step)
 
-
-    # array_indexes[:, :, :, 1] = np.maximum(var_ndsi_1, var_ndsi_144)
-    # array_indexes[:, :, :, 1] = var_ndsi_1
     array_indexes[:, :, :, 0] = ndsi
+    me[0] = m
+    std[0] = s
 
     if weights is not None:
         for feat in range(nb_features):

@@ -13,7 +13,7 @@ def get_classes_decision_tree(latitudes,
         return_m_s=False
    ):
 
-    visible_features, m, s, mu = get_features(
+    visible_features, m, s = get_features(
         'visible',
         latitudes,
         longitudes,
@@ -24,7 +24,6 @@ def get_classes_decision_tree(latitudes,
         normalize,
         weights,
         return_m_s=True,
-        return_mu=True
     )
 
     infrared_features = get_features(
@@ -144,7 +143,7 @@ if __name__ == '__main__':
 
     slot_step = 1
     beginning = 13548
-    nb_days = 8
+    nb_days = 1
     ending = beginning + nb_days - 1
     compute_indexes = True
     normalize = False
