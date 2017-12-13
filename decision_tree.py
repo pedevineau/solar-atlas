@@ -104,11 +104,11 @@ def get_classes_decision_tree(latitudes,
 
     clouds = obvious_clouds | slight_clouds
     begin_affectation = time()
+    classes[(visible_features[:, :, :, 2] == 1)] = 12  # class obvious_clouds over sea
     classes[(visible_features[:, :, :, 0] == -10)] = 13
     classes[(infrared_features[:, :, :, 0] == -10)] = 14
     # classes[persistent_snow & ~(obvious_clouds | cold_opaque_clouds)] = 3
     classes[bright & ~clouds & ~warm & ~variable_brightness] = 5  # class ground snow or ice
-    classes[(visible_features[:, :, :, 2] == 1)] = 12  # class obvious_clouds over sea
     classes[bright & variable_brightness & ~warm] = 6
     classes[bright & ~variable_brightness & warm] = 9
     classes[bright & variable_brightness & warm] = 8

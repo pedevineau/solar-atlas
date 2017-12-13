@@ -16,7 +16,7 @@ def get_visible_predictors(array_data, ocean_mask, times, latitudes, longitudes,
     mu = get_array_cos_zen(times, latitudes, longitudes)
     array_indexes = np.empty(shape=(nb_slots, nb_latitudes, nb_longitudes, nb_features))
     array_indexes[:, :, :, 2] = get_cloudy_sea(vis=array_data[:, :, :, 1], ocean_mask=ocean_mask,
-                                               threshold_cloudy_sea=0.1)
+                                               threshold_cloudy_sea=0.2)
     me, std = np.zeros(nb_features), np.full(nb_features, 1.)
 
     ndsi, m, s, mask_ndsi = get_snow_index(vis=array_data[:, :, :, 1], nir=array_data[:, :, :, 0], threshold_denominator=0.02,

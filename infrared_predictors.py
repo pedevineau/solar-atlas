@@ -1,5 +1,4 @@
 from utils import *
-from dtw_computing import *
 
 
 def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_step, slot_step, compute_indexes,
@@ -48,9 +47,7 @@ def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_
 
     # array_indexes[:, :, :, 3] = cold  # useless to return it?
 
-    obvious_clouds = (cli > (50-m)/s) | (cold == 1)   # awful implementation
-
-    array_indexes[:, :, :, 0][(cli > (50-m)/s)] = 1
+    array_indexes[:, :, :, 0][(cli > (30-m)/s)] = 1
 
     # array_indexes[:, :, :, 1] = \
     #     get_cloud_index(mir=array_data[:, :, :, 1], fir=array_data[:, :, :, 0], method='without-bias',
@@ -61,7 +58,7 @@ def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_
 
     array_indexes[:, :, :, 1] = get_cloud_index_positive_variability_5d(cloud_index=difference,
                                                                         definition_mask=mask | (mu <= 0),
-                                                                        pre_cloud_mask=obvious_clouds,
+                                                                        pre_cloud_mask=(cli > (30-m)/s) | (cold == 1),
                                                                         satellite_step=satellite_step,
                                                                         slot_step=slot_step)
 
@@ -77,7 +74,6 @@ def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_
     array_indexes[:, :, :, 2] = get_warm_predictor(mir=array_data[:, :, :, 1], cos_zen=mu, satellite_step=satellite_step,
                                                    slot_step=slot_step, cloudy_mask=array_indexes[:, :, :, 1] > 0.5,
                                                    threshold_median=300)
-
 
     me, std = np.zeros(nb_features), np.full(nb_features, 1.)
 
