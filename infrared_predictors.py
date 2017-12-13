@@ -28,7 +28,7 @@ def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_
 
     (nb_slots, nb_latitudes, nb_longitudes, nb_channels) = np.shape(array_data)
 
-    nb_features = 3  # cli, variations, warm predictor
+    nb_features = 4  # cli, variations, warm predictor, cold
     mu = get_array_cos_zen(times, latitudes, longitudes)
     mu[mu < 0] = 0
 
@@ -39,15 +39,15 @@ def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_
         get_cloud_index(mir=array_data[:, :, :, 1], fir=array_data[:, :, :, 0], return_m_s=True, method='mu-normalization',
                         mask=mask, cos_zen=mu)
 
-    cold = get_cold(fir=array_data[:, :, :, 0],
-                    cos_zen=mu,
-                    satellite_step=satellite_step,
-                    slot_step=slot_step,
-                    threshold=240)
+    array_indexes[:, :, :, 3] = get_cold(fir=array_data[:, :, :, 0],
+                                         cos_zen=mu,
+                                         satellite_step=satellite_step,
+                                         slot_step=slot_step,
+                                         threshold=240)
 
-    # array_indexes[:, :, :, 3] = cold  # useless to return it?
-
-    array_indexes[:, :, :, 0][(cli > (30-m)/s)] = 1
+    array_indexes[:, :, :, 0][(cli > (30-m)/s)] = 1   # "hot" water clouds
+    # (cli > (30-m)/s) for thick clouds with much water
+    # cold==1 for cold things: snow, icy clouds, or cold water clouds like altocumulus
 
     # array_indexes[:, :, :, 1] = \
     #     get_cloud_index(mir=array_data[:, :, :, 1], fir=array_data[:, :, :, 0], method='without-bias',
@@ -58,7 +58,7 @@ def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_
 
     array_indexes[:, :, :, 1] = get_cloud_index_positive_variability_5d(cloud_index=difference,
                                                                         definition_mask=mask | (mu <= 0),
-                                                                        pre_cloud_mask=(cli > (30-m)/s) | (cold == 1),
+                                                                        pre_cloud_mask=(cli > (30-m)/s) | (array_indexes[:, :, :, 3] == 1),
                                                                         satellite_step=satellite_step,
                                                                         slot_step=slot_step)
     # from filter import digital_low_cut_filtering_time

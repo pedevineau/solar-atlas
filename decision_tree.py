@@ -67,6 +67,8 @@ def get_classes_decision_tree(latitudes,
     slight_clouds = (classify_cloud_variability(infrared_features[:, :, :, 1]) == 1)
     obvious_clouds = (infrared_features[:, :, :, 0] == 1)
 
+    cold_not_bright = (infrared_features[:, :, :, 3] ==1) & ~bright
+
     warm = (infrared_features[:, :, :, 2] == 1)
 
 
@@ -110,6 +112,7 @@ def get_classes_decision_tree(latitudes,
     classes[bright & variable_brightness & ~warm] = 6
     classes[bright & ~variable_brightness & warm] = 9
     classes[bright & variable_brightness & warm] = 8
+    classes[cold_not_bright] = 7
     classes[obvious_clouds & ~bright] = 1
     classes[slight_clouds & ~bright] = 2
     classes[obvious_clouds & bright] = 3
@@ -128,6 +131,7 @@ def get_classes_decision_tree(latitudes,
     print 'slight clouds and bright:4'
     print 'snowy:5'
     print 'variable snowy stuff:6'
+    print 'cold not bright (cold thin water clouds?):7'
     print 'hot bright corpses:8'
     print 'hot bright variable corpses:9'
     print 'foggy:10'
