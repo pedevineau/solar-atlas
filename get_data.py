@@ -157,25 +157,35 @@ def compute_short_variability(array, mask=None, cos_zen=None,  step=1, return_ma
 #     for group in groups:
 
 
-def remove_cos_zen_correlation(index, cos_zen, mask):
+def remove_cos_zen_correlation(index, cos_zen, mask, pre_mask=None):
     '''
 
     :param index: 3-d array representing the variable to test
     :param cos_zen: 3-d array with cos of zenith angle
     :param mask: mask associated with the variable
+    :param pre_mask: mask covering points to exclude in linear regression computing (eg: cloudy pre-mask)
     :return: the index minus its average cos(zenith) component
     '''
     to_return = index.copy()
     (nb_slots, nb_latitudes, nb_longitudes) = np.shape(to_return)
     from scipy.stats import linregress
-    for lat in range(nb_latitudes):
-        for lon in range(nb_longitudes):
-            slice_mask = mask[:, lat, lon]
-            slice_index = index[:, lat, lon][~slice_mask]
-            slice_mu = cos_zen[:, lat, lon][~slice_mask]
-            if not np.all(slice_mask):
-                slope = linregress(slice_mu, slice_index)[0]
-                to_return[:, lat, lon][~slice_mask] -= slope * slice_mu
+    if pre_mask is not None:
+        for lat in range(nb_latitudes):
+            for lon in range(nb_longitudes):
+                slice_mask = mask[:, lat, lon]
+                slice_pre_mask = pre_mask[:, lat, lon]
+                slice_total_mask = (slice_mask | slice_pre_mask)
+                if not np.all(slice_total_mask):
+                    # exclude pre-masked values from slope computing, but remove the cos-zen component all the same
+                    slope = linregress(cos_zen[:, lat, lon][~slice_total_mask], index[:, lat, lon][~slice_total_mask])[0]
+                    to_return[:, lat, lon][~slice_mask] -= slope * cos_zen[:, lat, lon][~slice_mask]
+    else:
+        for lat in range(nb_latitudes):
+            for lon in range(nb_longitudes):
+                slice_mask = mask[:, lat, lon]
+                if not np.all(slice_mask):
+                    slope = linregress(cos_zen[:, lat, lon][~slice_mask], index[:, lat, lon][~slice_mask])[0]
+                    to_return[:, lat, lon][~slice_mask] -= slope * cos_zen[:, lat, lon][~slice_mask]
     return to_return
 
 

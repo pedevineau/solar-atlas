@@ -33,13 +33,18 @@ def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_
     mu = get_array_cos_zen(times, latitudes, longitudes)
     mu[mu < 0] = 0
 
+
     array_indexes = np.empty(shape=(nb_slots, nb_latitudes, nb_longitudes, nb_features))
     # remove spatial smoothing
     array_indexes[:, :, :, 0], m, s = \
         get_cloud_index(mir=array_data[:, :, :, 1], fir=array_data[:, :, :, 0], return_m_s=True, method='mu-normalization',
                         mask=mask, cos_zen=mu)
 
-    pre_cloud_mask = (array_indexes[:, :, :, 0] > (50-m)/s)
+    array_indexes[:, :, :, 3] = get_cold_clouds(fir=array_data[:, :, :, 0], cos_zen=mu, satellite_step=satellite_step,
+                                                slot_step=slot_step,
+                                                threshold=235)
+
+    pre_cloud_mask = (array_indexes[:, :, :, 0] > (50-m)/s) | (array_indexes[:, :, :, 3]==1)
 
     array_indexes[:, :, :, 1] = \
         get_cloud_index(mir=array_data[:, :, :, 1], fir=array_data[:, :, :, 0], method='without-bias',
@@ -59,9 +64,6 @@ def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_
                                                    slot_step=slot_step, cloudy_mask=array_indexes[:, :, :, 1] > 0.5,
                                                    threshold_median=300)
 
-    array_indexes[:, :, :, 3] = get_cold_clouds(fir=array_data[:, :, :, 0], cos_zen=mu, satellite_step=satellite_step,
-                                                slot_step=slot_step,
-                                                threshold=235)
 
     me, std = np.zeros(nb_features), np.full(nb_features, 1.)
 
@@ -103,11 +105,10 @@ def get_cloud_index(mir, fir, mask, cos_zen, return_m_s=False, pre_cloud_mask=No
     else:
         diffstd = normalize_array(difference, mask, normalization='standard')
         if method == 'without-bias':
+            # mustd = normalize_array(cos_zen, mask, 'standard')
+            # NB: ths use of mustd add a supplementary bias term alpha*std(index)*m(cos-zen)/std(cos_zen)
             from get_data import remove_cos_zen_correlation
-            if pre_cloud_mask is not None:
-                cli = remove_cos_zen_correlation(diffstd, cos_zen, mask | pre_cloud_mask)
-            else:
-                cli = remove_cos_zen_correlation(diffstd,  cos_zen, mask)
+            cli = remove_cos_zen_correlation(diffstd, cos_zen, mask, pre_cloud_mask)
         elif method == 'clear-sky':
                 cli = diffstd-normalize_array(cos_zen, mask, normalization='standard')
         elif method == 'default':

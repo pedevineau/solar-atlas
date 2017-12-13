@@ -97,7 +97,7 @@ if __name__ == '__main__':
             elif type_channels == 1:
                 mask_mu = ((mu[:, lat, lon] < 0.05) | (visible_features[:, lat, lon, 0] == -1)
                            | (visible_features[:, lat, lon, 1] == -1))
-                visible_means[lat, lon] = np.mean(ndsi[:, lat, lon][~mask])
+                visible_means[lat, lon] = np.mean(ndsi[:, lat, lon][~mask_mu])
                 visible_correlations[lat, lon] = pearsonr(visible_features[:, lat, lon, 0][~mask_mu],
                                                           visible_features[:, lat, lon, 1][~mask_mu])[0]
 
