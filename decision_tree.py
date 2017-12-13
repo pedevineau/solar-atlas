@@ -102,46 +102,45 @@ def get_classes_decision_tree(latitudes,
     # del classified_cli
     from time import time
 
-    clouds = obvious_clouds | slight_clouds
+    # clouds = obvious_clouds | slight_clouds
     begin_affectation = time()
-    classes[(visible_features[:, :, :, 2] == 1)] = 12  # class obvious_clouds over sea
-    classes[(visible_features[:, :, :, 0] == -10)] = 13
-    classes[(infrared_features[:, :, :, 0] == -10)] = 14
-    # classes[persistent_snow & ~(obvious_clouds | cold_opaque_clouds)] = 3
-    classes[bright & ~clouds & ~warm & ~variable_brightness] = 5  # class ground snow or ice
+    # classes[(visible_features[:, :, :, 0] == -10)] = 13  # before all the other classes (important)
+    classes[(infrared_features[:, :, :, 0] == -10)] = 12 # before all the other classes (important)
+    classes[(visible_features[:, :, :, 2] == 1)] = 11  # before all the other classes (important)
+    classes[bright & ~(obvious_clouds | slight_clouds) & ~warm & ~variable_brightness] = 5  # class ground snow or ice
     classes[bright & variable_brightness & ~warm] = 6
     classes[bright & ~variable_brightness & warm] = 9
     classes[bright & variable_brightness & warm] = 8
     classes[obvious_clouds & ~bright] = 1
     classes[slight_clouds & ~bright] = 2
-    classes[clouds & bright] = 10
+    classes[obvious_clouds & bright] = 3
+    classes[slight_clouds & bright] = 4
+
     # classes[bright & (infrared_features[:, :, :, 3] == 1)] = 7  # = cold and bright. opaque obvious_clouds or cold obvious_clouds over snowy stuff
     # classes[persistent_snow & (obvious_clouds | cold_opaque_clouds)] = 4
-    classes[foggy] = 11
+    classes[foggy] = 10
 
     print 'time affectation', time()-begin_affectation
 
     print 'allegedly uncovered lands'
     print 'obvious clouds:1'
     print 'slight clouds or sunrise/sunset clouds:2'
-    # print 'persistent snow not covered:3'
-    # print 'persistent snow covered by water or snowy obvious_clouds:4'
-    print 'undetermined snowy stuff:5'
+    print 'clouds and bright:3'
+    print 'slight clouds and bright:4'
+    print 'snowy:5'
     print 'variable snowy stuff:6'
-    # print 'opaque cold obvious_clouds or snow covered by (cold) obvious_clouds:7'
     print 'hot bright corpses:8'
     print 'hot bright variable corpses:9'
-    print 'clouds and bright - icy cloud? covered snow?:10'
-    print 'foggy:11'
-    print 'sea bright obvious_clouds:12' #### WARNING: what about icy lakes??? ####
-    print 'suspect high snow index (over sea / around sunset or sunrise):13'
-    print 'undefined:14'
+    print 'foggy:10'
+    print 'sea clouds identified by visibility:11' #### WARNING: what about icy lakes??? ####
+    # print 'suspect high snow index (over sea / around sunset or sunrise):13'
+    print 'undefined:12'
 
     return classes
 
 
 if __name__ == '__main__':
-    nb_classes = 15
+    nb_classes = 13
 
     slot_step = 1
     beginning = 13548
