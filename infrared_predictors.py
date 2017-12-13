@@ -29,27 +29,41 @@ def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_
 
     (nb_slots, nb_latitudes, nb_longitudes, nb_channels) = np.shape(array_data)
 
-    nb_features = 4  # cli, diff cli, cold_mask
+    nb_features = 3  # cli, variations, warm predictor
     mu = get_array_cos_zen(times, latitudes, longitudes)
     mu[mu < 0] = 0
 
 
-    array_indexes = np.empty(shape=(nb_slots, nb_latitudes, nb_longitudes, nb_features))
+    array_indexes = np.zeros(shape=(nb_slots, nb_latitudes, nb_longitudes, nb_features))
     # remove spatial smoothing
-    array_indexes[:, :, :, 0], m, s = \
+    cli, m, s = \
         get_cloud_index(mir=array_data[:, :, :, 1], fir=array_data[:, :, :, 0], return_m_s=True, method='mu-normalization',
                         mask=mask, cos_zen=mu)
 
-    array_indexes[:, :, :, 3] = get_cold_clouds(fir=array_data[:, :, :, 0], cos_zen=mu, satellite_step=satellite_step,
-                                                slot_step=slot_step,
-                                                threshold=235)
+    cold = get_cold(fir=array_data[:, :, :, 0],
+                    cos_zen=mu,
+                    satellite_step=satellite_step,
+                    slot_step=slot_step,
+                    threshold=240)
 
-    pre_cloud_mask = (array_indexes[:, :, :, 0] > (50-m)/s) | (array_indexes[:, :, :, 3]==1)
+    # array_indexes[:, :, :, 3] = cold  # useless to return it?
 
-    array_indexes[:, :, :, 1] = \
-        get_cloud_index(mir=array_data[:, :, :, 1], fir=array_data[:, :, :, 0], method='without-bias',
-                        mask=mask, pre_cloud_mask=pre_cloud_mask, cos_zen=mu)
+    obvious_clouds = (cli > (50-m)/s) | (cold == 1)   # awful implementation
 
+    array_indexes[:, :, :, 0][(cli > (50-m)/s)] = 1
+
+    # array_indexes[:, :, :, 1] = \
+    #     get_cloud_index(mir=array_data[:, :, :, 1], fir=array_data[:, :, :, 0], method='without-bias',
+    #                     mask=mask, pre_cloud_mask=pre_cloud_mask, cos_zen=mu)
+
+    difference = get_cloud_index(mir=array_data[:, :, :, 1], fir=array_data[:, :, :, 0], method='default',
+                        mask=mask, cos_zen=mu)
+
+    array_indexes[:, :, :, 1] = get_cloud_index_positive_variability_5d(cloud_index=difference,
+                                                                        definition_mask=mask | (mu <= 0),
+                                                                        pre_cloud_mask=obvious_clouds,
+                                                                        satellite_step=satellite_step,
+                                                                        slot_step=slot_step)
 
     # array_indexes[:, :, :, 3] = get_variability_array(array=array_indexes[:, :, :, 2], mask=mask_cli)
     #
@@ -95,7 +109,7 @@ def get_cloud_index(mir, fir, mask, cos_zen, return_m_s=False, pre_cloud_mask=No
     difference = mir - fir
     mask = mask | (cos_zen <= 0)
     if method == 'mu-normalization':
-        mu_threshold = 0.05
+        mu_threshold = 0.03
         mask = mask | (cos_zen <= mu_threshold)
         cli, m, s, = normalize_array(difference / np.maximum(cos_zen, mu_threshold),
                               mask=mask, normalization='standard', return_m_s=True)
@@ -108,7 +122,10 @@ def get_cloud_index(mir, fir, mask, cos_zen, return_m_s=False, pre_cloud_mask=No
             # mustd = normalize_array(cos_zen, mask, 'standard')
             # NB: ths use of mustd add a supplementary bias term alpha*std(index)*m(cos-zen)/std(cos_zen)
             from get_data import remove_cos_zen_correlation
-            cli = remove_cos_zen_correlation(diffstd, cos_zen, mask, pre_cloud_mask)
+            # WARNING DANGER #TODO DANGER
+            mask = (mask | pre_cloud_mask)
+            cli = remove_cos_zen_correlation(diffstd, cos_zen, mask)
+            cli = normalize_array(cli, mask, 'standard')
         elif method == 'clear-sky':
                 cli = diffstd-normalize_array(cos_zen, mask, normalization='standard')
         elif method == 'default':
@@ -118,6 +135,76 @@ def get_cloud_index(mir, fir, mask, cos_zen, return_m_s=False, pre_cloud_mask=No
     cli[mask] = -10
     # cli, m, s = normalize_array(cli, maski, normalization='max')
     return cli
+
+
+def get_cloud_index_positive_variability_5d(cloud_index, definition_mask, pre_cloud_mask,
+                                            satellite_step, slot_step):
+    '''
+    This function is supposed to help finding small clouds with low positive clouds (eg: NOT icy clouds)
+    :param cloud_index: cloud index computed with the previous function
+    :param definition_mask: mask points where cloud index is not defined
+    :param pre_cloud_mask: mask points where we don't want to compute 5 days variability (eg: obvious water clouds)
+    :param satellite_step: the satellite characteristic time step between two slots (10 minutes for Himawari 8)
+    :param slot_step: the chosen sampling of slots. if slot_step = n, the sampled slots are s[0], s[n], s[2*n]...
+    :return:
+    '''
+    from get_data import compute_short_variability
+    mask = definition_mask | pre_cloud_mask
+    nb_slots_per_day = get_nb_slots_per_day(satellite_step, slot_step)
+    nb_days = np.shape(cloud_index)[0] / nb_slots_per_day
+    to_return = np.full_like(cloud_index, -10)
+    if nb_days >= 2:
+        var_cli_1d_past = compute_short_variability(array=cloud_index, mask=mask,
+                                                    step=nb_slots_per_day)
+
+        var_cli_1d_future = compute_short_variability(array=cloud_index, mask=mask,
+                                                      step=-nb_slots_per_day)
+        if nb_days == 2:
+            to_return[:nb_slots_per_day] = var_cli_1d_future[:nb_slots_per_day]
+            to_return[nb_slots_per_day:] = var_cli_1d_past[nb_slots_per_day:]
+        else:  # nb_days >=3
+            var_cli_2d_past = compute_short_variability(array=cloud_index, mask=mask,
+                                                        step=nb_slots_per_day * 2)
+            var_cli_2d_future = compute_short_variability(array=cloud_index, mask=mask,
+                                                          step=-2 * nb_slots_per_day)
+
+            # first day
+            to_return[:nb_slots_per_day] = np.maximum(var_cli_1d_future[:nb_slots_per_day],
+                                                      var_cli_2d_future[:nb_slots_per_day])
+            # last day
+            to_return[-nb_slots_per_day:] = np.maximum(var_cli_1d_past[-nb_slots_per_day:],
+                                                       var_cli_2d_past[-nb_slots_per_day:])
+
+            if nb_days == 3:
+                # second day
+                to_return[nb_slots_per_day:2*nb_slots_per_day] = np.maximum(
+                    var_cli_1d_past[nb_slots_per_day:2*nb_slots_per_day],
+                    var_cli_1d_future[nb_slots_per_day:2*nb_slots_per_day])
+            else:  # nb_days >= 4
+                # the day previous the last one
+                to_return[-2*nb_slots_per_day:-nb_slots_per_day] = np.maximum(
+                    np.maximum(
+                        var_cli_1d_past[-2*nb_slots_per_day:-nb_slots_per_day],
+                        var_cli_2d_past[-2*nb_slots_per_day:-nb_slots_per_day]),
+                    var_cli_1d_future[-2*nb_slots_per_day:-nb_slots_per_day])
+                # second day
+                to_return[nb_slots_per_day:2*nb_slots_per_day] = np.maximum(
+                    np.maximum(
+                        var_cli_1d_future[nb_slots_per_day:2*nb_slots_per_day],
+                        var_cli_2d_future[nb_slots_per_day:2*nb_slots_per_day]),
+                    var_cli_1d_past[nb_slots_per_day:2*nb_slots_per_day])
+                if nb_days >= 5:
+                    to_return[2*nb_slots_per_day:-2*nb_slots_per_day] = np.maximum(
+                        np.maximum(
+                            var_cli_1d_past[2*nb_slots_per_day:-2*nb_slots_per_day],
+                            var_cli_2d_past[2*nb_slots_per_day:-2*nb_slots_per_day]),
+                        np.maximum(
+                            var_cli_1d_future[2*nb_slots_per_day:-2*nb_slots_per_day],
+                            var_cli_2d_future[2*nb_slots_per_day:-2*nb_slots_per_day])
+                    )
+    # we are interested only in positive cli variations
+    to_return[to_return < 0] = 0
+    return to_return
 
 
 # def get_cold_mask(mir, satellite_step, slot_step, threshold_median):
@@ -151,7 +238,7 @@ def get_warm_predictor(mir, cos_zen, satellite_step, slot_step, cloudy_mask, thr
     return to_return
 
 
-def get_cold_clouds(fir, cos_zen, satellite_step, slot_step, threshold):
+def get_cold(fir, cos_zen, satellite_step, slot_step, threshold):
     '''
     recognise some high altitudes clouds
     we are not looking above Antartica... there is no likely risk of temperature inversion at these altitudes

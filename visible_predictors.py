@@ -115,7 +115,7 @@ def get_snow_index(vis, nir, mask, mu, ocean_mask, threshold_denominator=0.02, t
         ndsi = (vis - nir) / np.maximum(nir + vis, threshold_denominator)
     else:
         ndsi = vis / np.maximum(nir, threshold_denominator)
-    threshold_mu = 0.15
+    threshold_mu = 0.05
     mask_ndsi = (mu <= threshold_mu) | mask | ocean_mask
     ndsi, m, s = normalize_array(ndsi, mask_ndsi, normalization='standard', return_m_s=True)  # normalization take into account the mask
     ndsi[mask_ndsi] = -10

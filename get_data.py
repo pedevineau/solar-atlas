@@ -144,7 +144,8 @@ def compute_short_variability(array, mask=None, cos_zen=None,  step=1, return_ma
         array = np.abs(array)
     if mask is not None:
         array[mask] = -10
-    array = normalize_array(array, mask=mask, normalization=normalization)
+    if normalization != 'none':
+        array = normalize_array(array, mask=mask, normalization=normalization)
     if return_mask:
         return array, mask
     else:
