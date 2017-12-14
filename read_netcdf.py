@@ -12,7 +12,7 @@ def read_channels(channels, latitudes, longitudes, dfb_beginning, dfb_ending, sl
     nb_days = dfb_ending - dfb_beginning + 1
     from nclib2.dataset import DataSet
     content = np.empty((nb_slots * nb_days, len(latitudes), len(longitudes), len(patterns)))
-    slots = np.arange(0, nb_slots*slot_step, slot_step)
+    # slots = np.arange(1, nb_slots*slot_step, slot_step)
     for k in range(len(patterns)):
         pattern = patterns[k]
         chan = channels[k]
@@ -22,7 +22,7 @@ def read_channels(channels, latitudes, longitudes, dfb_beginning, dfb_ending, sl
                                    'longitude': longitudes,
                                    'dfb': {'start': dfb_beginning, 'end': dfb_ending, "end_inclusive": True,
                                            'start_inclusive': True, },
-                                   'slot': slots
+                                   'slot': np.arange(1, nb_slots*slot_step+1, slot_step)
                                },
                                file_pattern=pattern,
                                variable_name=chan,
@@ -40,10 +40,11 @@ def read_channels(channels, latitudes, longitudes, dfb_beginning, dfb_ending, sl
 
 
 def read_classes(latitudes, longitudes, dfb_beginning, dfb_ending, slot_step=1):
-    from read_metadata import read_indexes_dir_and_pattern
+    from read_metadata import read_indexes_dir_and_pattern, read_satellite_step
     dir, pattern = read_indexes_dir_and_pattern('classes')
+    satellite_step = read_satellite_step()
+    nb_slots = get_nb_slots_per_day(satellite_step, slot_step)
     nb_days = dfb_ending - dfb_beginning + 1
-    nb_slots = 144 / slot_step
     slots = [k*slot_step for k in range(nb_slots)]
 
     from nclib2.dataset import DataSet

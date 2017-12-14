@@ -86,20 +86,34 @@ if __name__ == '__main__':
 
         features = np.flip(features, axis=1)
 
-        cli = features[:, :, :, 0]
-        biased = features[:, :, :, 1]
+        big_clouds = features[:, :, :, 0]
+        var_difference = features[:, :, :, 1]
+        warm = features[:, :, :, 2]
+        cold = features[:, :, :, 3]
 
-        cli = np.reshape(cli, (nb_dfbs, nb_slots_per_day, nb_latitudes, nb_longitudes))
-        biased = np.reshape(biased, (nb_dfbs, nb_slots_per_day, nb_latitudes, nb_longitudes))
+        big_clouds = np.reshape(big_clouds, (nb_dfbs, nb_slots_per_day, nb_latitudes, nb_longitudes))
+        var_difference = np.reshape(var_difference, (nb_dfbs, nb_slots_per_day, nb_latitudes, nb_longitudes))
+        warm = np.reshape(warm, (nb_dfbs, nb_slots_per_day, nb_latitudes, nb_longitudes))
+        cold = np.reshape(cold, (nb_dfbs, nb_slots_per_day, nb_latitudes, nb_longitudes))
 
 
         variables_definitions_cli = {
-            "CLI": {"_FillValue": -999., "units": "no unit", "long_name": "normalized cloud index",
+            "Big_clouds": {"_FillValue": -999., "units": "no unit", "long_name": "mask with hot water clouds",
                      "datatype": "f8",
                      "cell_methods": "time: mean (interval: 1 day comment: hourly sum averages) latitude: mean longitude: mean",
                      "grid_mapping": "coordinate_reference_system",
                      "dimensions": ("dfb", "slot", "latitude", "longitude")},
-            "Biased": {"_FillValue": -999., "units": "no unit", "long_name": "biased cloud index",
+            "Var_difference": {"_FillValue": -999., "units": "no unit", "long_name": "5 days variability difference (for small hot clouds)",
+                     "datatype": "f8",
+                     "cell_methods": "time: mean (interval: 1 day comment: hourly sum averages) latitude: mean longitude: mean",
+                     "grid_mapping": "coordinate_reference_system",
+                     "dimensions": ("dfb", "slot", "latitude", "longitude")},
+            "Warm": {"_FillValue": -999., "units": "no unit", "long_name": "Warm mask",
+                               "datatype": "f8",
+                               "cell_methods": "time: mean (interval: 1 day comment: hourly sum averages) latitude: mean longitude: mean",
+                               "grid_mapping": "coordinate_reference_system",
+                               "dimensions": ("dfb", "slot", "latitude", "longitude")},
+            "Cold": {"_FillValue": -999., "units": "no unit", "long_name": "Cold mask",
                      "datatype": "f8",
                      "cell_methods": "time: mean (interval: 1 day comment: hourly sum averages) latitude: mean longitude: mean",
                      "grid_mapping": "coordinate_reference_system",
@@ -107,8 +121,10 @@ if __name__ == '__main__':
         }
 
         variables_cli = {
-            "CLI": cli,
-            "Biased": biased
+            "Big_clouds": big_clouds,
+            "Var_difference": var_difference,
+            "Warm": warm,
+            "Cold": cold
         }
 
         write('infrared', variables_definitions_cli, variables_cli, dfbs, slots, latitudes, longitudes)
@@ -139,18 +155,18 @@ if __name__ == '__main__':
         cloudy_sea = np.reshape(cloudy_sea, (nb_dfbs, nb_slots_per_day, nb_latitudes, nb_longitudes))
 
         variables_ndsi = {
-            "NDSI": ndsi,
-            "Var_NDSI": var_ndsi,
+            "Snow_index": ndsi,
+            "Var_snow_index": var_ndsi,
             "Cloudy_sea": cloudy_sea
         }
 
         variables_definitions_ndsi = {
-            "NDSI": {"_FillValue": -999., "units": "no unit", "long_name": "snow index",
+            "Snow_index": {"_FillValue": -999., "units": "no unit", "long_name": "snow index",
                      "datatype": "f8",
                      "cell_methods": "time: mean (interval: 1 day comment: hourly sum averages) latitude: mean longitude: mean",
                      "grid_mapping": "coordinate_reference_system",
                      "dimensions": ("dfb", "slot", "latitude", "longitude")},
-            "Var_NDSI": {"_FillValue": -999., "units": "no unit", "long_name": "The short variability of NDSI",
+            "Var_snow_index": {"_FillValue": -999., "units": "no unit", "long_name": "5 days variability of snow index",
                            "datatype": "f8",
                            "cell_methods": "time: mean (interval: 1 day comment: hourly sum averages) latitude: mean longitude: mean",
                            "grid_mapping": "coordinate_reference_system",
