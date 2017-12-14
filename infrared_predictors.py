@@ -5,13 +5,13 @@ def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_
                             normalize, weights, return_m_s=False, return_mu=False):
     '''
 
-    :param array_channels: matrix with channels 3890nm and 12380nm
-    :param ocean_mask: a boolean matrix determining if a pixel is part of a large water body (sea, ocean, big lakes)
+    :param array_data: matrix with channels 3890nm and 12380nm
     :param times: a datetime matrix giving the times of all sampled slots
     :param latitudes: a float matrix giving the bottom latitudes of all pixels
     :param longitudes: a float matrix giving the bottom longitudes of all pixels
     :param satellite_step: the satellite characteristic time step between two slots (10 minutes for Himawari 8)
     :param slot_step: the chosen sampling of slots. if slot_step = n, the sampled slots are s[0], s[n], s[2*n]...
+    :param compute_indexes
     :param normalize:
     :param weights:
     :param return_m_s:
@@ -20,7 +20,7 @@ def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_
     '''
     from get_data import mask_channels
     from cos_zen import get_array_cos_zen
-    from filter import median_filter_3d
+    # from filter import median_filter_3d
 
     array_data, mask = mask_channels(array_data, normalize)
     if not compute_indexes:
@@ -45,9 +45,9 @@ def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_
                                          slot_step=slot_step,
                                          threshold=240)
 
-    array_indexes[:, :, :, 0][(cli > (30-m)/s)] = 1   # "hot" water clouds
     # (cli > (30-m)/s) for thick clouds with much water
     # cold==1 for cold things: snow, icy clouds, or cold water clouds like altocumulus
+    array_indexes[:, :, :, 0][(cli > (30-m)/s)] = 1   # "hot" water clouds
 
     # array_indexes[:, :, :, 1] = \
     #     get_cloud_index(mir=array_data[:, :, :, 1], fir=array_data[:, :, :, 0], method='without-bias',
@@ -61,11 +61,10 @@ def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_
                                                                         pre_cloud_mask=(cli > (30-m)/s) | (array_indexes[:, :, :, 3] == 1),
                                                                         satellite_step=satellite_step,
                                                                         slot_step=slot_step)
-    # from filter import digital_low_cut_filtering_time
-    # array_indexes[:,:,:,2] = median_filter_3d(digital_low_cut_filtering_time(fir - mir, mask_cli, satellite_step=satellite_step), scope=1)
-    array_indexes[:, :, :, 2] = get_warm_predictor(mir=array_data[:, :, :, 1], cos_zen=mu, satellite_step=satellite_step,
-                                                   slot_step=slot_step, cloudy_mask=array_indexes[:, :, :, 1] > 0.5,
-                                                   threshold_median=300)
+
+    array_indexes[:, :, :, 2] = get_warm(mir=array_data[:, :, :, 1], cos_zen=mu, satellite_step=satellite_step,
+                                         slot_step=slot_step, cloudy_mask=array_indexes[:, :, :, 1] > 0.5,
+                                         threshold_median=300)
 
     me, std = np.zeros(nb_features), np.full(nb_features, 1.)
     me[0] = m
@@ -212,7 +211,7 @@ def get_cloud_index_positive_variability_5d(cloud_index, definition_mask, pre_cl
 #     return cold_mask
 
 
-def get_warm_predictor(mir, cos_zen, satellite_step, slot_step, cloudy_mask, threshold_median):
+def get_warm(mir, cos_zen, satellite_step, slot_step, cloudy_mask, threshold_median):
     '''
     :param mir: medium infra-red band (centered on 3890nm for Himawari 8)
     :param cos_zen: cos of zenith angle matrix (shape: slots, latitudes, longitudes)
@@ -236,6 +235,7 @@ def get_cold(fir, cos_zen, satellite_step, slot_step, threshold):
     :param cos_zen: cos of zenith angle matrix (shape: slots, latitudes, longitudes)
     :param satellite_step: the satellite characteristic time step between two slots (10 minutes for Himawari 8)
     :param slot_step: the chosen sampling of slots. if slot_step = n, the sampled slots are s[0], s[n], s[2*n]...
+    :param threshold
     :return: a 0-1 integer matrix (shape: slots, latitudes, longitudes)
     '''
     # TODO: add some cos-zen correlation (correlation => it was not clouds)
