@@ -76,7 +76,7 @@ if __name__ == '__main__':
         infrared_means = np.empty((nb_latitudes, nb_longitudes))
         infrared_correlations = np.empty((nb_latitudes, nb_longitudes))
         cli_means = np.empty((nb_latitudes, nb_longitudes))
-        unbiased_means = np.empty((nb_latitudes, nb_longitudes))
+        var_means = np.empty((nb_latitudes, nb_longitudes))
     elif type_channels == 1:
         visible_correlations = np.empty((nb_latitudes, nb_longitudes))
         visible_means = np.empty((nb_latitudes, nb_longitudes))
@@ -92,7 +92,7 @@ if __name__ == '__main__':
                 infrared_correlations[lat, lon] = pearsonr(infrared_features[:, lat, lon, 0][~mask],
                                                            infrared_features[:, lat, lon, 1][~mask])[0]
                 cli_means[lat, lon] = np.mean(cli[:, lat, lon][~mask])
-                unbiased_means[lat, lon] = np.mean(unbiased[:, lat, lon][~mask])
+                var_means[lat, lon] = np.mean(unbiased[:, lat, lon][~mask])
 
             elif type_channels == 1:
                 mask_mu = ((mu[:, lat, lon] < 0.05) | (visible_features[:, lat, lon, 0] == -1)
@@ -110,9 +110,9 @@ if __name__ == '__main__':
         visualize_map(infrared_correlations)
         visualize_map(infrared_means)
         visualize_map(cli_means)
-        visualize_map(unbiased_means)
+        visualize_map(var_means)
         bias = normalize_array(infrared_means, normalization='standard') - \
-                         normalize_array(unbiased_means, normalization='standard')
+                         normalize_array(var_means, normalization='standard')
         visualize_map(bias)
     elif type_channels == 1:
         visualize_map(visible_correlations)

@@ -67,37 +67,66 @@ def is_likely_outlier(point):
     return np.isnan(point) or np.isinf(point) or point > 350 or point < 0
 
 
-def interpolate_the_missing_slots(array, missing_slots_list, interpolation):   # inerpolation: 'keep-last', 'linear', 'none'
-    for slot in missing_slots_list:
+def interpolate_the_missing_slots(array, missing_slots_list_1, missing_slots_list_2,
+                                  missing_slots_list_3, interpolation):   # interpolation: 'keep-last', 'linear', 'none'
+    for slot in missing_slots_list_1:
         if interpolation == 'linear':
-            array[slot] = 0.5*(array[slot-1].copy()+array[slot+1].copy())
+            array[slot] = 0.5*(array[slot-1]+array[slot+1])
         elif interpolation == 'keep-last':
-            array[slot] = array[slot-1].copy()
+            array[slot] = array[slot-1]
+    for slot in missing_slots_list_2:
+        if interpolation == 'linear':
+            array[slot] = (array[slot-1]*2. + array[slot+2]) / 3.
+            array[slot+1] = (array[slot-1] + array[slot+2]*2.) / 3.
+        elif interpolation == 'keep-last':
+            array[slot] = array[slot-1]
+            array[slot+1] = array[slot-1]
+    for slot in missing_slots_list_3:
+        if interpolation == 'linear':
+            array[slot] = (array[slot-1]*3. + array[slot+3]) / 4.
+            array[slot+1] = (array[slot-1]*2. + array[slot+3]*2) / 4.
+            array[slot+2] = (array[slot-1]*1. + array[slot+3]*3) / 4.
+        elif interpolation == 'keep-last':
+            array[slot] = array[slot-1]
+            array[slot+1] = array[slot-1]
+            array[slot+2] = array[slot-1]
     return array
 
 
 # get list of isolated slots
-def get_list_missing_slots(array):
-    (a, b, c) = np.shape(array)
-    lat_1 = np.random.randint(0,b)
-    lon_1 = np.random.randint(0,c)
-    lat_2 = np.random.randint(0,b)
-    lon_2 = np.random.randint(0,c)
-    lat_3 = np.random.randint(0,b)
-    lon_3 = np.random.randint(0,c)
+def get_list_isolated_missing_slots(array, maximal_scope=3):
+    # (a, b, c) = np.shape(array)
+    # lat_1 = np.random.randint(0,b)
+    # lon_1 = np.random.randint(0,c)
+    # lat_2 = np.random.randint(0,b)
+    # lon_2 = np.random.randint(0,c)
+    # lat_3 = np.random.randint(0,b)
+    # lon_3 = np.random.randint(0,c)
     # if a slot is missing for 3 random places, it's probably missing everywhere...
-    mask_l = get_mask_outliers(array[:, lat_1, lon_1]) & get_mask_outliers(array[:, lat_2, lon_2]) & get_mask_outliers(array[:, lat_3, lon_3])
+    # mask = get_mask_outliers(array[:, lat_1, lon_1]) & get_mask_outliers(array[:, lat_2, lon_2]) & get_mask_outliers(array[:, lat_3, lon_3])
+
+    mask = get_mask_outliers(array[:, 0, 0]) & get_mask_outliers(array[:, -1, -1]) \
+           & get_mask_outliers(array[:, -1, 0]) & get_mask_outliers(array[:, 0, -1])
+
     # indexes list of isolated slots
-    indexes_isolated = []
+    indexes_isolated_1, indexes_isolated_2, indexes_isolated_3 = [], [], []
     # indexes list of dawn slots to be removed
     # dawn_indexes = []
-    for k in range(1, len(mask_l)-1):
-        if mask_l[k] and not mask_l[k-1] and not mask_l[k+1]:
-            indexes_isolated.append(k)
-        # following condition is dawn assuming there is no double black slots outside night
-        # elif mask_l[k] and  mask_l[k-1] and not mask_l[k+1]:
-        #     dawn_indexes.extend([k+i for i in range(min(nb_slots_to_remove_dawn,len(mask_l) - k))])
-    return indexes_isolated
+    if maximal_scope >= 1:
+        for k in range(1, len(mask)-1):
+            if mask[k] and not mask[k-1] and not mask[k+1]:
+                indexes_isolated_1.append(k)
+    if maximal_scope >= 2:
+        for k in range(1, len(mask)-2):
+            if mask[k] and mask[k+1] and not mask[k-1] and not mask[k+2]:
+                indexes_isolated_2.append(k)   # keep only the index of the first of the two consecutive missing slots
+    if maximal_scope >= 3:
+        for k in range(1, len(mask)-3):
+            if mask[k] and mask[k+1] and mask[k+2] and not mask[k-1] and not mask[k+3]:
+                indexes_isolated_3.append(k)
+    if maximal_scope >= 4:
+        raise Exception('the maximal interpolation scope allowed is 3')
+    return indexes_isolated_1, indexes_isolated_2, indexes_isolated_3
 
 
 def mask_channels(array_data, normalize):
@@ -105,10 +134,14 @@ def mask_channels(array_data, normalize):
 
     mask = np.zeros((nb_slots, nb_latitudes, nb_longitudes), dtype=bool)
     for chan in range(nb_channels):
-        slots_to_interpolate = get_list_missing_slots(array_data[:, :, :, chan])
+        slots_to_interpolate_1, slots_to_interpolate_2, slots_to_interpolate_3 =\
+            get_list_isolated_missing_slots(array_data[:, :, :, chan])
         # filter isolated nan and aberrant
-        array_data[:, :, :, chan] = interpolate_the_missing_slots(array_data[:, :, :, chan], slots_to_interpolate,
-                                                               interpolation='linear')
+        array_data[:, :, :, chan] = interpolate_the_missing_slots(array_data[:, :, :, chan],
+                                                                  slots_to_interpolate_1,
+                                                                  slots_to_interpolate_2,
+                                                                  slots_to_interpolate_3,
+                                                                  interpolation='linear')
         # get mask for non isolated nan and aberrant
         mask_current_channels = get_mask_outliers(array_data[:, :, :, chan])
         if normalize:   # a normalization here does not seems very relevant
@@ -123,7 +156,8 @@ def apply_smooth_threshold(x, th, order=2):
     return np.exp(-(x-th))
 
 
-def compute_short_variability(array, mask=None, cos_zen=None,  step=1, return_mask=False, abs_value=False,
+def compute_short_variability(array, mask=None, cos_zen=None, step=1, return_mask=False, abs_value=False,
+                              negative_variation_only=False,
                               option='default',  # ['default, 'without-bias']
                               normalization='none'):
     step_left = step
@@ -140,6 +174,9 @@ def compute_short_variability(array, mask=None, cos_zen=None,  step=1, return_ma
             mask[:step_left] = True
         else:
             mask[step_left:] = True
+    if negative_variation_only:
+        array[array > 0] = 0
+        array[~mask] *= -1
     if abs_value:
         array = np.abs(array)
     if mask is not None:

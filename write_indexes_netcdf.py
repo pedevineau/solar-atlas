@@ -54,7 +54,7 @@ if __name__ == '__main__':
     longitude_beginning = 125.
     longitude_end = 130.
     dfb_beginning = 13544
-    nb_dfbs = 3
+    nb_dfbs = 10
     satellite_timestep = 10
     slot_step_ = 1
     nb_slots_per_day = get_nb_slots_per_day(satellite_timestep, slot_step_)
@@ -189,7 +189,6 @@ if __name__ == '__main__':
             longitudes,
             dfb_beginning,
             dfb_ending,
-            compute_indexes=True,
             slot_step=slot_step_,
             normalize=False,
             weights=None,

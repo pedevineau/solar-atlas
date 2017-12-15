@@ -23,15 +23,21 @@ def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_
     # from filter import median_filter_3d
 
     array_data, mask = mask_channels(array_data, normalize)
+
     if not compute_indexes:
+        # mu[mu < 0] = 0
+        # mask[mu<=0] = True
+        # array_data[:, :, :, 0][mask]=0
+        # array_data[:, :, :, 1][mask]=0
+        # from get_data import remove_cos_zen_correlation
+        # array_data[:,:,:,0] = remove_cos_zen_correlation(array_data[:,:,:,0], mu, mask)
+        # array_data[:,:,:, 1] = remove_cos_zen_correlation(array_data[:,:,:, 1], mu, mask)
         return array_data
 
-    (nb_slots, nb_latitudes, nb_longitudes, nb_channels) = np.shape(array_data)
-
     nb_features = 4  # cli, variations, warm predictor, cold
+    (nb_slots, nb_latitudes, nb_longitudes, nb_channels) = np.shape(array_data)
     mu = get_array_cos_zen(times, latitudes, longitudes)
     mu[mu < 0] = 0
-
 
     array_indexes = np.zeros(shape=(nb_slots, nb_latitudes, nb_longitudes, nb_features))
     # remove spatial smoothing
@@ -47,7 +53,10 @@ def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_
 
     # (cli > (30-m)/s) for thick clouds with much water
     # cold==1 for cold things: snow, icy clouds, or cold water clouds like altocumulus
-    array_indexes[:, :, :, 0][(cli > (30-m)/s)] = 1   # "hot" water clouds
+    high_cli_mask = (cli > (30 - m) / s)
+    del cli
+    array_indexes[:, :, :, 0][high_cli_mask] = 1   # "hot" water clouds
+    array_indexes[:, :, :, 0][mask | (mu <= 0)] = -10
 
     # array_indexes[:, :, :, 1] = \
     #     get_cloud_index(mir=array_data[:, :, :, 1], fir=array_data[:, :, :, 0], method='without-bias',
@@ -58,9 +67,11 @@ def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_
 
     array_indexes[:, :, :, 1] = get_cloud_index_positive_variability_5d(cloud_index=difference,
                                                                         definition_mask=mask | (mu <= 0),
-                                                                        pre_cloud_mask=(cli > (30-m)/s) | (array_indexes[:, :, :, 3] == 1),
+                                                                        pre_cloud_mask=high_cli_mask | (array_indexes[:, :, :, 3] == 1),
                                                                         satellite_step=satellite_step,
                                                                         slot_step=slot_step)
+
+    del mask, high_cli_mask, difference
 
     array_indexes[:, :, :, 2] = get_warm(mir=array_data[:, :, :, 1], cos_zen=mu, satellite_step=satellite_step,
                                          slot_step=slot_step, cloudy_mask=array_indexes[:, :, :, 1] > 0.5,
@@ -138,7 +149,10 @@ def get_cloud_index_positive_variability_5d(cloud_index, definition_mask, pre_cl
     :return:
     '''
     from get_data import compute_short_variability
-    mask = definition_mask | pre_cloud_mask
+    if pre_cloud_mask is not None:
+        mask = definition_mask | pre_cloud_mask
+    else:
+        mask = definition_mask
     nb_slots_per_day = get_nb_slots_per_day(satellite_step, slot_step)
     nb_days = np.shape(cloud_index)[0] / nb_slots_per_day
     to_return = np.full_like(cloud_index, -10)

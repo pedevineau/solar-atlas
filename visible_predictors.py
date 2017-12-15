@@ -20,7 +20,7 @@ def get_visible_predictors(array_data, ocean_mask, times, latitudes, longitudes,
     me, std = np.zeros(nb_features), np.full(nb_features, 1.)
 
     ndsi, m, s, mask_ndsi = get_snow_index(vis=array_data[:, :, :, 1], nir=array_data[:, :, :, 0], threshold_denominator=0.02,
-                                           mask=mask, mu=mu, threshold_mu=0.02, ocean_mask=ocean_mask,
+                                           mask=mask, mu=mu, threshold_mu=0.0, ocean_mask=ocean_mask,
                                            return_m_s_mask=True)
 
     # print 'replace NDSI by VIS (en sekrd)'
@@ -28,8 +28,7 @@ def get_visible_predictors(array_data, ocean_mask, times, latitudes, longitudes,
 
     del array_data
 
-    array_indexes[:, :, :, 1] = get_bright_variability_5d(ndsi, mask_ndsi, satellite_step, slot_step)
-
+    array_indexes[:, :, :, 1] = get_bright_variability_negative_5d(ndsi, mask_ndsi, satellite_step, slot_step)
     array_indexes[:, :, :, 0] = ndsi
     me[0] = m
     std[0] = s
@@ -48,57 +47,77 @@ def get_visible_predictors(array_data, ocean_mask, times, latitudes, longitudes,
         return array_indexes
 
 
-def get_bright_variability_5d(ndsi, mask_ndsi, satellite_step, slot_step):
+def get_bright_variability_negative_5d(index, definition_mask, satellite_step, slot_step):
+    '''
+    NB: we loose information about the first slot (resp the last slot) if night is 1 slot longer during 1 of the 5 days
+    :param index:
+    :param definition_mask:
+    :param satellite_step: the satellite characteristic time step between two slots (10 minutes for Himawari 8)
+    :param slot_step: the chosen sampling of slots. if slot_step = n, the sampled slots are s[0], s[n], s[2*n]...
+    :return:
+    :return:
+    '''
     from get_data import compute_short_variability
     nb_slots_per_day = get_nb_slots_per_day(satellite_step, slot_step)
-    nb_days = np.shape(ndsi)[0] / nb_slots_per_day
-    to_return = np.full_like(ndsi, -10)
+    nb_days = np.shape(index)[0] / nb_slots_per_day
+    to_return = np.full_like(index, -10)
     if nb_days >= 2:
-        var_ndsi_1d_past = compute_short_variability(array=ndsi, mask=mask_ndsi,
-                                                     step=nb_slots_per_day, abs_value=True)
+        var_ndsi_1d_past = compute_short_variability(array=index,
+                                                     mask=definition_mask,
+                                                     step=nb_slots_per_day,
+                                                     negative_variation_only=True,
+                                                     abs_value=False)
 
-        var_ndsi_1d_future = compute_short_variability(array=ndsi, mask=mask_ndsi,
-                                                       step=-nb_slots_per_day, abs_value=True)
+        var_ndsi_1d_future = compute_short_variability(array=index,
+                                                       mask=definition_mask,
+                                                       step=-nb_slots_per_day,
+                                                       negative_variation_only=True,
+                                                       abs_value=False)
         if nb_days == 2:
             to_return[:nb_slots_per_day] = var_ndsi_1d_future[:nb_slots_per_day]
             to_return[nb_slots_per_day:] = var_ndsi_1d_past[nb_slots_per_day:]
         else:  # nb_days >=3
-            var_ndsi_2d_past = compute_short_variability(array=ndsi, mask=mask_ndsi,
-                                                         step=nb_slots_per_day * 2, abs_value=True)
-            var_ndsi_2d_future = compute_short_variability(array=ndsi, mask=mask_ndsi,
-                                                           step=-2 * nb_slots_per_day, abs_value=True)
-
+            var_ndsi_2d_past = compute_short_variability(array=index,
+                                                         mask=definition_mask,
+                                                         step=nb_slots_per_day * 2,
+                                                         negative_variation_only=True,
+                                                         abs_value=False)
+            var_ndsi_2d_future = compute_short_variability(array=index,
+                                                           mask=definition_mask,
+                                                           step=-2 * nb_slots_per_day,
+                                                           negative_variation_only=True,
+                                                           abs_value=False)
             # first day
-            to_return[:nb_slots_per_day] = np.minimum(var_ndsi_1d_future[:nb_slots_per_day],
+            to_return[:nb_slots_per_day] = np.maximum(var_ndsi_1d_future[:nb_slots_per_day],
                                                       var_ndsi_2d_future[:nb_slots_per_day])
             # last day
-            to_return[-nb_slots_per_day:] = np.minimum(var_ndsi_1d_past[-nb_slots_per_day:],
+            to_return[-nb_slots_per_day:] = np.maximum(var_ndsi_1d_past[-nb_slots_per_day:],
                                                        var_ndsi_2d_past[-nb_slots_per_day:])
 
             if nb_days == 3:
                 # second day
-                to_return[nb_slots_per_day:2*nb_slots_per_day] = np.minimum(
+                to_return[nb_slots_per_day:2*nb_slots_per_day] = np.maximum(
                     var_ndsi_1d_past[nb_slots_per_day:2*nb_slots_per_day],
                     var_ndsi_1d_future[nb_slots_per_day:2*nb_slots_per_day])
             else:  # nb_days >= 4
                 # the day previous the last one
-                to_return[-2*nb_slots_per_day:-nb_slots_per_day] = np.minimum(
-                    np.minimum(
+                to_return[-2*nb_slots_per_day:-nb_slots_per_day] = np.maximum(
+                    np.maximum(
                         var_ndsi_1d_past[-2*nb_slots_per_day:-nb_slots_per_day],
                         var_ndsi_2d_past[-2*nb_slots_per_day:-nb_slots_per_day]),
                     var_ndsi_1d_future[-2*nb_slots_per_day:-nb_slots_per_day])
                 # second day
-                to_return[nb_slots_per_day:2*nb_slots_per_day] = np.minimum(
-                    np.minimum(
+                to_return[nb_slots_per_day:2*nb_slots_per_day] = np.maximum(
+                    np.maximum(
                         var_ndsi_1d_future[nb_slots_per_day:2*nb_slots_per_day],
                         var_ndsi_2d_future[nb_slots_per_day:2*nb_slots_per_day]),
                     var_ndsi_1d_past[nb_slots_per_day:2*nb_slots_per_day])
                 if nb_days >= 5:
-                    to_return[2*nb_slots_per_day:-2*nb_slots_per_day] = np.minimum(
-                        np.minimum(
+                    to_return[2*nb_slots_per_day:-2*nb_slots_per_day] = np.maximum(
+                        np.maximum(
                             var_ndsi_1d_past[2*nb_slots_per_day:-2*nb_slots_per_day],
                             var_ndsi_2d_past[2*nb_slots_per_day:-2*nb_slots_per_day]),
-                        np.minimum(
+                        np.maximum(
                             var_ndsi_1d_future[2*nb_slots_per_day:-2*nb_slots_per_day],
                             var_ndsi_2d_future[2*nb_slots_per_day:-2*nb_slots_per_day])
                     )
@@ -108,6 +127,7 @@ def get_bright_variability_5d(ndsi, mask_ndsi, satellite_step, slot_step):
 def get_snow_index(vis, nir, mask, mu, ocean_mask, threshold_denominator=0.02, threshold_mu=0.05, compute_ndsi=True,
                    return_m_s_mask=False):
     if compute_ndsi:
+        # nir *= 5
         ndsi = (vis - nir) / np.maximum(nir + vis, threshold_denominator)
     else:
         ndsi = vis / np.maximum(nir, threshold_denominator)

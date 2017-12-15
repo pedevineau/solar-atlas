@@ -6,7 +6,6 @@ def get_classes_decision_tree(latitudes,
         longitudes,
         beginning,
         ending,
-        compute_indexes,
         slot_step,
         normalize,
         weights=None,
@@ -19,7 +18,7 @@ def get_classes_decision_tree(latitudes,
         longitudes,
         beginning,
         ending,
-        compute_indexes,
+        True,
         slot_step,
         normalize,
         weights,
@@ -32,10 +31,10 @@ def get_classes_decision_tree(latitudes,
         longitudes,
         beginning,
         ending,
-        compute_indexes,
+        True,
         slot_step,
         normalize,
-        weights,
+        weights
     )
     #
     # nir = get_features(
@@ -56,6 +55,15 @@ def get_classes_decision_tree(latitudes,
     # obvious_clouds = (infrared_features[:, :, :, cli_or_unbiased] > 0)  # | (visible_features[:, :, :, 3] == 1)
 
     from classification_snow_index import classify_brightness, classifiy_brightness_variability
+    # bright = np.zeros(np.shape(visible_features)[0:3], dtype=bool)
+    # nb_slots = np.shape(visible_features)[0]
+    # slot = 0
+    # while slot < nb_slots:
+    #     print 'brightness slot:', slot
+    #     next_slot = slot + 5/slot_step
+    #     bright[slot:next_slot] = (classify_brightness(visible_features[slot:next_slot, :, :, 0], m[0], s[0]) == 1)
+    #     slot = next_slot
+
     bright = (classify_brightness(visible_features[:, :, :, 0], m[0], s[0]) == 1)
     variable_brightness = (classifiy_brightness_variability(visible_features[:, :, :, 1]) == 1)
     # from quick_visualization import visualize_map_time, get_bbox
@@ -87,8 +95,12 @@ def get_classes_decision_tree(latitudes,
     # print persistent_snow
     # print len(persistent_snow[persistent_snow])
 
-    foggy = obvious_clouds & ~warm & (visible_features[:, :, :, 0] < -1.5) & ~variable_brightness & ~(visible_features[:, :, :, 2] == 1)
+    foggy = (obvious_clouds | slight_clouds) & ~warm & (visible_features[:, :, :, 0] < -1.5)
+    if not np.all(foggy is False):
+        foggy[foggy] = 100
+        print np.argmax(foggy)
 
+    #  foggy: low snow index, good vis
     (nb_slots, nb_latitudes, nb_longitudes) = np.shape(visible_features)[0:3]
     classes = np.zeros((nb_slots, nb_latitudes, nb_longitudes))
 
@@ -146,14 +158,14 @@ if __name__ == '__main__':
     nb_classes = 13
 
     slot_step = 1
-    beginning = 13548
-    nb_days = 1
+    beginning = 13517
+    nb_days = 10
     ending = beginning + nb_days - 1
     compute_indexes = True
     normalize = False
 
-    latitude_beginning = 45.
-    latitude_end = 50.
+    latitude_beginning = 40.
+    latitude_end = 45.
     longitude_beginning = 125.
     longitude_end = 130.
     latitudes, longitudes = get_latitudes_longitudes(latitude_beginning, latitude_end,
@@ -166,7 +178,6 @@ if __name__ == '__main__':
                                         longitudes,
                                         beginning,
                                         ending,
-                                        compute_indexes,
                                         slot_step,
                                         normalize,
                                         )

@@ -11,9 +11,13 @@ def classify_brightness(bright_index, m, s):
     '''
 
     default_threshold = (0.35-m)/s
-
-    (nb_slots, nb_latitudes, nb_longitudes) = np.shape(bright_index)[0:3]
-    bright_index_1d = bright_index.reshape(nb_slots * nb_latitudes * nb_longitudes)
+    shape = np.shape(bright_index)
+    if len(shape) == 3:
+        (nb_slots, nb_latitudes, nb_longitudes) = np.shape(bright_index)
+        bright_index_1d = bright_index.reshape(nb_slots * nb_latitudes * nb_longitudes)
+    elif len(shape) == 2:
+        (nb_latitudes, nb_longitudes) = np.shape(bright_index)
+        bright_index_1d = bright_index.reshape(nb_latitudes * nb_longitudes)
     bright_index_1d = bright_index_1d[~np.isnan(bright_index_1d)].reshape(-1, 1)
     training_rate = 0.005
     brightness_copy = bright_index_1d.copy()
@@ -29,7 +33,7 @@ def classify_brightness(bright_index, m, s):
     means_init = [[-10], [-1], [1]]
     model = get_basis_model(process, nb_components, max_iter, means_init)
     model = get_trained_model(bright_index_training, model, process)
-    brightness = model.predict(bright_index_1d).reshape((nb_slots, nb_latitudes, nb_longitudes))
+    brightness = model.predict(bright_index_1d).reshape(shape)
     centers3 = get_centers(model, process)
     [undefined, dark, bright] = np.argsort(centers3.flatten())
 
@@ -40,7 +44,7 @@ def classify_brightness(bright_index, m, s):
     if not better_than_threshold or not separability_condition:
         print 'bad separation between bright and dark'
         print 'using awful thresholds instead'
-        brightness = np.zeros((nb_slots, nb_latitudes, nb_longitudes))
+        brightness = np.zeros(shape)
         brightness[bright_index > default_threshold] = 1
         return brightness
     else:

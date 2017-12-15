@@ -145,42 +145,46 @@ def visualize_hist(array_1d, title='Histogram', precision=50):
 if __name__ == '__main__':
     from get_data import get_features
     from utils import *
-    compute_indexes_ = True
+    compute_indexes_ = False
     types_channel = ['infrared', 'visible']
     channel_number = 1
     display_curves = False
     type_channels = types_channel[channel_number]
-    latitude_beginning = 35.+5
-    latitude_end = 40.+5
+    dfb_beginning = 13517
+    nb_days = 10
+    dfb_ending = dfb_beginning + nb_days - 1
+    latitude_beginning = 40.
+    latitude_end = 45.
     longitude_beginning = 125.
     longitude_end = 130.
-    dfb_beginning = 13552
-    dfb_ending = dfb_beginning
     date_begin, date_end = print_date_from_dfb(dfb_beginning, dfb_ending)
     lat, lon = get_latitudes_longitudes(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
     bbox = get_bbox(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
     features = get_features(type_channels, lat, lon, dfb_beginning, dfb_ending, compute_indexes_, slot_step=1,
                             normalize=False)
 
-    gra = True
-    if gra:
-        from scipy.ndimage import sobel, prewitt
-        (slots, lats, lons) = np.shape(features)[0:3]
-        from numpy.random import randint
-        grad = np.empty((slots, lats, lons, 2))
-        for slot in range(slots):
-            # Find contours at a constant value of 0.8
-            from skimage import measure
-            import matplotlib.pyplot as plt
-            contours = measure.find_contours(features[slot,:,:,0], 0.8)
-            # Display the image and plot all contours found
-            fig, ax = plt.subplots()
-            ax.imshow(features[slot,:,:,0], interpolation='nearest', cmap=plt.cm.gray)
 
-            for n, contour in enumerate(contours):
-                ax.plot(contour[:, 1], contour[:, 0], linewidth=2)
-            plt.show()
 
+
+    # gra = True
+    # if gra:
+    #     from scipy.ndimage import sobel, prewitt
+    #     (slots, lats, lons) = np.shape(features)[0:3]
+    #     from numpy.random import randint
+    #     grad = np.empty((slots, lats, lons, 2))
+    #     for slot in range(slots):
+    #         # Find contours at a constant value of 0.8
+    #         from skimage import measure
+    #         import matplotlib.pyplot as plt
+    #         contours = measure.find_contours(features[slot,:,:,0], 0.8)
+    #         # Display the image and plot all contours found
+    #         fig, ax = plt.subplots()
+    #         ax.imshow(features[slot,:,:,0], interpolation='nearest', cmap=plt.cm.gray)
+    #
+    #         for n, contour in enumerate(contours):
+    #             ax.plot(contour[:, 1], contour[:, 0], linewidth=2)
+    #         plt.show()
+    #
 
     if display_curves:
         for k in range(25):
