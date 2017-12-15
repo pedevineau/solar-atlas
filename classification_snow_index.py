@@ -73,7 +73,7 @@ def classifiy_brightness_variability(bright_variability):
     del brightness_copy
     from naive_gaussian_classification import get_basis_model, get_trained_model
     process = 'bayesian'
-    print 'classify brightness_variability variability', process
+    print 'classify brightness variability', process
     nb_components = 3
     max_iter = 300
     means_init = [[-10], [-1], [1]]

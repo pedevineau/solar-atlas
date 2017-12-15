@@ -11,11 +11,11 @@ def get_visible_predictors(array_data, ocean_mask, times, latitudes, longitudes,
         return array_data
     (nb_slots, nb_latitudes, nb_longitudes, nb_channels) = np.shape(array_data)
 
-    nb_features = 3
+    nb_features = 4  # snow index, negative variability, positive variability, cloudy sea
     # VIS160_2000: 0,  VIS064_2000:1
     mu = get_array_cos_zen(times, latitudes, longitudes)
     array_indexes = np.empty(shape=(nb_slots, nb_latitudes, nb_longitudes, nb_features))
-    array_indexes[:, :, :, 2] = get_cloudy_sea(vis=array_data[:, :, :, 1], ocean_mask=ocean_mask,
+    array_indexes[:, :, :, 3] = get_cloudy_sea(vis=array_data[:, :, :, 1], ocean_mask=ocean_mask,
                                                threshold_cloudy_sea=0.2)
     me, std = np.zeros(nb_features), np.full(nb_features, 1.)
 
@@ -28,7 +28,8 @@ def get_visible_predictors(array_data, ocean_mask, times, latitudes, longitudes,
 
     del array_data
 
-    array_indexes[:, :, :, 1] = get_bright_variability_negative_5d(ndsi, mask_ndsi, satellite_step, slot_step)
+    array_indexes[:, :, :, 1] = get_bright_variability_5d(ndsi, mask_ndsi, satellite_step, slot_step, 'negative')
+    array_indexes[:, :, :, 2] = get_bright_variability_5d(ndsi, mask_ndsi, satellite_step, slot_step, 'positive')
     array_indexes[:, :, :, 0] = ndsi
     me[0] = m
     std[0] = s
@@ -47,16 +48,17 @@ def get_visible_predictors(array_data, ocean_mask, times, latitudes, longitudes,
         return array_indexes
 
 
-def get_bright_variability_negative_5d(index, definition_mask, satellite_step, slot_step):
+def get_bright_variability_5d(index, definition_mask, satellite_step, slot_step, positive_or_negative='positive'):
     '''
     NB: we loose information about the first slot (resp the last slot) if night is 1 slot longer during 1 of the 5 days
     :param index:
     :param definition_mask:
     :param satellite_step: the satellite characteristic time step between two slots (10 minutes for Himawari 8)
     :param slot_step: the chosen sampling of slots. if slot_step = n, the sampled slots are s[0], s[n], s[2*n]...
-    :return:
+    :param positive_or_negative: 'positive' or 'negative'
     :return:
     '''
+    negative_variation_only = (positive_or_negative == 'negative')
     from get_data import compute_short_variability
     nb_slots_per_day = get_nb_slots_per_day(satellite_step, slot_step)
     nb_days = np.shape(index)[0] / nb_slots_per_day
@@ -65,13 +67,13 @@ def get_bright_variability_negative_5d(index, definition_mask, satellite_step, s
         var_ndsi_1d_past = compute_short_variability(array=index,
                                                      mask=definition_mask,
                                                      step=nb_slots_per_day,
-                                                     negative_variation_only=True,
+                                                     negative_variation_only=negative_variation_only,
                                                      abs_value=False)
 
         var_ndsi_1d_future = compute_short_variability(array=index,
                                                        mask=definition_mask,
                                                        step=-nb_slots_per_day,
-                                                       negative_variation_only=True,
+                                                       negative_variation_only=negative_variation_only,
                                                        abs_value=False)
         if nb_days == 2:
             to_return[:nb_slots_per_day] = var_ndsi_1d_future[:nb_slots_per_day]
@@ -80,12 +82,12 @@ def get_bright_variability_negative_5d(index, definition_mask, satellite_step, s
             var_ndsi_2d_past = compute_short_variability(array=index,
                                                          mask=definition_mask,
                                                          step=nb_slots_per_day * 2,
-                                                         negative_variation_only=True,
+                                                         negative_variation_only=negative_variation_only,
                                                          abs_value=False)
             var_ndsi_2d_future = compute_short_variability(array=index,
                                                            mask=definition_mask,
                                                            step=-2 * nb_slots_per_day,
-                                                           negative_variation_only=True,
+                                                           negative_variation_only=negative_variation_only,
                                                            abs_value=False)
             # first day
             to_return[:nb_slots_per_day] = np.maximum(var_ndsi_1d_future[:nb_slots_per_day],

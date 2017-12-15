@@ -65,9 +65,11 @@ def get_classes_decision_tree(latitudes,
     #     slot = next_slot
 
     bright = (classify_brightness(visible_features[:, :, :, 0], m[0], s[0]) == 1)
-    variable_brightness = (classifiy_brightness_variability(visible_features[:, :, :, 1]) == 1)
+
+    negative_variable_brightness = (classifiy_brightness_variability(visible_features[:, :, :, 1]) == 1)
+    positive_variable_brightness = (classifiy_brightness_variability(visible_features[:, :, :, 2]) == 1)
     # from quick_visualization import visualize_map_time, get_bbox
-    # visualize_map_time(variable_brightness, get_bbox(latitudes[0], latitudes[-1], longitudes[0], longitudes[-1]))
+    # visualize_map_time(negative_variable_brightness, get_bbox(latitudes[0], latitudes[-1], longitudes[0], longitudes[-1]))
 
     from classification_cloud_index import classify_cloud_covertness, classify_cloud_variability
     # classified_cli = classify_cloud_covertness(infrared_features[:, :, :, cli_or_unbiased])
@@ -117,14 +119,14 @@ def get_classes_decision_tree(latitudes,
 
     # clouds = obvious_clouds | slight_clouds
     begin_affectation = time()
-    # classes[(visible_features[:, :, :, 0] == -10)] = 13  # before all the other classes (important)
-    classes[(infrared_features[:, :, :, 0] == -10)] = 12 # before all the other classes (important)
-    classes[(visible_features[:, :, :, 2] == 1)] = 11  # before all the other classes (important)
-    classes[bright & ~(obvious_clouds | slight_clouds) & ~warm & ~variable_brightness] = 5  # class ground snow or ice
-    classes[bright & variable_brightness & ~warm] = 6
-    classes[bright & ~variable_brightness & warm] = 9
-    classes[bright & variable_brightness & warm] = 8
-    classes[cold_not_bright] = 7
+    classes[(infrared_features[:, :, :, 0] == -10)] = 13 # before all the other classes (important)
+    classes[(visible_features[:, :, :, 3] == 1)] = 12  # before all the other classes (important)
+    classes[bright & ~(obvious_clouds | slight_clouds) & ~warm & ~negative_variable_brightness] = 5  # class ground snow or ice
+    classes[bright & positive_variable_brightness & ~warm] = 6
+    classes[bright & negative_variable_brightness & ~warm] = 7
+    classes[bright & ~negative_variable_brightness & warm] = 10
+    classes[bright & negative_variable_brightness & warm] = 9
+    classes[cold_not_bright] = 8
     classes[obvious_clouds & ~bright] = 1
     classes[slight_clouds & ~bright] = 2
     classes[obvious_clouds & bright] = 3
@@ -132,7 +134,7 @@ def get_classes_decision_tree(latitudes,
 
     # classes[bright & (infrared_features[:, :, :, 3] == 1)] = 7  # = cold and bright. opaque obvious_clouds or cold obvious_clouds over snowy stuff
     # classes[persistent_snow & (obvious_clouds | cold_opaque_clouds)] = 4
-    classes[foggy] = 10
+    classes[foggy] = 11
 
     print 'time affectation', time()-begin_affectation
 
@@ -142,20 +144,21 @@ def get_classes_decision_tree(latitudes,
     print 'clouds and bright:3'
     print 'slight clouds and bright:4'
     print 'snowy:5'
-    print 'variable snowy stuff:6'
-    print 'cold not bright (cold thin water clouds?):7'
-    print 'hot bright corpses:8'
-    print 'hot bright variable corpses:9'
-    print 'foggy:10'
-    print 'sea clouds identified by visibility:11' #### WARNING: what about icy lakes??? ####
+    print 'snowy clouds:6'
+    print 'covered snow:7'
+    print 'cold not bright (cold thin water clouds?):8'
+    print 'hot bright corpses:9'
+    print 'hot bright variable corpses:10'
+    print 'foggy:11'
+    print 'sea clouds identified by visibility:12' #### WARNING: what about icy lakes??? ####
     # print 'suspect high snow index (over sea / around sunset or sunrise):13'
-    print 'undefined:12'
+    print 'undefined:13'
 
     return classes
 
 
 if __name__ == '__main__':
-    nb_classes = 13
+    nb_classes = 14
 
     slot_step = 1
     beginning = 13517
