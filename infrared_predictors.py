@@ -71,12 +71,12 @@ def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_
             mask_cli, normalization='gray-scale')
         array_indexes[:, :, :, 0][high_cli_mask] = 1  # "hot" water clouds
 
-    del mask, high_cli_mask, difference
 
     array_indexes[:, :, :, 2] = get_warm(mir=array_data[:, :, :, 1], cos_zen=mu, satellite_step=satellite_step,
-                                         slot_step=slot_step, cloudy_mask=difference > 0.5,
+                                         slot_step=slot_step, cloudy_mask=high_cli_mask,
                                          threshold_median=300)
 
+    del mask, high_cli_mask, difference
     array_indexes[:, :, :, 3] = cold
 
     me, std = np.zeros(nb_features), np.full(nb_features, 1.)
