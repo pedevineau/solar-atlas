@@ -91,12 +91,21 @@ def upper_divisor_slot_step(slot_step, nb_slots_per_day):
 
 
 def normalize_array(array, mask=None, normalization='max', return_m_s=False):
-    # normalization: max, standard
-    if normalization == 'max':
+    # normalization: max, standard, 'reduced', 'gray-scale'
+    if normalization == 'gray-scale':
+
         if mask is None:
-            to_return = array / np.max(np.abs(array)), 0, 1 # max of data which is not masked...
+            M =  np.max(array)
+            m = np.min(array)
         else:
-            to_return = array / np.max(array[~mask]), 0, 1   # max of data which is not masked...
+            M =  np.max(array[~mask])
+            m = np.min(array[~mask])
+        to_return = np.array(m + 255* (array-m) /(M-m), dtype=np.uint8), 0, 1
+    elif normalization == 'max':
+        if mask is None:
+            to_return = array / np.max(np.abs(array)), 0, 1
+        else:
+            to_return = array / np.max(array[~mask]), 0, 1
     elif normalization == 'centered':
         if mask is None:
             m = np.mean(array)

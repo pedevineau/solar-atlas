@@ -7,7 +7,7 @@ def get_contours(features):
     from numpy.random import randint
     from skimage import measure
     from skimage.exposure import rescale_intensity
-    features = rescale_intensity(np.array(200*features, dtype=np.uint8))
+    # features = rescale_intensity(features))
     array_contours = []
     for slot in range(slots):
         # Find contours at a constant value of 0.8
@@ -35,7 +35,6 @@ if __name__ == '__main__':
     from get_data import get_features
     types_channel = ['infrared', 'visible']
     channel_number = 1
-    display_curves = False
     type_channels = types_channel[channel_number]
     dfb_beginning = 13517
     nb_days = 1
@@ -49,5 +48,6 @@ if __name__ == '__main__':
     # from quick_visualization import get_bbox
     # bbox = get_bbox(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
     features = get_features(type_channels, lat, lon, dfb_beginning, dfb_ending, True, slot_step=1,
-                            normalize=False)
+                            normalize=True)
+    features = normalize_array(features, normalization='max')
     get_contours(features)
