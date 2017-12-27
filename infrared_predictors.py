@@ -56,7 +56,8 @@ def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_
     high_cli_mask = (cli > (30 - m) / s)
     del cli
     array_indexes[:, :, :, 0][high_cli_mask] = 1   # "hot" water clouds
-    array_indexes[:, :, :, 0][mask | (mu <= 0)] = -10
+    mask_cli = mask | (mu <= 0)
+    array_indexes[:, :, :, 0][mask_cli] = -10
 
     # array_indexes[:, :, :, 1] = \
     #     get_cloud_index(mir=array_data[:, :, :, 1], fir=array_data[:, :, :, 0], method='without-bias',
@@ -66,7 +67,7 @@ def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_
                         mask=mask, cos_zen=mu)
 
     array_indexes[:, :, :, 1] = get_cloud_index_positive_variability_5d(cloud_index=difference,
-                                                                        definition_mask=mask | (mu <= 0),
+                                                                        definition_mask=mask_cli,
                                                                         pre_cloud_mask=high_cli_mask | (array_indexes[:, :, :, 3] == 1),
                                                                         satellite_step=satellite_step,
                                                                         slot_step=slot_step)
@@ -85,6 +86,22 @@ def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_
         for feat in range(nb_features):
             array_indexes[:, :, :, feat] = weights[feat] * array_indexes[:, :, :, feat]
         me = me * weights
+
+    if weights is not None:
+        for feat in range(nb_features):
+            array_indexes[:, :, :, feat] = weights[feat] * array_indexes[:, :, :, feat]
+        me = me * weights
+    if normalize:
+        array_indexes[:, :, :, 0] = np.array(
+            normalize_array(array_indexes[:, :, :, 0], mask_cli, normalization='gray-scale'),
+            dtype=np.uint8
+        )
+        array_indexes[:, :, :, 0][mask_cli] = 0
+        array_indexes[:, :, :, 1] = np.array(
+            normalize_array(array_indexes[:, :, :, 1], mask_cli, normalization='gray-scale'),
+            dtype=np.uint8
+        )
+        array_indexes[:, :, :, 1][mask_cli] = 0
 
     if return_m_s and return_mu:
         return array_indexes, mu, me, std

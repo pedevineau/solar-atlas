@@ -34,10 +34,10 @@ def get_otsu(img):
 if __name__ == '__main__':
     from get_data import get_features
     types_channel = ['infrared', 'visible']
-    channel_number = 1
+    channel_number = 0
     type_channels = types_channel[channel_number]
     dfb_beginning = 13517
-    nb_days = 1
+    nb_days = 3
     dfb_ending = dfb_beginning + nb_days - 1
     latitude_beginning = 40.
     latitude_end = 45.
@@ -49,5 +49,4 @@ if __name__ == '__main__':
     # bbox = get_bbox(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
     features = get_features(type_channels, lat, lon, dfb_beginning, dfb_ending, True, slot_step=1,
                             normalize=True)
-    features = normalize_array(features, normalization='max')
     get_contours(features)

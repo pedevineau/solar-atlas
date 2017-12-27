@@ -151,7 +151,7 @@ if __name__ == '__main__':
     display_curves = False
     type_channels = types_channel[channel_number]
     dfb_beginning = 13517
-    nb_days = 10
+    nb_days = 3
     dfb_ending = dfb_beginning + nb_days - 1
     latitude_beginning = 40.
     latitude_end = 45.

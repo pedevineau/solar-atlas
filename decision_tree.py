@@ -162,7 +162,7 @@ if __name__ == '__main__':
 
     slot_step = 1
     beginning = 13517
-    nb_days = 10
+    nb_days = 3
     ending = beginning + nb_days - 1
     compute_indexes = True
     normalize = False

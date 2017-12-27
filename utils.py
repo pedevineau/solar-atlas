@@ -99,7 +99,7 @@ def normalize_array(array, mask=None, normalization='max', return_m_s=False):
         else:
             M =  np.max(array[~mask])
             m = np.min(array[~mask])
-        to_return = np.array(m + 255* (array-m) /(M-m), dtype=np.uint8), 0, 1
+        to_return = m + 255* (array-m) /(M-m), 0, 1
     elif normalization == 'max':
         if mask is None:
             to_return = array / np.max(np.abs(array)), 0, 1
