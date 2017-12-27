@@ -14,9 +14,7 @@ def get_visible_predictors(array_data, ocean_mask, times, latitudes, longitudes,
     nb_features = 4  # snow index, negative variability, positive variability, cloudy sea
     # VIS160_2000: 0,  VIS064_2000:1
     mu = get_array_cos_zen(times, latitudes, longitudes)
-    array_indexes = np.empty(shape=(nb_slots, nb_latitudes, nb_longitudes, nb_features))
-    array_indexes[:, :, :, 3] = get_cloudy_sea(vis=array_data[:, :, :, 1], ocean_mask=ocean_mask,
-                                               threshold_cloudy_sea=0.2)
+
     me, std = np.zeros(nb_features), np.full(nb_features, 1.)
 
     ndsi, m, s, mask_ndsi = get_snow_index(vis=array_data[:, :, :, 1], nir=array_data[:, :, :, 0], threshold_denominator=0.02,
@@ -28,31 +26,34 @@ def get_visible_predictors(array_data, ocean_mask, times, latitudes, longitudes,
 
     del array_data
 
-    array_indexes[:, :, :, 1] = get_bright_negative_variability_5d(ndsi, mask_ndsi, satellite_step, slot_step)
-    array_indexes[:, :, :, 2] = get_bright_negative_variability_5d(ndsi, mask_ndsi, satellite_step, slot_step)
-    array_indexes[:, :, :, 0] = ndsi
     me[0] = m
     std[0] = s
 
-    if weights is not None:
-        for feat in range(nb_features):
-            array_indexes[:, :, :, feat] = weights[feat] * array_indexes[:, :, :, feat]
-        me = me * weights
-    if normalize:
-        array_indexes[:, :, :, 0] = np.array(
-            normalize_array(array_indexes[:, :, :, 0], mask_ndsi, normalization='gray-scale'),
-            dtype=np.uint8
-        )
-        array_indexes[:, :, :, 0][mask_ndsi] = 0
-        array_indexes[:, :, :, 1] = np.array(
-            normalize_array(array_indexes[:, :, :, 1], mask_ndsi, normalization='gray-scale'),
-            dtype=np.uint8
-        )
+    # if weights is not None:
+    #     for feat in range(nb_features):
+    #         array_indexes[:, :, :, feat] = weights[feat] * array_indexes[:, :, :, feat]
+    #     me = me * weights
+
+    if not normalize:
+        array_indexes = np.empty(shape=(nb_slots, nb_latitudes, nb_longitudes, nb_features))
+        array_indexes[:, :, :, 3] = get_cloudy_sea(vis=array_data[:, :, :, 1], ocean_mask=ocean_mask,
+                                                   threshold_cloudy_sea=0.2)
+        array_indexes[:, :, :, 1] = get_bright_negative_variability_5d(ndsi, mask_ndsi, satellite_step, slot_step)
+        array_indexes[:, :, :, 2] = get_bright_negative_variability_5d(ndsi, mask_ndsi, satellite_step, slot_step)
+        array_indexes[:, :, :, 0] = ndsi
+    else:
+        array_indexes = np.empty(shape=(nb_slots, nb_latitudes, nb_longitudes, nb_features), dtype=np.uint8)
+        array_indexes[:, :, :, 3] = get_cloudy_sea(vis=array_data[:, :, :, 1], ocean_mask=ocean_mask,
+                                                   threshold_cloudy_sea=0.2)
+        array_indexes[:, :, :, 2] = normalize_array(
+                get_bright_negative_variability_5d(ndsi, mask_ndsi, satellite_step, slot_step),
+                mask_ndsi, normalization='gray-scale')
+        array_indexes[:, :, :, 2][mask_ndsi] = 0
+        array_indexes[:, :, :, 1] = normalize_array(
+                get_bright_negative_variability_5d(ndsi, mask_ndsi, satellite_step, slot_step),
+                mask_ndsi, normalization='gray-scale')
         array_indexes[:, :, :, 1][mask_ndsi] = 0
-        array_indexes[:, :, :, 2] = np.array(
-            normalize_array(array_indexes[:, :, :, 2], mask_ndsi, normalization='gray-scale'),
-            dtype=np.uint8
-        )
+        array_indexes[:, :, :, 0] = normalize_array(ndsi, mask_ndsi, normalization='gray-scale')
         array_indexes[:, :, :, 2][mask_ndsi] = 0
     if return_m_s and return_mu:
         return array_indexes, mu, me, std

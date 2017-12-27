@@ -25,13 +25,6 @@ def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_
     array_data, mask = mask_channels(array_data, normalize)
 
     if not compute_indexes:
-        # mu[mu < 0] = 0
-        # mask[mu<=0] = True
-        # array_data[:, :, :, 0][mask]=0
-        # array_data[:, :, :, 1][mask]=0
-        # from get_data import remove_cos_zen_correlation
-        # array_data[:,:,:,0] = remove_cos_zen_correlation(array_data[:,:,:,0], mu, mask)
-        # array_data[:,:,:, 1] = remove_cos_zen_correlation(array_data[:,:,:, 1], mu, mask)
         return array_data
 
     nb_features = 4  # cli, variations, warm predictor, cold
@@ -39,44 +32,52 @@ def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_
     mu = get_array_cos_zen(times, latitudes, longitudes)
     mu[mu < 0] = 0
 
-    array_indexes = np.zeros(shape=(nb_slots, nb_latitudes, nb_longitudes, nb_features))
     # remove spatial smoothing
-    cli, m, s = \
-        get_cloud_index(mir=array_data[:, :, :, 1], fir=array_data[:, :, :, 0], return_m_s=True, method='mu-normalization',
-                        mask=mask, cos_zen=mu)
+    cli, m, s =  get_cloud_index(mir=array_data[:, :, :, 1], fir=array_data[:, :, :, 0], return_m_s=True,
+                                 method='mu-normalization', mask=mask, cos_zen=mu)
 
-    array_indexes[:, :, :, 3] = get_cold(fir=array_data[:, :, :, 0],
-                                         cos_zen=mu,
-                                         satellite_step=satellite_step,
-                                         slot_step=slot_step,
-                                         threshold=240)
+    cold = get_cold(fir=array_data[:, :, :, 0],
+                    cos_zen=mu,
+                    satellite_step=satellite_step,
+                    slot_step=slot_step,
+                    threshold=240)
 
-    # (cli > (30-m)/s) for thick clouds with much water
     # cold==1 for cold things: snow, icy clouds, or cold water clouds like altocumulus
     high_cli_mask = (cli > (30 - m) / s)
     del cli
-    array_indexes[:, :, :, 0][high_cli_mask] = 1   # "hot" water clouds
     mask_cli = mask | (mu <= 0)
-    array_indexes[:, :, :, 0][mask_cli] = -10
-
-    # array_indexes[:, :, :, 1] = \
-    #     get_cloud_index(mir=array_data[:, :, :, 1], fir=array_data[:, :, :, 0], method='without-bias',
-    #                     mask=mask, pre_cloud_mask=pre_cloud_mask, cos_zen=mu)
 
     difference = get_cloud_index(mir=array_data[:, :, :, 1], fir=array_data[:, :, :, 0], method='default',
                         mask=mask, cos_zen=mu)
 
-    array_indexes[:, :, :, 1] = get_cloud_index_positive_variability_5d(cloud_index=difference,
-                                                                        definition_mask=mask_cli,
-                                                                        pre_cloud_mask=high_cli_mask | (array_indexes[:, :, :, 3] == 1),
-                                                                        satellite_step=satellite_step,
-                                                                        slot_step=slot_step)
+    if not normalize:
+        array_indexes = np.empty(shape=(nb_slots, nb_latitudes, nb_longitudes, nb_features))
+        array_indexes[:, :, :, 1] = get_cloud_index_positive_variability_5d(cloud_index=difference,
+                                                    definition_mask=mask_cli,
+                                                    pre_cloud_mask=high_cli_mask | (cold == 1),
+                                                    satellite_step=satellite_step,
+                                                    slot_step=slot_step)
+        array_indexes[:, :, :, 0][high_cli_mask] = 1  # "hot" water clouds
+        array_indexes[:, :, :, 0][mask_cli] = -10
+
+    else:
+        array_indexes = np.empty(shape=(nb_slots, nb_latitudes, nb_longitudes, nb_features), dtype=np.uint8)
+        array_indexes[:, :, :, 1] = normalize_array(
+            get_cloud_index_positive_variability_5d(cloud_index=difference,
+                                                    definition_mask=mask_cli,
+                                                    pre_cloud_mask=high_cli_mask | (cold == 1),
+                                                    satellite_step=satellite_step,
+                                                    slot_step=slot_step),
+            mask_cli, normalization='gray-scale')
+        array_indexes[:, :, :, 0][high_cli_mask] = 1  # "hot" water clouds
 
     del mask, high_cli_mask, difference
 
     array_indexes[:, :, :, 2] = get_warm(mir=array_data[:, :, :, 1], cos_zen=mu, satellite_step=satellite_step,
-                                         slot_step=slot_step, cloudy_mask=array_indexes[:, :, :, 1] > 0.5,
+                                         slot_step=slot_step, cloudy_mask=difference > 0.5,
                                          threshold_median=300)
+
+    array_indexes[:, :, :, 3] = cold
 
     me, std = np.zeros(nb_features), np.full(nb_features, 1.)
     me[0] = m
@@ -91,17 +92,6 @@ def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_
         for feat in range(nb_features):
             array_indexes[:, :, :, feat] = weights[feat] * array_indexes[:, :, :, feat]
         me = me * weights
-    if normalize:
-        array_indexes[:, :, :, 0] = np.array(
-            normalize_array(array_indexes[:, :, :, 0], mask_cli, normalization='gray-scale'),
-            dtype=np.uint8
-        )
-        array_indexes[:, :, :, 0][mask_cli] = 0
-        array_indexes[:, :, :, 1] = np.array(
-            normalize_array(array_indexes[:, :, :, 1], mask_cli, normalization='gray-scale'),
-            dtype=np.uint8
-        )
-        array_indexes[:, :, :, 1][mask_cli] = 0
 
     if return_m_s and return_mu:
         return array_indexes, mu, me, std
@@ -252,7 +242,7 @@ def get_warm(mir, cos_zen, satellite_step, slot_step, cloudy_mask, threshold_med
     :param threshold_median: an hyper-parameter giving the minimum median infra-red (3890nm) temperature to be considered as hot pixel
     :return: a 0-1 integer matrix (shape: slots, latitudes, longitudes)
     '''
-    to_return = np.zeros_like(mir)
+    to_return = np.zeros_like(mir, dtype=np.uint8)
     warm_mask = get_warm_ground_mask(mir, cos_zen, satellite_step, slot_step, cloudy_mask, threshold_median)
     to_return[warm_mask] = 1
     return to_return
@@ -270,7 +260,7 @@ def get_cold(fir, cos_zen, satellite_step, slot_step, threshold):
     :return: a 0-1 integer matrix (shape: slots, latitudes, longitudes)
     '''
     # TODO: add some cos-zen correlation (correlation => it was not clouds)
-    to_return = np.zeros_like(fir)
+    to_return = np.zeros_like(fir, dtype=np.uint8)
     to_return[fir < threshold] = 1
     return to_return
 
