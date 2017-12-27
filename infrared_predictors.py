@@ -22,7 +22,7 @@ def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_
     from cos_zen import get_array_cos_zen
     # from filter import median_filter_3d
 
-    array_data, mask = mask_channels(array_data, normalize)
+    array_data, mask = mask_channels(array_data, False)
 
     if not compute_indexes:
         return array_data
