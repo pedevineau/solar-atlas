@@ -1,18 +1,16 @@
 from utils import *
 
 
-def get_contours(features):
-    # from scipy.ndimage import sobel, prewitt
+def segmentation(features, chan):
     (slots, lats, lons) = np.shape(features)[0:3]
-    from numpy.random import randint
     from skimage import measure
-    from skimage.exposure import rescale_intensity
+    # from skimage.exposure import rescale_intensity
     # features = rescale_intensity(features))
     array_contours = []
     for slot in range(slots):
         # Find contours at a constant value of 0.8
         import matplotlib.pyplot as plt
-        img = get_otsu(features[slot, :, :, 0])
+        img = get_otsu(features[slot, :, :, chan])
         contours = measure.find_contours(img, 0.8)
         array_contours.append(contours)
         fig, ax = plt.subplots()
@@ -25,7 +23,6 @@ def get_contours(features):
 
 def get_otsu(img):
     import cv2
-    print np.shape(img)
     blur = cv2.GaussianBlur(img, (5, 5), 0)
     ret, th = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     return th
@@ -34,6 +31,8 @@ def get_otsu(img):
 if __name__ == '__main__':
     from get_data import get_features
     types_channel = ['infrared', 'visible']
+    compute_indexes = True
+    chan = 1
     channel_number = 0
     type_channels = types_channel[channel_number]
     dfb_beginning = 13517
@@ -47,6 +46,6 @@ if __name__ == '__main__':
     lat, lon = get_latitudes_longitudes(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
     # from quick_visualization import get_bbox
     # bbox = get_bbox(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
-    features = get_features(type_channels, lat, lon, dfb_beginning, dfb_ending, True, slot_step=1,
+    features = get_features(type_channels, lat, lon, dfb_beginning, dfb_ending, compute_indexes, slot_step=1,
                             normalize=True)
-    get_contours(features)
+    segmentation(features, chan)

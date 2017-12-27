@@ -8,7 +8,14 @@ def get_visible_predictors(array_data, ocean_mask, times, latitudes, longitudes,
 
     array_data, mask = mask_channels(array_data, False)
     if not compute_indexes:
-        return array_data
+        if not normalize:
+            return array_data
+        else:
+            to_return = np.empty_like(array_data, dtype=np.uint8)
+            to_return[:, :, :, 0] = normalize_array(array_data[:, :, :, 0], mask, normalization='gray-scale')
+            to_return[:, :, :, 1] = normalize_array(array_data[:, :, :, 1], mask, normalization='gray-scale')
+            return to_return
+
     (nb_slots, nb_latitudes, nb_longitudes, nb_channels) = np.shape(array_data)
 
     nb_features = 4  # snow index, negative variability, positive variability, cloudy sea
