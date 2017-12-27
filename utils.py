@@ -93,7 +93,6 @@ def upper_divisor_slot_step(slot_step, nb_slots_per_day):
 def normalize_array(array, mask=None, normalization='max', return_m_s=False):
     # normalization: max, standard, 'reduced', 'gray-scale'
     if normalization == 'gray-scale':
-
         if mask is None:
             M =  np.max(array)
             m = np.min(array)

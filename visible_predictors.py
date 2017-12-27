@@ -40,9 +40,11 @@ def get_visible_predictors(array_data, ocean_mask, times, latitudes, longitudes,
         me = me * weights
     if normalize:
         array_indexes[:, :, :, 0] = normalize_array(array_indexes[:, :, :, 0], mask_ndsi, normalization='gray-scale')
+        array_indexes[:, :, :, 0][mask_ndsi] = 0
         array_indexes[:, :, :, 1] = normalize_array(array_indexes[:, :, :, 1], mask_ndsi, normalization='gray-scale')
+        array_indexes[:, :, :, 1][mask_ndsi] = 0
         array_indexes[:, :, :, 2] = normalize_array(array_indexes[:, :, :, 2], mask_ndsi, normalization='gray-scale')
-
+        array_indexes[:, :, :, 2][mask_ndsi] = 0
     if return_m_s and return_mu:
         return array_indexes, mu, me, std
     elif not return_m_s and return_mu:
