@@ -24,8 +24,6 @@ def get_visible_predictors(array_data, ocean_mask, times, latitudes, longitudes,
     # print 'replace NDSI by VIS (en sekrd)'
     # ndsi, m, s = normalize_array(array=array_data[:, :, :, 1], mask=mask_ndsi, normalization='standard', return_m_s=True)
 
-    del array_data
-
     me[0] = m
     std[0] = s
 
