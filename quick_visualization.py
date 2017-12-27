@@ -210,33 +210,3 @@ if __name__ == '__main__':
                            , vmax=2, color='gray')
     # visualize_map_time(4*features[:, :, :, 1:3], bbox, title='INFRARED', vmin=0, vmax=1, color='gray')
     raise Exception('stop here for now')
-
-
-    for slot0 in arange(4,40,9):
-        visualize_curves_3d(lat, lon, features[slot0,:,:,0], title='slot:'+str(slot0))
-        # visualize_curves_3d(lat, lon, features[slot0,:,:,1], title='slot:'+str(slot0))
-
-        # visualize_map_time(blu, bbox, title='median filter', vmin=-1, vmax=1, color='gray')
-
-
-    gra = True
-    if gra:
-        from scipy.ndimage import sobel, prewitt
-        (slots, lats, lons) = np.shape(features)[0:3]
-        from numpy.random import randint
-        grad = np.empty((slots, lats, lons, 2))
-        for slot in range(slots):
-            # Find contours at a constant value of 0.8
-            from skimage import measure
-            import matplotlib.pyplot as plt
-            contours = measure.find_contours(r, 0.8)
-            fig, ax = plt.subplots()
-            # Display the image and plot all contours found
-            fig, ax = plt.subplots()
-            ax.imshow(features[slot,:,:,0], interpolation='nearest', cmap=plt.cm.gray)
-        #
-        # for n, contour in enumerate(contours):
-        #     ax.plot(contour[:, 1], contour[:, 0], linewidth=2)
-        #     gr = np.gradient(features[slot,:,:,0])
-        #     grad[slot, :, :, 0] = gr[0]
-        #     grad[slot, :, :, 1] = gr[1]
