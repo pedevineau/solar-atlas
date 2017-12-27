@@ -6,9 +6,8 @@ def get_contours(features):
     (slots, lats, lons) = np.shape(features)[0:3]
     from numpy.random import randint
     from skimage import measure
-    grad = np.empty((slots, lats, lons, 2))
     from skimage.exposure import rescale_intensity
-    features = rescale_intensity(features)
+    features = rescale_intensity(np.array(200*features, dtype=np.uint8))
     array_contours = []
     for slot in range(slots):
         # Find contours at a constant value of 0.8
@@ -26,6 +25,7 @@ def get_contours(features):
 
 def get_otsu(img):
     import cv2
+    print np.shape(img)
     blur = cv2.GaussianBlur(img, (5, 5), 0)
     ret, th = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     return th
@@ -38,7 +38,7 @@ if __name__ == '__main__':
     display_curves = False
     type_channels = types_channel[channel_number]
     dfb_beginning = 13517
-    nb_days = 10
+    nb_days = 1
     dfb_ending = dfb_beginning + nb_days - 1
     latitude_beginning = 40.
     latitude_end = 45.
