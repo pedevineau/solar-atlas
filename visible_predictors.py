@@ -45,6 +45,7 @@ def get_visible_predictors(array_data, ocean_mask, times, latitudes, longitudes,
                                                    threshold_cloudy_sea=0.2)
         array_indexes[:, :, :, 1] = get_bright_negative_variability_5d(ndsi, mask_ndsi, satellite_step, slot_step)
         array_indexes[:, :, :, 2] = get_bright_negative_variability_5d(ndsi, mask_ndsi, satellite_step, slot_step)
+        ndsi[array_data[:, :, :, 1] < 0.3] = -10
         array_indexes[:, :, :, 0] = ndsi
     else:
         array_indexes = np.empty(shape=(nb_slots, nb_latitudes, nb_longitudes, nb_features), dtype=np.uint8)
