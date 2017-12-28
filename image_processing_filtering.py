@@ -14,7 +14,8 @@ def segmentation(features, chan):
         contours = measure.find_contours(img, 0.8)
         array_contours.append(contours)
         fig, ax = plt.subplots()
-        ax.imshow(features[slot,:,:,0], interpolation='nearest', cmap=plt.cm.gray)
+        ax.imshow(features[slot,:,:, chan], interpolation='nearest', cmap=plt.cm.gray)
+        # ax.imshow(img, interpolation='nearest', cmap=plt.cm.gray)
         for n, contour in enumerate(contours):
             ax.plot(contour[:, 1], contour[:, 0], linewidth=2)
         plt.show()
@@ -23,9 +24,14 @@ def segmentation(features, chan):
 
 def get_otsu(img):
     import cv2
-    blur = cv2.GaussianBlur(img, (5, 5), 0)
-    ret, th = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    return th
+    from skimage.filters import rank
+    from skimage.morphology import disk
+    radius = 5
+    selem = disk(radius)
+    local_otsu = rank.otsu(img, selem)
+    # blur = cv2.GaussianBlur(img, (5, 5), 0)
+    # ret, th = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    return img > local_otsu
 
 
 if __name__ == '__main__':

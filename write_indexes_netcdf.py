@@ -184,15 +184,12 @@ if __name__ == '__main__':
 
         from decision_tree import *
 
-        classes = get_classes_decision_tree(
+        classes = get_classes_v1_point(
             latitudes,
             longitudes,
             dfb_beginning,
             dfb_ending,
-            slot_step=slot_step_,
-            normalize=False,
-            weights=None,
-            return_m_s=False
+            slot_step=slot_step_
         )
 
         classes = np.flip(classes, axis=1)

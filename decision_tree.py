@@ -2,15 +2,12 @@ from utils import *
 from get_data import get_features
 
 
-def get_classes_decision_tree(latitudes,
-        longitudes,
-        beginning,
-        ending,
-        slot_step,
-        normalize,
-        weights=None,
-        return_m_s=False
-   ):
+def get_classes_v1_point(latitudes,
+                         longitudes,
+                         beginning,
+                         ending,
+                         slot_step,
+                         ):
 
     visible_features, m, s = get_features(
         'visible',
@@ -97,7 +94,7 @@ def get_classes_decision_tree(latitudes,
     # print persistent_snow
     # print len(persistent_snow[persistent_snow])
 
-    foggy = (obvious_clouds | slight_clouds) & ~warm & (visible_features[:, :, :, 0] < -1.5)
+    foggy = (obvious_clouds | slight_clouds) & ~warm & (visible_features[:, :, :, 0] < -1.5) & (visible_features[:, :, :, 0] > -9)
     if not np.all(foggy is False):
         foggy[foggy] = 100
         print np.argmax(foggy)
@@ -157,6 +154,99 @@ def get_classes_decision_tree(latitudes,
     return classes
 
 
+def get_classes_v2_image(latitudes,
+                         longitudes,
+                         beginning,
+                         ending,
+                         slot_step
+                         ):
+
+    visible_features, m, s = get_features(
+        'visible',
+        latitudes,
+        longitudes,
+        beginning,
+        ending,
+        True,
+        slot_step,
+        normalize=True,
+    )
+
+    infrared_features = get_features(
+        'infrared',
+        latitudes,
+        longitudes,
+        beginning,
+        ending,
+        True,
+        slot_step,
+        normalize=True,
+    )
+
+    bright = (classify_brightness(visible_features[:, :, :, 0], m[0], s[0]) == 1)
+    negative_variable_brightness = (classifiy_brightness_variability(visible_features[:, :, :, 1]) == 1)
+    positive_variable_brightness = (classifiy_brightness_variability(visible_features[:, :, :, 2]) == 1)
+
+    from classification_cloud_index import classify_cloud_covertness, classify_cloud_variability
+    slight_clouds = (classify_cloud_variability(infrared_features[:, :, :, 1]) == 1)
+    obvious_clouds = (infrared_features[:, :, :, 0] == 1)
+
+    cold_not_bright = (infrared_features[:, :, :, 3] ==1) & ~bright
+
+    warm = (infrared_features[:, :, :, 2] == 1)
+
+
+    # foggy = (obvious_clouds | slight_clouds) & ~warm & (visible_features[:, :, :, 0] < -1.5) & (visible_features[:, :, :, 0] > -9)
+    # if not np.all(foggy is False):
+    #     foggy[foggy] = 100
+    #     print np.argmax(foggy)
+
+    #  foggy: low snow index, good vis
+    (nb_slots, nb_latitudes, nb_longitudes) = np.shape(visible_features)[0:3]
+    classes = np.zeros((nb_slots, nb_latitudes, nb_longitudes))
+
+    from time import time
+
+    # clouds = obvious_clouds | slight_clouds
+    begin_affectation = time()
+    classes[(infrared_features[:, :, :, 0] == -10)] = 13 # before all the other classes (important)
+    classes[(visible_features[:, :, :, 3] == 1)] = 12  # before all the other classes (important)
+    classes[bright & ~(obvious_clouds | slight_clouds) & ~warm & ~negative_variable_brightness] = 5  # class ground snow or ice
+    classes[bright & positive_variable_brightness & ~warm] = 6
+    classes[bright & negative_variable_brightness & ~warm] = 7
+    classes[bright & ~negative_variable_brightness & warm] = 10
+    classes[bright & negative_variable_brightness & warm] = 9
+    classes[cold_not_bright] = 8
+    classes[obvious_clouds & ~bright] = 1
+    classes[slight_clouds & ~bright] = 2
+    classes[obvious_clouds & bright] = 3
+    classes[slight_clouds & bright] = 4
+
+    # classes[bright & (infrared_features[:, :, :, 3] == 1)] = 7  # = cold and bright. opaque obvious_clouds or cold obvious_clouds over snowy stuff
+    # classes[persistent_snow & (obvious_clouds | cold_opaque_clouds)] = 4
+    # classes[foggy] = 11
+
+    print 'time affectation', time()-begin_affectation
+
+    print 'allegedly uncovered lands'
+    print 'obvious clouds:1'
+    print 'slight clouds or sunrise/sunset clouds:2'
+    print 'clouds and bright:3'
+    print 'slight clouds and bright:4'
+    print 'snowy:5'
+    print 'snowy clouds:6'
+    print 'covered snow:7'
+    print 'cold not bright (cold thin water clouds?):8'
+    print 'hot bright corpses:9'
+    print 'hot bright variable corpses:10'
+    print 'foggy:11'
+    print 'sea clouds identified by visibility:12' #### WARNING: what about icy lakes??? ####
+    # print 'suspect high snow index (over sea / around sunset or sunrise):13'
+    print 'undefined:13'
+
+    return classes
+
+
 if __name__ == '__main__':
     nb_classes = 14
 
@@ -165,7 +255,8 @@ if __name__ == '__main__':
     nb_days = 3
     ending = beginning + nb_days - 1
     compute_indexes = True
-    normalize = False
+
+    method = 'on-point'  # 'on-point', 'image'
 
     latitude_beginning = 40.
     latitude_end = 45.
@@ -177,13 +268,13 @@ if __name__ == '__main__':
     date_begin, date_end = print_date_from_dfb(beginning, ending)
     print beginning, ending
 
-    classes = get_classes_decision_tree(latitudes,
-                                        longitudes,
-                                        beginning,
-                                        ending,
-                                        slot_step,
-                                        normalize,
-                                        )
+    if method == 'on_point':
+        classes = get_classes_v1_point(latitudes,
+                                       longitudes,
+                                       beginning,
+                                       ending,
+                                       slot_step,
+                                       )
 
     from quick_visualization import visualize_map_time, get_bbox
 

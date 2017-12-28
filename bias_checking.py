@@ -57,10 +57,10 @@ if __name__ == '__main__':
                                                      longitude_beginning, longitude_end)
 
     from get_data import get_features
-    from decision_tree import get_classes_decision_tree
+    from decision_tree import get_classes_v1_point
 
     vis = get_features('visible', latitudes, longitudes, beginning, ending, False)[:, :, :, 1]
-    classes = get_classes_decision_tree(latitudes, longitudes, beginning, ending, slot_step=1, normalize=False)
+    classes = get_classes_v1_point(latitudes, longitudes, beginning, ending, slot_step=1)
 
     comparision = comparision_visible(
         vis,
