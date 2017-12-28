@@ -34,7 +34,7 @@ def medians_index(index, mask, display_now=True):
 
 
 def comparision_visible(vis, classes):
-    threshold_visible = 0.3
+    threshold_visible = 0.4
     comparision = np.empty_like(vis)
     comparision[(vis > threshold_visible) & (classes == 0)] = -2
     comparision[(vis > threshold_visible) & ((classes == 2) | (classes == 4))] = -1
