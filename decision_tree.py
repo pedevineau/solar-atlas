@@ -161,7 +161,7 @@ def get_classes_v2_image(latitudes,
                          slot_step
                          ):
 
-    visible_features, m, s = get_features(
+    visible_features = get_features(
         'visible',
         latitudes,
         longitudes,
