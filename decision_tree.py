@@ -184,10 +184,10 @@ def get_classes_v2_image(latitudes,
     )
 
     from image_processing_filtering import segmentation
-    bright = (visible_features, 0)
-    negative_variable_brightness = (visible_features, 1)
-    positive_variable_brightness = (visible_features, 2)
-    slight_clouds = (infrared_features, 1)
+    bright = segmentation(visible_features, 0)
+    negative_variable_brightness = segmentation(visible_features, 1)
+    positive_variable_brightness = segmentation(visible_features, 2)
+    slight_clouds = segmentation(infrared_features, 1)
     obvious_clouds = (infrared_features[:, :, :, 0] == 1)
 
     cold_not_bright = (infrared_features[:, :, :, 3] ==1) & ~bright
@@ -269,6 +269,13 @@ if __name__ == '__main__':
 
     if method == 'on_point':
         classes = get_classes_v1_point(latitudes,
+                                       longitudes,
+                                       beginning,
+                                       ending,
+                                       slot_step,
+                                       )
+    else:
+        classes = get_classes_v2_image(latitudes,
                                        longitudes,
                                        beginning,
                                        ending,
