@@ -6,28 +6,28 @@ def segmentation(features, chan):
     from skimage import measure
     # from skimage.exposure import rescale_intensity
     # features = rescale_intensity(features))
-    array_contours = []
+    to_return = np.empty(((slots, lats, lons)))
     for slot in range(slots):
         # Find contours at a constant value of 0.8
         import matplotlib.pyplot as plt
-        img = get_otsu(features[slot, :, :, chan])
-        contours = measure.find_contours(img, 0.8)
-        array_contours.append(contours)
-        fig, ax = plt.subplots()
-        ax.imshow(features[slot,:,:, chan], interpolation='nearest', cmap=plt.cm.gray)
+        img = apply_otsu(features[slot, :, :, chan])
+        to_return[slot] = (img == 255)
+        # contours = measure.find_contours(img, 0.8)
+        # array_contours.append(contours)
+        # fig, ax = plt.subplots()
+        # ax.imshow(features[slot,:,:, chan], interpolation='nearest', cmap=plt.cm.gray)
         # ax.imshow(img, interpolation='nearest', cmap=plt.cm.gray)
-        for n, contour in enumerate(contours):
-            ax.plot(contour[:, 1], contour[:, 0], linewidth=2)
-        plt.show()
-    return array_contours
+        # for n, contour in enumerate(contours):
+        #     ax.plot(contour[:, 1], contour[:, 0], linewidth=2)
+        # plt.show()
+    return to_return
 
 
-def get_otsu(img):
+def apply_otsu(img):
     import cv2
-    radius = 5
     blur = cv2.GaussianBlur(img, (5, 5), 0)
     ret, th = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    return th
+    return th, ret
 
 
 def get_local_otsu(img):

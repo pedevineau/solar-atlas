@@ -183,12 +183,11 @@ def get_classes_v2_image(latitudes,
         normalize=True,
     )
 
-    bright = (classify_brightness(visible_features[:, :, :, 0], m[0], s[0]) == 1)
-    negative_variable_brightness = (classifiy_brightness_variability(visible_features[:, :, :, 1]) == 1)
-    positive_variable_brightness = (classifiy_brightness_variability(visible_features[:, :, :, 2]) == 1)
-
-    from classification_cloud_index import classify_cloud_covertness, classify_cloud_variability
-    slight_clouds = (classify_cloud_variability(infrared_features[:, :, :, 1]) == 1)
+    from image_processing_filtering import segmentation
+    bright = (visible_features, 0)
+    negative_variable_brightness = (visible_features, 1)
+    positive_variable_brightness = (visible_features, 2)
+    slight_clouds = (infrared_features, 1)
     obvious_clouds = (infrared_features[:, :, :, 0] == 1)
 
     cold_not_bright = (infrared_features[:, :, :, 3] ==1) & ~bright
