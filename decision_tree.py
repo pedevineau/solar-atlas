@@ -17,8 +17,7 @@ def get_classes_v1_point(latitudes,
         ending,
         True,
         slot_step,
-        normalize,
-        weights,
+        normalize=False,
         return_m_s=True,
     )
 
@@ -30,37 +29,11 @@ def get_classes_v1_point(latitudes,
         ending,
         True,
         slot_step,
-        normalize,
-        weights
+        normalize=False,
     )
-    #
-    # nir = get_features(
-    #     'visible',
-    #     latitudes,
-    #     longitudes,
-    #     beginning,
-    #     ending,
-    #     False,
-    #     slot_step,
-    #     normalize,
-    #     weights,
-    # )[:, :, :, 0]
-
     # classes: classified_cli, snow over the ground, other (ground, sea...), unknown
 
-
-    # obvious_clouds = (infrared_features[:, :, :, cli_or_unbiased] > 0)  # | (visible_features[:, :, :, 3] == 1)
-
     from classification_snow_index import classify_brightness, classifiy_brightness_variability
-    # bright = np.zeros(np.shape(visible_features)[0:3], dtype=bool)
-    # nb_slots = np.shape(visible_features)[0]
-    # slot = 0
-    # while slot < nb_slots:
-    #     print 'brightness slot:', slot
-    #     next_slot = slot + 5/slot_step
-    #     bright[slot:next_slot] = (classify_brightness(visible_features[slot:next_slot, :, :, 0], m[0], s[0]) == 1)
-    #     slot = next_slot
-
     bright = (classify_brightness(visible_features[:, :, :, 0], m[0], s[0]) == 1)
 
     negative_variable_brightness = (classifiy_brightness_variability(visible_features[:, :, :, 1]) == 1)
@@ -161,6 +134,9 @@ def get_classes_v2_image(latitudes,
                          slot_step
                          ):
 
+
+
+
     visible_features = get_features(
         'visible',
         latitudes,
@@ -184,7 +160,20 @@ def get_classes_v2_image(latitudes,
     )
 
     from image_processing_filtering import segmentation
-    bright = segmentation(visible_features, 0)
+
+    visible = segmentation(
+        get_features(
+            'visible',
+            latitudes,
+            longitudes,
+            beginning,
+            ending,
+            False,
+            slot_step,
+            normalize=True),
+        1
+    )
+    bright = (segmentation(visible_features, 0) & visible)
     negative_variable_brightness = segmentation(visible_features, 1)
     positive_variable_brightness = segmentation(visible_features, 2)
     slight_clouds = segmentation(infrared_features, 1)
@@ -267,7 +256,7 @@ if __name__ == '__main__':
     date_begin, date_end = print_date_from_dfb(beginning, ending)
     print beginning, ending
 
-    if method == 'on_point':
+    if method == 'on-point':
         classes = get_classes_v1_point(latitudes,
                                        longitudes,
                                        beginning,

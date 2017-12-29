@@ -6,11 +6,11 @@ def segmentation(features, chan):
     from skimage import measure
     # from skimage.exposure import rescale_intensity
     # features = rescale_intensity(features))
-    to_return = np.empty(((slots, lats, lons)))
+    to_return = np.empty((slots, lats, lons), dtype=bool)
     for slot in range(slots):
         # Find contours at a constant value of 0.8
         import matplotlib.pyplot as plt
-        img = apply_otsu(features[slot, :, :, chan])
+        img, ret = apply_otsu(features[slot, :, :, chan])
         to_return[slot] = (img == 255)
         # contours = measure.find_contours(img, 0.8)
         # array_contours.append(contours)
@@ -25,7 +25,7 @@ def segmentation(features, chan):
 
 def apply_otsu(img):
     import cv2
-    blur = cv2.GaussianBlur(img, (5, 5), 0)
+    blur = cv2.GaussianBlur(img, (3, 3), 0)
     ret, th = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     return th, ret
 
