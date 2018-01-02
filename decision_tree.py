@@ -236,10 +236,11 @@ def get_classes_v2_image(latitudes,
 
 
 def reduce_classes(classes):
-    to_return = np.full_like(classes, 2)
-    cloudless = ((classes == 0) || (classes == 9) || (classes == 10))
-    cloudless = (cloudless && np.roll(cloudless, 1) && np.roll(cloudless, -1))
+    to_return = np.full_like(classes, 3)
+    cloudless = ((classes == 0) | (classes == 9) | (classes == 10))
+    cloudless = (cloudless & np.roll(cloudless, 1) & np.roll(cloudless, -1))
     to_return[cloudless] = 0
+    to_return[(classes == 2) | (classes == 4)] = 2
     to_return[classes == 5] = 1
     to_return[classes == 13] = 4
     return to_return
@@ -251,11 +252,11 @@ if __name__ == '__main__':
 
     slot_step = 1
     beginning = 13517
-    nb_days = 3
+    nb_days = 1
     ending = beginning + nb_days - 1
     compute_indexes = True
 
-    method = 'on-point'  # 'on-point', 'image'
+    method = 'image'  # 'on-point', 'image'
 
     latitude_beginning = 40.
     latitude_end = 45.
