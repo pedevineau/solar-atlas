@@ -23,6 +23,58 @@ def segmentation(features, chan):
     return to_return
 
 
+def segmentation_watershed(image):
+    from scipy import ndimage
+    from skimage.feature import peak_local_max
+    from skimage.morphology import watershed
+    import numpy as np
+    import argparse
+    import cv2
+
+    # construct the argument parse and parse the arguments
+    # load the image and perform pyramid mean shift filtering
+    # to aid the thresholding step
+    shifted = cv2.pyrMeanShiftFiltering(image, 21, 51)
+    # convert the mean shift image to grayscale, then apply
+    # Otsu's thresholding
+    gray = cv2.cvtColor(shifted, cv2.COLOR_BGR2GRAY)
+    thresh = cv2.threshold(gray, 0, 255,
+                           cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
+    # compute the exact Euclidean distance from every binary
+    # pixel to the nearest zero pixel, then find peaks in this
+    # distance map
+    D = ndimage.distance_transform_edt(thresh)
+    localMax = peak_local_max(D, indices=False, min_distance=20,
+                              labels=thresh)
+
+    # perform a connected component analysis on the local peaks,
+    # using 8-connectivity, then appy the Watershed algorithm
+    markers = ndimage.label(localMax, structure=np.ones((3, 3)))[0]
+    labels = watershed(-D, markers, mask=thresh)
+    # loop over the unique labels returned by the Watershed
+    # algorithm
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots()
+    for label in np.unique(labels):
+        # if the label is zero, we are examining the 'background'
+        # so simply ignore it
+        if label == 0:
+            continue
+
+        # otherwise, allocate memory for the label region and draw
+        # it on the mask
+        mask = np.zeros(gray.shape, dtype="uint8")
+        mask[labels == label] = 255
+
+        # detect contours in the mask and grab the largest one
+        contours = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL,
+                                cv2.CHAIN_APPROX_SIMPLE)[-2]
+
+        for n, contour in enumerate(contours):
+            ax.plot(contour[:, 1], contour[:, 0], linewidth=2)
+    ax.imshow(image, cmap=plt.cm.gray)
+    plt.show()
+
 def apply_otsu(img):
     import cv2
     blur = cv2.GaussianBlur(img, (3, 3), 0)
@@ -60,4 +112,7 @@ if __name__ == '__main__':
     # bbox = get_bbox(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
     features = get_features(type_channels, lat, lon, dfb_beginning, dfb_ending, compute_indexes, slot_step=1,
                             normalize=True)
+
+    segmentation_watershed(features[16, :, :, chan])
+
     segmentation(features, chan)
