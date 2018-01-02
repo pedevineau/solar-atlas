@@ -235,6 +235,17 @@ def get_classes_v2_image(latitudes,
     return classes
 
 
+def reduce_classes(classes):
+    to_return = np.full_like(classes, 2)
+    cloudless = ((classes == 0) || (classes == 9) || (classes == 10))
+    cloudless = (cloudless && np.roll(cloudless, 1) && np.roll(cloudless, -1))
+    to_return[cloudless] = 0
+    to_return[classes == 5] = 1
+    to_return[classes == 13] = 4
+    return to_return
+
+
+
 if __name__ == '__main__':
     nb_classes = 14
 
@@ -278,6 +289,9 @@ if __name__ == '__main__':
     from bias_checking import statistics_classes
 
     visualize_map_time(classes, bbox, vmin=0, vmax=nb_classes-1, title='Classes 0-'+str(nb_classes-1)+
+                                                                       ' from' + str(date_begin))
+
+    visualize_map_time(reduce_classes(classes), bbox, vmin=0, vmax=4, title='Classes 0-'+str(5-1)+
                                                                        ' from' + str(date_begin))
     statistics_classes(classes, display_now=True)
 
