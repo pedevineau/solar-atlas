@@ -131,7 +131,8 @@ def get_classes_v2_image(latitudes,
                          longitudes,
                          beginning,
                          ending,
-                         slot_step
+                         slot_step,
+                         method='otsu'
                          ):
 
 
@@ -158,36 +159,49 @@ def get_classes_v2_image(latitudes,
         slot_step,
         normalize=True,
     )
+    if method == 'watershed':
+        from image_processing_filtering import segmentation_watershed
+        visible = segmentation_watershed(
+            get_features(
+                'visible',
+                latitudes,
+                longitudes,
+                beginning,
+                ending,
+                False,
+                slot_step,
+                normalize=True),
+            1
+        )
 
-    from image_processing_filtering import segmentation
+        bright = (segmentation_watershed(visible_features, 0) & visible)
+        negative_variable_brightness = segmentation_watershed(visible_features, 1)
+        positive_variable_brightness = segmentation_watershed(visible_features, 2)
+        slight_clouds = segmentation_watershed(infrared_features, 1)
+    else:
+        from image_processing_filtering import segmentation
+        visible = segmentation(
+            get_features(
+                'visible',
+                latitudes,
+                longitudes,
+                beginning,
+                ending,
+                False,
+                slot_step,
+                normalize=True),
+            1
+        )
 
-    visible = segmentation(
-        get_features(
-            'visible',
-            latitudes,
-            longitudes,
-            beginning,
-            ending,
-            False,
-            slot_step,
-            normalize=True),
-        1
-    )
-    bright = (segmentation(visible_features, 0) & visible)
-    negative_variable_brightness = segmentation(visible_features, 1)
-    positive_variable_brightness = segmentation(visible_features, 2)
-    slight_clouds = segmentation(infrared_features, 1)
+        bright = (segmentation(visible_features, 0) & visible)
+        negative_variable_brightness = segmentation(visible_features, 1)
+        positive_variable_brightness = segmentation(visible_features, 2)
+        slight_clouds = segmentation(infrared_features, 1)
     obvious_clouds = (infrared_features[:, :, :, 0] == 1)
 
     cold_not_bright = (infrared_features[:, :, :, 3] ==1) & ~bright
 
     warm = (infrared_features[:, :, :, 2] == 1)
-
-
-    # foggy = (obvious_clouds | slight_clouds) & ~warm & (visible_features[:, :, :, 0] < -1.5) & (visible_features[:, :, :, 0] > -9)
-    # if not np.all(foggy is False):
-    #     foggy[foggy] = 100
-    #     print np.argmax(foggy)
 
     #  foggy: low snow index, good vis
     (nb_slots, nb_latitudes, nb_longitudes) = np.shape(visible_features)[0:3]
@@ -256,7 +270,7 @@ if __name__ == '__main__':
     ending = beginning + nb_days - 1
     compute_indexes = True
 
-    method = 'image'  # 'on-point', 'image'
+    method = 'image'  # 'on-point', 'otsu', 'watershed'
 
     latitude_beginning = 40.
     latitude_end = 45.
@@ -275,12 +289,22 @@ if __name__ == '__main__':
                                        ending,
                                        slot_step,
                                        )
-    else:
+    elif method == 'otsu':
         classes = get_classes_v2_image(latitudes,
                                        longitudes,
                                        beginning,
                                        ending,
                                        slot_step,
+                                       method='otsu'
+                                       )
+
+    elif method == 'watershed':
+        classes = get_classes_v2_image(latitudes,
+                                       longitudes,
+                                       beginning,
+                                       ending,
+                                       slot_step,
+                                       method='watershed'
                                        )
 
     from quick_visualization import visualize_map_time, get_bbox

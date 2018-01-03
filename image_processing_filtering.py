@@ -3,27 +3,21 @@ from utils import *
 
 def segmentation(features, chan):
     (slots, lats, lons) = np.shape(features)[0:3]
-    from skimage import measure
-    # from skimage.exposure import rescale_intensity
-    # features = rescale_intensity(features))
     to_return = np.empty((slots, lats, lons), dtype=bool)
     for slot in range(slots):
-        # Find contours at a constant value of 0.8
-        import matplotlib.pyplot as plt
         img, ret = apply_otsu(features[slot, :, :, chan])
         to_return[slot] = (img == 255)
-        # contours = measure.find_contours(img, 0.8)
-        # array_contours.append(contours)
-        # fig, ax = plt.subplots()
-        # ax.imshow(features[slot,:,:, chan], interpolation='nearest', cmap=plt.cm.gray)
-        # ax.imshow(img, interpolation='nearest', cmap=plt.cm.gray)
-        # for n, contour in enumerate(contours):
-        #     ax.plot(contour[:, 1], contour[:, 0], linewidth=2)
-        # plt.show()
     return to_return
 
+def segmentation_watershed(features, chan):
+    (slots, lats, lons) = np.shape(features)[0:3]
+    to_return = np.empty((slots, lats, lons), dtype=bool)
+    for slot in range(slots):
+        img, ret = improved_watershed(features[slot, :, :, chan])
+        to_return[slot] = (img == 255)
+    return to_return
 
-def segmentation_watershed(image):
+def improved_watershed(image, spatial_coherence=0.1):
     # Image Segmentation with Watershed Algorithm
     # http://opencv-python-tutroals.readthedocs.io/en/latest/py_tutorials/py_imgproc/py_watershed/py_watershed.html
     from scipy import ndimage
@@ -45,7 +39,7 @@ def segmentation_watershed(image):
 
     # Finding sure foreground area
     dist_transform = cv2.distanceTransform(opening, cv2.cv.CV_DIST_L2, 5)
-    ret, sure_fg = cv2.threshold(dist_transform, 1.0 * dist_transform.max(), 255, 0)
+    ret, sure_fg = cv2.threshold(dist_transform, spatial_coherence * dist_transform.max(), 255, 0)
 
     # Finding unknown region
     sure_fg = np.uint8(sure_fg)
@@ -63,16 +57,16 @@ def segmentation_watershed(image):
     # localMax = peak_local_max(D, indices=False, min_distance=20,
     #                           labels=thresh)
 
-    labels = watershed(-D, markers, mask=thresh)
-
+    water = watershed(-D, markers, mask=thresh)
+    water[water == 1] = 255
     # loop over the unique labels returned by the Watershed
     # algorithm
-    fig, ax = plt.subplots()
-    contours = find_contours(labels, 1)
-    for n, contour in enumerate(contours):
-        ax.plot(contour[:, 1], contour[:, 0], linewidth=2)
-    ax.imshow(image, cmap=plt.cm.gray)
-    plt.show()
+    # fig, ax = plt.subplots()
+    # contours = find_contours(labels, 1)
+    # for n, contour in enumerate(contours):
+    #     ax.plot(contour[:, 1], contour[:, 0], linewidth=2)
+    # ax.imshow(image, cmap=plt.cm.gray)
+    # plt.show()
 
 
 def apply_otsu(img):
@@ -92,12 +86,13 @@ def get_local_otsu(img):
     # ret, th = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     return img > local_otsu
 
+
 if __name__ == '__main__':
     from get_data import get_features
     types_channel = ['infrared', 'visible']
     compute_indexes = True
-    chan = 1
-    channel_number = 0
+    chan = 0
+    channel_number = 1
     type_channels = types_channel[channel_number]
     dfb_beginning = 13517
     nb_days = 3
