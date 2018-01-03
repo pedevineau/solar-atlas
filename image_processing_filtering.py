@@ -27,7 +27,7 @@ def segmentation_watershed(image):
     # Image Segmentation with Watershed Algorithm
     # http://opencv-python-tutroals.readthedocs.io/en/latest/py_tutorials/py_imgproc/py_watershed/py_watershed.html
     from scipy import ndimage
-    from skimage.feature import peak_local_max
+    # from skimage.feature import peak_local_max
     from skimage.morphology import watershed
     from skimage.measure import find_contours, label
     import numpy as np
@@ -45,7 +45,7 @@ def segmentation_watershed(image):
 
     # Finding sure foreground area
     dist_transform = cv2.distanceTransform(opening, cv2.cv.CV_DIST_L2, 5)
-    ret, sure_fg = cv2.threshold(dist_transform, 0.7 * dist_transform.max(), 255, 0)
+    ret, sure_fg = cv2.threshold(dist_transform, 1.0 * dist_transform.max(), 255, 0)
 
     # Finding unknown region
     sure_fg = np.uint8(sure_fg)
@@ -59,12 +59,11 @@ def segmentation_watershed(image):
     # Now, mark the region of unknown with zero
     markers[unknown == 255] = 0
 
-    # D = ndimage.distance_transform_edt(thresh)
+    D = ndimage.distance_transform_edt(thresh)
     # localMax = peak_local_max(D, indices=False, min_distance=20,
     #                           labels=thresh)
 
-    labels = watershed(image, markers)
-    # image[labels == -1] = 255
+    labels = watershed(-D, markers, mask=thresh)
 
     # loop over the unique labels returned by the Watershed
     # algorithm
