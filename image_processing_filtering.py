@@ -29,7 +29,7 @@ def segmentation_watershed(image):
     from scipy import ndimage
     from skimage.feature import peak_local_max
     from skimage.morphology import watershed
-    from skimage.measure import find_contours
+    from skimage.measure import find_contours, label
     import numpy as np
     import cv2
     import matplotlib.pyplot as plt
@@ -44,7 +44,7 @@ def segmentation_watershed(image):
     sure_bg = cv2.dilate(opening, kernel, iterations=3)
 
     # Finding sure foreground area
-    dist_transform = cv2.distanceTransform(opening, cv2.DIST_L2, 5)
+    dist_transform = cv2.distanceTransform(opening, cv2.cv.CV_DIST_L2, 5)
     ret, sure_fg = cv2.threshold(dist_transform, 0.7 * dist_transform.max(), 255, 0)
 
     # Finding unknown region
@@ -52,7 +52,8 @@ def segmentation_watershed(image):
     unknown = cv2.subtract(sure_bg, sure_fg)
 
     # Marker labelling
-    ret, markers = cv2.connectedComponents(sure_fg)
+    # ret, markers = cv2.connectedComponents(sure_fg)
+    markers = label(sure_fg, background=0)
     # Add one to all labels so that sure background is not 0, but 1
     markers += 1
     # Now, mark the region of unknown with zero
@@ -63,7 +64,7 @@ def segmentation_watershed(image):
     #                           labels=thresh)
 
     labels = cv2.watershed(image, markers)
-    image[markers == -1] = [255, 0, 0]
+    image[labels == -1] = [255, 0, 0]
 
     # loop over the unique labels returned by the Watershed
     # algorithm
