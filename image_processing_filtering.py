@@ -63,8 +63,8 @@ def segmentation_watershed(image):
     # localMax = peak_local_max(D, indices=False, min_distance=20,
     #                           labels=thresh)
 
-    labels = cv2.watershed(image, markers)
-    image[labels == -1] = [255, 0, 0]
+    labels = watershed(image, markers)
+    # image[labels == -1] = 255
 
     # loop over the unique labels returned by the Watershed
     # algorithm
