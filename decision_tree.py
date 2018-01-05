@@ -171,6 +171,7 @@ def get_classes_v2_image(latitudes,
             False,
             slot_step,
             normalize=True),
+        0,
         method
     )
     bright = (segmentation(visible_features, 0, method) & visible)

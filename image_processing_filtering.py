@@ -42,8 +42,8 @@ def segmentation_watershed_3d(features, chan, coherence=0.2):
 
 
 def watershed_3d(feature, coherence=0.2):
-    from scipy import ndimage
-    from skimage.morphology import watershed, dilation, opening, cube, distance_transform_edt
+    from scipy.ndimage import distance_transform_edt
+    from skimage.morphology import watershed, dilation, opening, cube,
     from skimage.measure import find_contours, label
     from skimage.filters import threshold_otsu, threshold_minimum
     thresh = feature < threshold_otsu(feature)  # mask=True for background
