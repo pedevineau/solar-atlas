@@ -46,33 +46,35 @@ def watershed_3d(feature, coherence=0.2):
     from skimage.morphology import watershed, dilation, opening, cube
     from skimage.measure import find_contours, label
     from skimage.filters import threshold_otsu, threshold_minimum
-    thresh = feature < threshold_otsu(feature)  # mask=True for background
-    kernel = cube(3)  # try other forms
-    opened = opening(thresh, kernel)
-    # opening(opened, kernel, opened)
+    try:
+        thresh = feature < threshold_otsu(feature)  # mask=True for background
+        kernel = cube(3)  # try other forms
+        opened = opening(thresh, kernel)
+        # opening(opened, kernel, opened)
 
-    # sure background area
-    sure_bg = dilation(opened, kernel)
-    # dilation(sure_bg, kernel, sure_bg)
-#    dilation(sure_bg, kernel, sure_bg)
+        # sure background area
+        sure_bg = dilation(opened, kernel)
+        # dilation(sure_bg, kernel, sure_bg)
+    #    dilation(sure_bg, kernel, sure_bg)
 
-    # Finding sure foreground area
-    dist_transform = distance_transform_edt(opened)
-    sure_fg = dist_transform > coherence * dist_transform.max()
+        # Finding sure foreground area
+        dist_transform = distance_transform_edt(opened)
+        sure_fg = dist_transform > coherence * dist_transform.max()
 
-    # Finding unknown region
-    unknown = (sure_bg - sure_fg > 0)
+        # Finding unknown region
+        unknown = (sure_bg - sure_fg > 0)
 
-    # Marker labelling
-    markers = label(sure_fg, background=0)
-    # Add one to all labels so that sure background is not 0, but 1
-    markers += 1
-    # Now, mark the region of unknown with zero
-    markers[unknown] = 0
-
-
-    water = watershed(-dist_transform, markers, mask=thresh)
-    return (water == 1)
+        # Marker labelling
+        markers = label(sure_fg, background=0)
+        # Add one to all labels so that sure background is not 0, but 1
+        markers += 1
+        # Now, mark the region of unknown with zero
+        markers[unknown] = 0
+        water = watershed(-dist_transform, markers, mask=thresh)
+        return (water == 1)
+    except ValueError:
+        # if the feature is monochromatic
+        return np.zeros_like(feature, dtype=bool)
 
 
 def watershed_2d(image, spatial_coherence=0.2):
