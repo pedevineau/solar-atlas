@@ -25,7 +25,7 @@ def segmentation_otsu_2d(features, chan):
 def segmentation_otsu_3d(features, chan):
     # skimage library
     from skimage.filters import threshold_otsu
-    return features[:, :, ,:, chan] > threshold_otsu(features[:, :, ,:, chan])
+    return features[:, :, :, chan] > threshold_otsu(features[:, :, :, chan])
 
 
 def segmentation_watershed_2d(features, chan):
