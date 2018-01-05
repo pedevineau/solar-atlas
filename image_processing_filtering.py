@@ -57,7 +57,7 @@ def watershed_3d(feature, coherence=0.2):
 #    dilation(sure_bg, kernel, sure_bg)
 
     # Finding sure foreground area
-    dist_transform = distance_transform_edt(opening)
+    dist_transform = distance_transform_edt(opened)
     sure_fg = dist_transform > coherence * dist_transform.max()
 
     # Finding unknown region
