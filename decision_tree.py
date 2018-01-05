@@ -252,7 +252,7 @@ if __name__ == '__main__':
     ending = beginning + nb_days - 1
     compute_indexes = True
 
-    method = 'image'  # 'on-point', 'otsu', 'watershed'
+    method = 'watershed-3d'  # 'on-point', 'otsu-2d', 'otsu-3d', 'watershed-2d', 'watershed-3d'
 
     latitude_beginning = 40.
     latitude_end = 45.
@@ -271,22 +271,13 @@ if __name__ == '__main__':
                                        ending,
                                        slot_step,
                                        )
-    elif method == 'otsu':
+    elif method in ['otsu-2d', 'otsu-3d', 'watershed-2d', 'watershed-3d']:
         classes = get_classes_v2_image(latitudes,
                                        longitudes,
                                        beginning,
                                        ending,
                                        slot_step,
-                                       method='otsu'
-                                       )
-
-    elif method == 'watershed':
-        classes = get_classes_v2_image(latitudes,
-                                       longitudes,
-                                       beginning,
-                                       ending,
-                                       slot_step,
-                                       method='watershed'
+                                       method
                                        )
 
     from quick_visualization import visualize_map_time, get_bbox
