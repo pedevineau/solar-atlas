@@ -53,7 +53,7 @@ def watershed_3d(feature, coherence=0.2):
 
     # sure background area
     sure_bg = dilation(opened, kernel)
-    dilation(sure_bg, kernel, sure_bg)
+    # dilation(sure_bg, kernel, sure_bg)
 #    dilation(sure_bg, kernel, sure_bg)
 
     # Finding sure foreground area
@@ -61,7 +61,7 @@ def watershed_3d(feature, coherence=0.2):
     sure_fg = dist_transform > coherence * dist_transform.max()
 
     # Finding unknown region
-    unknown = sure_bg - sure_fg
+    unknown = (sure_bg - sure_fg > 0)
 
     # Marker labelling
     markers = label(sure_fg, background=0)
