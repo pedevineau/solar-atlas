@@ -48,7 +48,7 @@ def watershed_3d(feature, coherence=0.2):
     from skimage.filters import threshold_otsu, threshold_minimum
     thresh = feature < threshold_otsu(feature)  # mask=True for background
     kernel = cube(3)  # try other forms
-    opened = opening(thresh, kernel), kernel
+    opened = opening(thresh, kernel)
     # opening(opened, kernel, opened)
 
     # sure background area
