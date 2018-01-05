@@ -97,10 +97,10 @@ def get_classes_v1_point(latitudes,
     classes[bright & ~negative_variable_brightness & warm] = 10
     classes[bright & negative_variable_brightness & warm] = 9
     classes[cold_not_bright] = 8
-    classes[obvious_clouds & ~bright] = 1
     classes[slight_clouds & ~bright] = 2
-    classes[obvious_clouds & bright] = 3
     classes[slight_clouds & bright] = 4
+    classes[obvious_clouds & ~bright] = 1
+    classes[obvious_clouds & bright] = 3
 
     # classes[bright & (infrared_features[:, :, :, 3] == 1)] = 7  # = cold and bright. opaque obvious_clouds or cold obvious_clouds over snowy stuff
     # classes[persistent_snow & (obvious_clouds | cold_opaque_clouds)] = 4
@@ -159,44 +159,25 @@ def get_classes_v2_image(latitudes,
         slot_step,
         normalize=True,
     )
-    if method == 'watershed':
-        from image_processing_filtering import segmentation_watershed
-        visible = segmentation_watershed(
-            get_features(
-                'visible',
-                latitudes,
-                longitudes,
-                beginning,
-                ending,
-                False,
-                slot_step,
-                normalize=True),
-            1
-        )
 
-        bright = (segmentation_watershed(visible_features, 0) & visible)
-        negative_variable_brightness = segmentation_watershed(visible_features, 1)
-        positive_variable_brightness = segmentation_watershed(visible_features, 2)
-        slight_clouds = segmentation_watershed(infrared_features, 1)
-    else:
-        from image_processing_filtering import segmentation
-        visible = segmentation(
-            get_features(
-                'visible',
-                latitudes,
-                longitudes,
-                beginning,
-                ending,
-                False,
-                slot_step,
-                normalize=True),
-            1
-        )
+    from image_processing_filtering import segmentation
+    visible = segmentation(
+        get_features(
+            'visible',
+            latitudes,
+            longitudes,
+            beginning,
+            ending,
+            False,
+            slot_step,
+            normalize=True),
+        method
+    )
+    bright = (segmentation(visible_features, 0, method) & visible)
+    negative_variable_brightness = segmentation(visible_features, 1, method)
+    positive_variable_brightness = segmentation(visible_features, 2, method)
+    slight_clouds = segmentation(infrared_features, 1, method)
 
-        bright = (segmentation(visible_features, 0) & visible)
-        negative_variable_brightness = segmentation(visible_features, 1)
-        positive_variable_brightness = segmentation(visible_features, 2)
-        slight_clouds = segmentation(infrared_features, 1)
     obvious_clouds = (infrared_features[:, :, :, 0] == 1)
 
     cold_not_bright = (infrared_features[:, :, :, 3] ==1) & ~bright
@@ -219,10 +200,11 @@ def get_classes_v2_image(latitudes,
     classes[bright & ~negative_variable_brightness & warm] = 10
     classes[bright & negative_variable_brightness & warm] = 9
     classes[cold_not_bright] = 8
-    classes[obvious_clouds & ~bright] = 1
-    classes[slight_clouds & ~bright] = 2
-    classes[obvious_clouds & bright] = 3
+    # WARNING: slight clouds AND obvious clouds => obvious clouds
     classes[slight_clouds & bright] = 4
+    classes[slight_clouds & ~bright] = 2
+    classes[obvious_clouds & ~bright] = 1
+    classes[obvious_clouds & bright] = 3
 
     # classes[bright & (infrared_features[:, :, :, 3] == 1)] = 7  # = cold and bright. opaque obvious_clouds or cold obvious_clouds over snowy stuff
     # classes[persistent_snow & (obvious_clouds | cold_opaque_clouds)] = 4
