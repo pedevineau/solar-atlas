@@ -102,7 +102,7 @@ if __name__ == '__main__':
     latitudes, longitudes = get_latitudes_longitudes(latitude_beginning, latitude_end,
                                                      longitude_beginning, longitude_end)
 
-    infrared_features, mu = get_features(
+    infrared_features , angles = get_features(
         'infrared',
         latitudes,
         longitudes,
@@ -111,8 +111,10 @@ if __name__ == '__main__':
         compute_indexes,
         slot_step,
         normalize,
-        return_mu=True
+        return_angle=True
     )
+    from  angle_zenith import get
+    mu = np.cos(angles)
 
     from quick_visualization import visualize_map_time, get_bbox, visualize_input
     bbox = get_bbox(latitudes[0], latitudes[-1], longitudes[0], longitudes[-1])

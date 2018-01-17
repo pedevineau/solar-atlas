@@ -1,83 +1,103 @@
 from utils import *
 
 
-def segmentation(features, chan, method):
+def segmentation(method, feature, chan=None, thresh_method='otsu'):
+    if len(np.shape(feature)) == 4:
+        if chan is not None:
+            feature = feature[:, :, :, chan]
+        else:
+            raise AttributeError('please give a channel number')
     if method == 'otsu-2d':
-        return segmentation_otsu_2d(features, chan)
+        return segmentation_otsu_2d(feature)
     elif method == 'otsu-3d':
-        return segmentation_otsu_3d(features, chan)
+        return segmentation_otsu_3d(feature)
     elif method == 'watershed-2d':
-        return segmentation_watershed_2d(features, chan)
+        return segmentation_watershed_2d(feature, thresh_method)
     elif method == 'watershed-3d':
-        return segmentation_watershed_3d(features, chan)
+        return segmentation_watershed_3d(feature, thresh_method)
+    else:
+        raise AttributeError('please give a valid segmentation method')
 
 
-def segmentation_otsu_2d(features, chan):
-    (slots, lats, lons) = np.shape(features)[0:3]
-    to_return = np.empty((slots, lats, lons), dtype=bool)
-    for slot in range(slots):
-        # opencv library
-        img, ret = apply_otsu(features[slot, :, :, chan])
-        to_return[slot] = (img == 255)
+def segmentation_otsu_2d(feature):
+    to_return = np.zeros_like(feature, dtype=bool)
+    from skimage.filters import threshold_otsu
+    nb_slots = np.shape(to_return)[0]
+    for slot in range(nb_slots):
+        try:
+            to_return[slot] = (feature[slot] > threshold_otsu(feature[slot]))
+        except ValueError:
+            pass
     return to_return
 
 
-def segmentation_otsu_3d(features, chan):
+def segmentation_otsu_3d(feature):
     # skimage library
     from skimage.filters import threshold_otsu
-    return features[:, :, :, chan] > threshold_otsu(features[:, :, :, chan])
-
-
-def segmentation_watershed_2d(features, chan):
-    (slots, lats, lons) = np.shape(features)[0:3]
-    to_return = np.empty((slots, lats, lons), dtype=bool)
-    for slot in range(slots):
-        # opencv library
-        to_return[slot] = watershed_2d(features[slot, :, :, chan])
-    return to_return
-
-
-def segmentation_watershed_3d(features, chan, coherence=0.2):
-    return watershed_3d(features[:, :, :, chan], coherence)
-
-
-def watershed_3d(feature, coherence=0.2):
-    from scipy.ndimage import distance_transform_edt
-    from skimage.morphology import watershed, dilation, opening, cube
-    from skimage.measure import find_contours, label
-    from skimage.filters import threshold_otsu, threshold_minimum
     try:
-        thresh = feature < threshold_otsu(feature)  # mask=True for background
-        kernel = cube(3)  # try other forms
-        opened = opening(thresh, kernel)
-        # opening(opened, kernel, opened)
-
-        # sure background area
-        sure_bg = dilation(opened, kernel)
-        # dilation(sure_bg, kernel, sure_bg)
-    #    dilation(sure_bg, kernel, sure_bg)
-
-        # Finding sure foreground area
-        dist_transform = distance_transform_edt(opened)
-        sure_fg = dist_transform > coherence * dist_transform.max()
-
-        # Finding unknown region
-        unknown = (sure_bg - sure_fg > 0)
-
-        # Marker labelling
-        markers = label(sure_fg, background=0)
-        # Add one to all labels so that sure background is not 0, but 1
-        markers += 1
-        # Now, mark the region of unknown with zero
-        markers[unknown] = 0
-        water = watershed(-dist_transform, markers, mask=thresh)
-        return (water == 1)
+        return feature > threshold_otsu(feature)
     except ValueError:
         # if the feature is monochromatic
         return np.zeros_like(feature, dtype=bool)
 
 
-def watershed_2d(image, spatial_coherence=0.2):
+def segmentation_watershed_2d(feature, thresh_method='otsu'):
+    (slots, lats, lons) = np.shape(feature)
+    to_return = np.empty((slots, lats, lons), dtype=bool)
+    for slot in range(slots):
+        # opencv library
+        to_return[slot] = watershed_2d(feature[slot], thresh_method)
+    return to_return
+
+
+def segmentation_watershed_3d(feature, thresh_method='otsu', coherence=0.2):
+    return watershed_3d(feature, coherence, thresh_method)
+
+
+def watershed_3d(feature, coherence, thresh_method):
+    from scipy.ndimage import distance_transform_edt
+    from skimage.morphology import watershed, dilation, opening, cube, octahedron
+    from skimage.measure import find_contours, label
+    from skimage.filters import threshold_otsu, threshold_minimum
+    # kernel = cube(3)  # try other forms
+    kernel = octahedron(1)
+    if thresh_method == 'otsu':
+        try:
+            thresh = feature < threshold_otsu(feature)  # mask=True for background
+        except ValueError:
+            # if the feature is monochromatic
+            return np.zeros_like(feature, dtype=bool)
+    else:  # if the image is already binary
+        thresh = (feature == 0)
+    opened = opening(thresh, kernel)
+    # opened = opening(opened, kernel)
+    # opened = opening(opened, kernel)
+
+    # sure background area
+    # sure_bg = dilation(opened, kernel)
+    # sure_bg = dilation(sure_bg, kernel)
+    # sure_bg = dilation(sure_bg, kernel)
+    # Finding sure foreground area
+    dist_transform = distance_transform_edt(opened)
+    sure_fg = dist_transform > coherence * dist_transform.max()
+
+    # Finding unknown region
+    unknown = (opened - sure_fg > 0)
+
+    # Marker labelling
+    markers = label(sure_fg, background=0)
+    # Add one to all labels so that sure background is not 0, but 1
+    markers += 1
+    # Now, mark the region of unknown with zero
+    markers[unknown] = 0
+    try:
+        water = watershed(-dist_transform, markers, mask=thresh)
+    except NameError:
+        water = watershed(-dist_transform, markers)
+    return (water == 1)
+
+
+def watershed_2d(image, thresh_method, spatial_coherence=0.2):
     # Image Segmentation with Watershed Algorithm
     # http://opencv-python-tutroals.readthedocs.io/en/latest/py_tutorials/py_imgproc/py_watershed/py_watershed.html
     from scipy import ndimage
@@ -89,16 +109,22 @@ def watershed_2d(image, spatial_coherence=0.2):
     import matplotlib.pyplot as plt
 
     # noise removal
-    thresh = apply_inverted_otsu(image)[0]
+    if thresh_method == 'otsu':
+        thresh = apply_inverted_otsu(image)[0]
+    else:
+        thresh = image
 
     kernel = np.ones((3, 3), np.uint8)
-    opening = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel, iterations=2)
-
+    opening = cv2.morphologyEx(image, cv2.MORPH_OPEN, kernel, iterations=2)
     # sure background area
     sure_bg = cv2.dilate(opening, kernel, iterations=3)
 
     # Finding sure foreground area
-    dist_transform = cv2.distanceTransform(opening, cv2.cv.CV_DIST_L2, 5)
+    # opencv3: cv2.DIST_L2, opencv2: cv2.cv.CV_DIST_L2
+    try:
+        dist_transform = cv2.distanceTransform(opening, cv2.DIST_L2, 5)
+    except:
+        dist_transform = cv2.distanceTransform(opening, cv2.cv.CV_DIST_L2, 5)
     ret, sure_fg = cv2.threshold(dist_transform, spatial_coherence * dist_transform.max(), 255, 0)
 
     # Finding unknown region

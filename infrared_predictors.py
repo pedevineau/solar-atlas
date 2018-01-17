@@ -2,7 +2,7 @@ from utils import *
 
 
 def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_step, slot_step, compute_indexes,
-                            normalize, weights, return_m_s=False, return_mu=False):
+                            normalize, return_m_s=False):
     '''
 
     :param array_data: matrix with channels 3890nm and 12380nm
@@ -13,13 +13,11 @@ def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_
     :param slot_step: the chosen sampling of slots. if slot_step = n, the sampled slots are s[0], s[n], s[2*n]...
     :param compute_indexes
     :param normalize:
-    :param weights:
     :param return_m_s:
-    :param return_mu:
     :return: a matrix with all infrared predictors (shape: slots, latitudes, longitudes, predictors)
     '''
     from get_data import mask_channels
-    from cos_zen import get_array_cos_zen
+    from angle_zenith import get_zenith_angle
     # from filter import median_filter_3d
 
     array_data, mask = mask_channels(array_data, False)
@@ -35,12 +33,14 @@ def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_
 
     nb_features = 4  # cli, variations, warm predictor, cold
     (nb_slots, nb_latitudes, nb_longitudes, nb_channels) = np.shape(array_data)
-    mu = get_array_cos_zen(times, latitudes, longitudes)
-    mu[mu < 0] = 0
+    angles = get_zenith_angle(times, latitudes, longitudes)
+    mask_cli = mask | (angles > 85./180.*np.pi) | (angles <= 0)
+    mu = np.cos(angles)
+    del angles
 
     # remove spatial smoothing
-    cli, m, s =  get_cloud_index(mir=array_data[:, :, :, 1], fir=array_data[:, :, :, 0], return_m_s=True,
-                                 method='mu-normalization', mask=mask, cos_zen=mu)
+    cli, m, s = get_cloud_index(mir=array_data[:, :, :, 1], fir=array_data[:, :, :, 0], return_m_s=True,
+                                method='mu-normalization', mask=mask_cli, cos_zen=mu)
 
     cold = get_cold(fir=array_data[:, :, :, 0],
                     cos_zen=mu,
@@ -51,10 +51,9 @@ def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_
     # cold==1 for cold things: snow, icy clouds, or cold water clouds like altocumulus
     high_cli_mask = (cli > (30 - m) / s)
     del cli
-    mask_cli = mask | (mu <= 0)
 
-    difference = get_cloud_index(mir=array_data[:, :, :, 1], fir=array_data[:, :, :, 0], method='default',
-                        mask=mask, cos_zen=mu)
+    difference = get_cloud_index(mir=array_data[:, :, :, 1], fir=array_data[:, :, :, 0], method='default', mask=mask_cli,
+                                 cos_zen=mu)
 
     if not normalize:
         array_indexes = np.empty(shape=(nb_slots, nb_latitudes, nb_longitudes, nb_features))
@@ -77,7 +76,6 @@ def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_
             mask_cli, normalization='gray-scale')
         array_indexes[:, :, :, 0][high_cli_mask] = 1  # "hot" water clouds
 
-
     array_indexes[:, :, :, 2] = get_warm(mir=array_data[:, :, :, 1], cos_zen=mu, satellite_step=satellite_step,
                                          slot_step=slot_step, cloudy_mask=high_cli_mask,
                                          threshold_median=300)
@@ -89,21 +87,12 @@ def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_
     me[0] = m
     std[0] = s
 
-    if weights is not None:
-        for feat in range(nb_features):
-            array_indexes[:, :, :, feat] = weights[feat] * array_indexes[:, :, :, feat]
-        me = me * weights
+    # if weights is not None:
+    #     for feat in range(nb_features):
+    #         array_indexes[:, :, :, feat] = weights[feat] * array_indexes[:, :, :, feat]
+    #     me = me * weights
 
-    if weights is not None:
-        for feat in range(nb_features):
-            array_indexes[:, :, :, feat] = weights[feat] * array_indexes[:, :, :, feat]
-        me = me * weights
-
-    if return_m_s and return_mu:
-        return array_indexes, mu, me, std
-    elif return_mu and not return_m_s:
-        return array_indexes, mu
-    elif not return_mu and return_m_s:
+    if return_m_s:
         return array_indexes, me, std
     else:
         return array_indexes
@@ -120,7 +109,6 @@ def get_cloud_index(mir, fir, mask, cos_zen, return_m_s=False, pre_cloud_mask=No
     :return: a cloud index matrix (shape: slots, latitudes, longitudes)
     '''
     difference = mir - fir
-    mask = mask | (cos_zen <= 0)
     if method == 'mu-normalization':
         mu_threshold = 0.03
         mask = mask | (cos_zen <= mu_threshold)
@@ -294,7 +282,7 @@ def get_warm_array_on_point(mir_point, mu_point, satellite_step, slot_step, clou
     width_window_in_minutes = 240
     width_window_in_slots = width_window_in_minutes/(slot_step*satellite_step)
 
-    from cos_zen import get_next_midday
+    from angle_zenith import get_next_midday
     noon = get_next_midday(
         mu_point,
         nb_slots_per_day

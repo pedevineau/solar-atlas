@@ -169,7 +169,7 @@ def compute_short_variability(array, mask=None, cos_zen=None, step=1, return_mas
     previous = np.roll(array, step_left, axis=0)
     array = array - previous
     if mask is not None:
-        mask = mask + np.roll(mask, step_left, axis=0)  # mask of night and dawn. numpy.roll casts the mask to an array
+        mask = mask + np.roll(mask, step_left, axis=0)
         if step_left >= 0:
             mask[:step_left] = True
         else:
@@ -266,7 +266,6 @@ def get_features(type_channels, latitudes, longitudes, dfb_beginning, dfb_ending
                  normalize=False,
                  weights=None,
                  return_m_s=False,
-                 return_mu=False
                  ):
     from read_netcdf import read_channels
     from read_metadata import read_satellite_step
@@ -295,9 +294,7 @@ def get_features(type_channels, latitudes, longitudes, dfb_beginning, dfb_ending
             slot_step,
             compute_indexes,
             normalize,
-            weights,
             return_m_s,
-            return_mu
         )
 
     elif type_channels == 'infrared':
@@ -319,7 +316,6 @@ def get_features(type_channels, latitudes, longitudes, dfb_beginning, dfb_ending
             slot_step,
             compute_indexes,
             normalize,
-            weights,
             return_m_s,
         )
     else:

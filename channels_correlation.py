@@ -64,7 +64,7 @@ if __name__ == '__main__':
             compute_indexes=True,
             slot_step=1,
             normalize=False,
-            return_mu=True
+            return_zen=True
         )
 
         ndsi = features[:, :, :, 0]

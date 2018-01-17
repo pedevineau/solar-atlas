@@ -39,7 +39,7 @@ def get_classes_v1_point(latitudes,
     negative_variable_brightness = (classifiy_brightness_variability(visible_features[:, :, :, 1]) == 1)
     positive_variable_brightness = (classifiy_brightness_variability(visible_features[:, :, :, 2]) == 1)
     # from quick_visualization import visualize_map_time, get_bbox
-    # visualize_map_time(negative_variable_brightness, get_bbox(latitudes[0], latitudes[-1], longitudes[0], longitudes[-1]))
+    # visualize_map_time(positive_variable_brightness, get_bbox(latitudes[0], latitudes[-1], longitudes[0], longitudes[-1]))
 
     from classification_cloud_index import classify_cloud_covertness, classify_cloud_variability
     # classified_cli = classify_cloud_covertness(infrared_features[:, :, :, cli_or_unbiased])
@@ -47,7 +47,7 @@ def get_classes_v1_point(latitudes,
     slight_clouds = (classify_cloud_variability(infrared_features[:, :, :, 1]) == 1)
     obvious_clouds = (infrared_features[:, :, :, 0] == 1)
 
-    cold_not_bright = (infrared_features[:, :, :, 3] ==1) & ~bright
+    cold_not_bright = (infrared_features[:, :, :, 3] == 1) & ~bright
 
     warm = (infrared_features[:, :, :, 2] == 1)
 
@@ -67,10 +67,7 @@ def get_classes_v1_point(latitudes,
     # print persistent_snow
     # print len(persistent_snow[persistent_snow])
 
-    foggy = (obvious_clouds | slight_clouds) & ~warm & (visible_features[:, :, :, 0] < -1.5) & (visible_features[:, :, :, 0] > -9)
-    if not np.all(foggy is False):
-        foggy[foggy] = 100
-        print np.argmax(foggy)
+    foggy = (obvious_clouds | slight_clouds) & ((m[0] + s[0] * visible_features[:, :, :, 0]) < -1.5) & (visible_features[:, :, :, 0] > -9)
 
     #  foggy: low snow index, good vis
     (nb_slots, nb_latitudes, nb_longitudes) = np.shape(visible_features)[0:3]
@@ -97,8 +94,8 @@ def get_classes_v1_point(latitudes,
     classes[bright & ~negative_variable_brightness & warm] = 10
     classes[bright & negative_variable_brightness & warm] = 9
     classes[cold_not_bright] = 8
-    classes[slight_clouds & ~bright] = 2
     classes[slight_clouds & bright] = 4
+    classes[slight_clouds & ~bright] = 2
     classes[obvious_clouds & ~bright] = 1
     classes[obvious_clouds & bright] = 3
 
@@ -132,11 +129,8 @@ def get_classes_v2_image(latitudes,
                          beginning,
                          ending,
                          slot_step,
-                         method='otsu'
+                         method='otsu-3d'
                          ):
-
-
-
 
     visible_features = get_features(
         'visible',
@@ -160,28 +154,42 @@ def get_classes_v2_image(latitudes,
         normalize=True,
     )
 
-    from image_processing_filtering import segmentation
-    visible = segmentation(
-        get_features(
-            'visible',
-            latitudes,
-            longitudes,
-            beginning,
-            ending,
-            False,
-            slot_step,
-            normalize=True),
-        0,
-        method
-    )
-    bright = (segmentation(visible_features, 0, method) & visible)
-    negative_variable_brightness = segmentation(visible_features, 1, method)
-    positive_variable_brightness = segmentation(visible_features, 2, method)
-    slight_clouds = segmentation(infrared_features, 1, method)
+    from image_processing_filtering import segmentation, segmentation_otsu_2d, segmentation_otsu_3d
+    from quick_visualization import visualize_map_time
 
+    if method in ['watershed-2d', 'watershed-3d']:
+        vis = get_features('visible', latitudes, longitudes, beginning, ending, False, slot_step, normalize=False)[:,
+                :, :, 1]
+        # visualize_map_time(segmentation_otsu_2d(visible_features[:, :, :, 0]), bbox)
+        # visualize_map_time(segmentation_otsu_2d(vis), bbox)
+        bright = (
+            segmentation_otsu_2d(visible_features[:, :, :, 0]) &
+            (vis > 0.35))
+        # visualize_map_time(bright, bbox)
+        bright = segmentation(method, bright, thresh_method=None)
+
+    else:
+        visible = segmentation(
+            method,
+            get_features(
+                    'visible',
+                    latitudes,
+                    longitudes,
+                    beginning,
+                    ending,
+                    False,
+                    slot_step,
+                    normalize=True),
+            0,
+        )
+
+        bright = (segmentation(method, visible_features[:, :, :, 0]) & visible)
+
+    negative_variable_brightness = segmentation(method, visible_features[:, :, :, 1])
+    positive_variable_brightness = segmentation(method, visible_features[:, :, :, 2])
+    slight_clouds = segmentation(method, infrared_features[:, :, :, 1])
     obvious_clouds = (infrared_features[:, :, :, 0] == 1)
-
-    cold_not_bright = (infrared_features[:, :, :, 3] ==1) & ~bright
+    cold_not_bright = (infrared_features[:, :, :, 3] == 1) & ~bright
 
     warm = (infrared_features[:, :, :, 2] == 1)
 
@@ -213,7 +221,7 @@ def get_classes_v2_image(latitudes,
 
     print 'time affectation', time()-begin_affectation
 
-    print 'allegedly uncovered lands'
+    print 'uncovered lands: 0'
     print 'obvious clouds:1'
     print 'slight clouds or sunrise/sunset clouds:2'
     print 'clouds and bright:3'
@@ -236,12 +244,16 @@ def reduce_classes(classes):
     to_return = np.full_like(classes, 3)
     cloudless = ((classes == 0) | (classes == 9) | (classes == 10))
     cloudless = (cloudless & np.roll(cloudless, 1) & np.roll(cloudless, -1))
-    to_return[cloudless] = 0
+    to_return[cloudless] = 0   # cloudless
     to_return[(classes == 2) | (classes == 4)] = 2
     to_return[classes == 5] = 1
     to_return[classes == 13] = 4
+    print 'uncovered lands: 0'
+    print 'snowy ground:1'
+    print 'slight clouds:2'
+    print 'cloudy:3'
+    print 'undefined:4'
     return to_return
-
 
 
 if __name__ == '__main__':
@@ -249,11 +261,13 @@ if __name__ == '__main__':
 
     slot_step = 1
     beginning = 13517
-    nb_days = 1
+    nb_days = 5
     ending = beginning + nb_days - 1
     compute_indexes = True
 
-    method = 'watershed-3d'  # 'on-point', 'otsu-2d', 'otsu-3d', 'watershed-2d', 'watershed-3d'
+    # method = 'watershed-3d'  # 'on-point', 'otsu-2d', 'otsu-3d', 'watershed-2d', 'watershed-3d'
+    method = 'on-point'  # 'on-point', 'otsu-2d', 'otsu-3d', 'watershed-2d', 'watershed-3d'
+    print method
 
     latitude_beginning = 40.
     latitude_end = 45.
@@ -264,6 +278,8 @@ if __name__ == '__main__':
 
     date_begin, date_end = print_date_from_dfb(beginning, ending)
     print beginning, ending
+    from quick_visualization import visualize_map_time, get_bbox
+    bbox = get_bbox(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
 
     if method == 'on-point':
         classes = get_classes_v1_point(latitudes,
@@ -281,16 +297,14 @@ if __name__ == '__main__':
                                        method
                                        )
 
-    from quick_visualization import visualize_map_time, get_bbox
 
-    bbox = get_bbox(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
 
     from bias_checking import statistics_classes
 
-    visualize_map_time(classes, bbox, vmin=0, vmax=nb_classes-1, title='Classes 0-'+str(nb_classes-1)+
+    visualize_map_time(classes, bbox, vmin=0, vmax=nb_classes-1, title=method+' Classes 0-'+str(nb_classes-1)+
                                                                        ' from' + str(date_begin))
 
-    visualize_map_time(reduce_classes(classes), bbox, vmin=0, vmax=4, title='Classes 0-'+str(5-1)+
+    visualize_map_time(reduce_classes(classes), bbox, vmin=0, vmax=4, title=method+' Classes 0-'+str(5-1)+
                                                                        ' from' + str(date_begin))
     statistics_classes(classes, display_now=True)
 

@@ -1,2 +1,4 @@
-def recognize_fog(nir, ):
-    return
+def recognize_fog(vis, nir, mir):
+    return ''
+
+# def fox_index():

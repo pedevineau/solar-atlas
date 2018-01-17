@@ -17,7 +17,7 @@ mu[mu<0]=0
 
 # mustd = normalize_array(mu, normalization='standard')
 import matplotlib.pyplot as plt
-from visible_predictors import get_bright_variability_negative_5d
+from visible_predictors import get_bright_negative_variability_5d
 from infrared_predictors import get_cloud_index_positive_variability_5d
 
 
@@ -71,7 +71,7 @@ for K in Ks:
 
     map, m, s = normalize_array(map, mask, normalization='standard', return_m_s=True)
 
-    max_variability = get_bright_variability_negative_5d(map, mask, 10, 1)
+    max_variability = get_bright_negative_variability_5d(map, mask, 10, 1)
 
     from classification_snow_index import *
     classified_brightness = 0.3*classify_brightness(map, m, s)

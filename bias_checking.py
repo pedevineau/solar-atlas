@@ -34,18 +34,27 @@ def medians_index(index, mask, display_now=True):
 
 
 def comparision_visible(vis, classes):
-    threshold_visible = 0.4
+    threshold_visible = 0.3
     comparision = np.empty_like(vis)
     comparision[(vis > threshold_visible) & (classes == 0)] = -2
     comparision[(vis > threshold_visible) & ((classes == 2) | (classes == 4))] = -1
     comparision[(vis < threshold_visible) & ((classes == 2) | (classes == 4))] = 1
-    comparision[(vis < threshold_visible) & (classes != 0) & (classes != 2) & (classes != 4) & (classes != 1-2)] = 2
+    comparision[(vis < threshold_visible) & (classes != 0) & (classes != 2) & (classes != 4) & (classes != 7) & (classes != 12)] = 2
+    return comparision
+
+
+def comparision_algorithms(reduced_classes_1, reduced_classes_2):
+    comparision = np.zeros_like(vis)
+    cloudy_1 = (reduced_classes_1 == 3)
+    cloudy_2 = (reduced_classes_2 == 3)
+    comparision[cloudy_1 & ~cloudy_2] = 1
+    comparision[~cloudy_1 & cloudy_2] = -1
     return comparision
 
 
 if __name__ == '__main__':
     slot_step = 1
-    beginning = 13516+17
+    beginning = 13517
     nb_days = 5
     ending = beginning + nb_days - 1
 
@@ -56,11 +65,14 @@ if __name__ == '__main__':
     latitudes, longitudes = get_latitudes_longitudes(latitude_beginning, latitude_end,
                                                      longitude_beginning, longitude_end)
 
+    print_date_from_dfb(beginning, ending)
+
     from get_data import get_features
-    from decision_tree import get_classes_v1_point
+    from decision_tree import get_classes_v1_point, get_classes_v2_image
 
     vis = get_features('visible', latitudes, longitudes, beginning, ending, False)[:, :, :, 1]
-    classes = get_classes_v1_point(latitudes, longitudes, beginning, ending, slot_step=1)
+    # classes = get_classes_v1_point(latitudes, longitudes, beginning, ending, slot_step=1)
+    classes = get_classes_v2_image(latitudes, longitudes, beginning, ending, slot_step=1, method='watershed-3d')
 
     comparision = comparision_visible(
         vis,

@@ -145,13 +145,13 @@ def visualize_hist(array_1d, title='Histogram', precision=50):
 if __name__ == '__main__':
     from get_data import get_features
     from utils import *
-    compute_indexes_ = False
+    compute_indexes_ = True
     types_channel = ['infrared', 'visible']
     channel_number = 1
-    display_curves = False
+    display_curves = True
     type_channels = types_channel[channel_number]
     dfb_beginning = 13517
-    nb_days = 3
+    nb_days = 5
     dfb_ending = dfb_beginning + nb_days - 1
     latitude_beginning = 40.
     latitude_end = 45.

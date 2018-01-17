@@ -25,7 +25,7 @@ def recognize_pattern_ndsi(ndsi, mu, mask, mask_high_variability,
 
     stressed_ndsi = np.zeros_like(ndsi)
     return stressed_ndsi
-    from cos_zen import get_map_next_midnight
+    from angle_zenith import get_map_next_midnight
     map_first_darkest_points = get_map_next_midnight(mu, nb_slots_per_day, current_midnight=0)
 
 
@@ -156,7 +156,7 @@ def recognize_pattern_vis(ndsi, vis, nir, mu, mask, time_step_satellite, slot_st
     nb_slots_per_day = get_nb_slots_per_day(time_step_satellite, slot_step)
     nb_slots_per_step = int(nb_slots_per_day / slices_by_day)
 
-    from cos_zen import get_map_next_midnight
+    from angle_zenith import get_map_next_midnight
     map_first_darkest_points = get_map_next_midnight(mu, nb_slots_per_day, current_midnight=0)
 
     stressed_ndsi = ndsi
