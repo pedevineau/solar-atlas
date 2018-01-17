@@ -1,14 +1,14 @@
 from utils import *
 
 
-def get_array_cos_zen(times, latitudes, longitudes):
+def get_cos_zen(times, latitudes, longitudes):
     import sunpos
-    return sunpos.evaluate(times, latitudes, longitudes, ndim=2, n_cpus=2).cosz
+    return sunpos.evaluate(times, np.flip(latitudes, 0), longitudes, ndim=2, n_cpus=2).cosz
 
 
 def get_zenith_angle(times, latitudes, longitudes):
     import sunpos
-    return sunpos.evaluate(times, latitudes, longitudes, ndim=2, n_cpus=2).zenith
+    return sunpos.evaluate(times, np.flip(latitudes, 0), longitudes, ndim=2, n_cpus=2).zenith
 
 
 def apply_gaussian_persistence(persistence_array_1d, persistence_mask_1d, persistence_sigma, persistence_scope):

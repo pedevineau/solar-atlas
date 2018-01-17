@@ -5,7 +5,7 @@ def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_
                             normalize, return_m_s=False):
     '''
 
-    :param array_data: matrix with channels 3890nm and 12380nm
+    :param array_data: matrix with all infrared channels available
     :param times: a datetime matrix giving the times of all sampled slots
     :param latitudes: a float matrix giving the bottom latitudes of all pixels
     :param longitudes: a float matrix giving the bottom longitudes of all pixels
@@ -21,15 +21,15 @@ def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_
     # from filter import median_filter_3d
 
     array_data, mask = mask_channels(array_data, False)
+    nb_channels = np.shape(array_data)[-1]
 
     if not compute_indexes:
         if not normalize:
             return array_data
         else:
-            to_return = np.empty_like(array_data, dtype=np.uint8)
-            to_return[:, :, :, 0] = normalize_array(array_data[:, :, :, 0], mask, normalization='gray-scale')
-            to_return[:, :, :, 1] = normalize_array(array_data[:, :, :, 1], mask, normalization='gray-scale')
-            return to_return
+            for chan in range(nb_channels):
+                array_data[:, :, :, chan] = normalize_array(array_data[:, :, :, chan], mask, normalization='gray-scale')
+            return array_data
 
     nb_features = 4  # cli, variations, warm predictor, cold
     (nb_slots, nb_latitudes, nb_longitudes, nb_channels) = np.shape(array_data)
@@ -39,23 +39,19 @@ def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_
     del angles
 
     # remove spatial smoothing
-    cli, m, s = get_cloud_index(mir=array_data[:, :, :, 1], fir=array_data[:, :, :, 0], return_m_s=True,
-                                method='mu-normalization', mask=mask_cli, cos_zen=mu)
+    cli, m, s = get_cloud_index(mir=array_data[:, :, :, nb_channels-1], fir=array_data[:, :, :, nb_channels-2],
+                                return_m_s=True, method='mu-normalization', mask=mask_cli, cos_zen=mu)
 
-    cold = get_cold(fir=array_data[:, :, :, 0],
-                    cos_zen=mu,
-                    satellite_step=satellite_step,
-                    slot_step=slot_step,
-                    threshold=240)
+    cold = get_cold(fir=array_data[:, :, :, 0], mask=mask_cli, threshold=240)
 
     # cold==1 for cold things: snow, icy clouds, or cold water clouds like altocumulus
     high_cli_mask = (cli > (30 - m) / s)
     del cli
 
-    difference = get_cloud_index(mir=array_data[:, :, :, 1], fir=array_data[:, :, :, 0], method='default', mask=mask_cli,
-                                 cos_zen=mu)
+    difference = get_cloud_index(mir=array_data[:, :, :, nb_channels-1], fir=array_data[:, :, :, nb_channels-2],
+                                 method='default', mask=mask_cli, cos_zen=mu)
 
-    if not normalize:
+    if not normalize:  # if on-point
         array_indexes = np.empty(shape=(nb_slots, nb_latitudes, nb_longitudes, nb_features))
         array_indexes[:, :, :, 1] = get_cloud_index_positive_variability_5d(cloud_index=difference,
                                                     definition_mask=mask_cli,
@@ -65,7 +61,7 @@ def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_
         array_indexes[:, :, :, 0][high_cli_mask] = 1  # "hot" water clouds
         array_indexes[:, :, :, 0][mask_cli] = -10
 
-    else:
+    else:  # if on-image
         array_indexes = np.empty(shape=(nb_slots, nb_latitudes, nb_longitudes, nb_features), dtype=np.uint8)
         array_indexes[:, :, :, 1] = normalize_array(
             get_cloud_index_positive_variability_5d(cloud_index=difference,
@@ -76,7 +72,8 @@ def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_
             mask_cli, normalization='gray-scale')
         array_indexes[:, :, :, 0][high_cli_mask] = 1  # "hot" water clouds
 
-    array_indexes[:, :, :, 2] = get_warm(mir=array_data[:, :, :, 1], cos_zen=mu, satellite_step=satellite_step,
+    array_indexes[:, :, :, 2] = get_warm(mir=array_data[:, :, :, nb_channels-1], cos_zen=mu,
+                                         satellite_step=satellite_step,
                                          slot_step=slot_step, cloudy_mask=high_cli_mask,
                                          threshold_median=300)
 
@@ -86,12 +83,6 @@ def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_
     me, std = np.zeros(nb_features), np.full(nb_features, 1.)
     me[0] = m
     std[0] = s
-
-    # if weights is not None:
-    #     for feat in range(nb_features):
-    #         array_indexes[:, :, :, feat] = weights[feat] * array_indexes[:, :, :, feat]
-    #     me = me * weights
-
     if return_m_s:
         return array_indexes, me, std
     else:
@@ -113,7 +104,7 @@ def get_cloud_index(mir, fir, mask, cos_zen, return_m_s=False, pre_cloud_mask=No
         mu_threshold = 0.03
         mask = mask | (cos_zen <= mu_threshold)
         cli, m, s, = normalize_array(difference / np.maximum(cos_zen, mu_threshold),
-                              mask=mask, normalization='standard', return_m_s=True)
+                                     mask=mask, normalization='standard', return_m_s=True)
         if return_m_s:
             cli[mask] = -10
             return cli, m, s
@@ -242,20 +233,18 @@ def get_warm(mir, cos_zen, satellite_step, slot_step, cloudy_mask, threshold_med
     return to_return
 
 
-def get_cold(fir, cos_zen, satellite_step, slot_step, threshold):
+def get_cold(fir, mask, threshold):
     '''
     recognise some high altitudes clouds
     we are not looking above Antartica... there is no likely risk of temperature inversion at these altitudes
     :param fir: medium infra-red band (centered on 12380nm for Himawari 8)
-    :param cos_zen: cos of zenith angle matrix (shape: slots, latitudes, longitudes)
-    :param satellite_step: the satellite characteristic time step between two slots (10 minutes for Himawari 8)
-    :param slot_step: the chosen sampling of slots. if slot_step = n, the sampled slots are s[0], s[n], s[2*n]...
     :param threshold
     :return: a 0-1 integer matrix (shape: slots, latitudes, longitudes)
     '''
     # TODO: add some cos-zen correlation (correlation => it was not clouds)
     to_return = np.zeros_like(fir, dtype=np.uint8)
     to_return[fir < threshold] = 1
+    to_return[mask] = -10
     return to_return
 
 

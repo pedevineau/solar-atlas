@@ -5,18 +5,19 @@
   },
   "H08": {
     "time_step": 10,
+    "channels_name": ["IR124_2000", "IR390_2000", "VIS160_2000", "VIS064_2000"],
     "indexes": {
       "visible": {
         "dir": "/data/computed",
-        "pattern": "H08LATLON_VISIBLE_INDEXES_2000__TMON_{YYYY}_{mm}__SDEG05_r{SDEG5_LATITUDE}_c{SDEG5_LONGITUDE}.nc"
+        "pattern": "{SATELLITE}LATLON_VISIBLE_INDEXES__TMON_{YYYY}_{mm}__SDEG05_r{SDEG5_LATITUDE}_c{SDEG5_LONGITUDE}.nc"
       },
       "infrared": {
         "dir": "/data/computed",
-        "pattern": "H08LATLON_INFRARED_INDEXES_2000__TMON_{YYYY}_{mm}__SDEG05_r{SDEG5_LATITUDE}_c{SDEG5_LONGITUDE}.nc"
+        "pattern": "{SATELLITE}LATLON_INFRARED_INDEXES__TMON_{YYYY}_{mm}__SDEG05_r{SDEG5_LATITUDE}_c{SDEG5_LONGITUDE}.nc"
       },
       "classes": {
         "dir": "/data/computed",
-        "pattern": "H08LATLON_CLASSES_INDEXES_2000__TMON_{YYYY}_{mm}__SDEG05_r{SDEG5_LATITUDE}_c{SDEG5_LONGITUDE}.nc"
+        "pattern": "{SATELLITE}LATLON_CLASSES_INDEXES__TMON_{YYYY}_{mm}__SDEG05_r{SDEG5_LATITUDE}_c{SDEG5_LONGITUDE}.nc"
       }
     },
     "channels": {
@@ -24,24 +25,25 @@
       "pattern": "{SATELLITE}LATLON_{CHANNEL}__TMON_{YYYY}_{mm}__SDEG05_r{SDEG5_LATITUDE}_c{SDEG5_LONGITUDE}.nc"
     }
   },
-  "GR": {
+  "GOES16": {
     "time_step": 15,
+    "channels_name": ["IR124", "IR103", "IR390", "VIS161", "VIS064"],
     "indexes": {
       "visible": {
         "dir": "/data/computed",
-        "pattern": "H08LATLON_VISIBLE_INDEXES_2000__TMON_{YYYY}_{mm}__SDEG05_r{SDEG5_LATITUDE}_c{SDEG5_LONGITUDE}.nc"
+        "pattern": "{SATELLITE}LATLON_VISIBLE_INDEXES__TMON_{YYYY}_{mm}__SDEG05_r{SDEG5_LATITUDE}_c{SDEG5_LONGITUDE}.nc"
       },
       "infrared": {
         "dir": "/data/computed",
-        "pattern": "H08LATLON_INFRARED_INDEXES_2000__TMON_{YYYY}_{mm}__SDEG05_r{SDEG5_LATITUDE}_c{SDEG5_LONGITUDE}.nc"
+        "pattern": "{SATELLITE}LATLON_INFRARED_INDEXES__TMON_{YYYY}_{mm}__SDEG05_r{SDEG5_LATITUDE}_c{SDEG5_LONGITUDE}.nc"
       },
       "classes": {
         "dir": "/data/computed",
-        "pattern": "H08LATLON_CLASSES_INDEXES_2000__TMON_{YYYY}_{mm}__SDEG05_r{SDEG5_LATITUDE}_c{SDEG5_LONGITUDE}.nc"
+        "pattern": "{SATELLITE}LATLON_CLASSES_INDEXES__TMON_{YYYY}_{mm}__SDEG05_r{SDEG5_LATITUDE}_c{SDEG5_LONGITUDE}.nc"
       }
     },
     "channels": {
-      "dir": "/data/model_data_himawari/sat_data_procseg",
+      "dir": "/data/test_data_goesr",
       "pattern": "{SATELLITE}LATLON_{CHANNEL}__TMON_{YYYY}_{mm}__SDEG05_r{SDEG5_LATITUDE}_c{SDEG5_LONGITUDE}.nc"
     }
   },

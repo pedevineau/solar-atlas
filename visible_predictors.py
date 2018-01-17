@@ -7,19 +7,19 @@ def get_visible_predictors(array_data, ocean_mask, times, latitudes, longitudes,
     from angle_zenith import get_zenith_angle
 
     array_data, mask = mask_channels(array_data, False)
+    nb_channels = np.shape(array_data)[-1]
+
     if not compute_indexes:
         if not normalize:
             return array_data
         else:
-            to_return = np.empty_like(array_data, dtype=np.uint8)
-            to_return[:, :, :, 0] = normalize_array(array_data[:, :, :, 0], mask, normalization='gray-scale')
-            to_return[:, :, :, 1] = normalize_array(array_data[:, :, :, 1], mask, normalization='gray-scale')
-            return to_return
+            for chan in range(nb_channels):
+                array_data[:, :, :, chan] = normalize_array(array_data[:, :, :, chan], mask, normalization='gray-scale')
+            return array_data
 
     (nb_slots, nb_latitudes, nb_longitudes, nb_channels) = np.shape(array_data)
 
     nb_features = 4  # snow index, negative variability, positive variability, cloudy sea
-    # VIS160_2000: 0,  VIS064_2000:1
 
     me, std = np.zeros(nb_features), np.full(nb_features, 1.)
 

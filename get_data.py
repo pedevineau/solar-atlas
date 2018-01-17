@@ -268,16 +268,16 @@ def get_features(type_channels, latitudes, longitudes, dfb_beginning, dfb_ending
                  return_m_s=False,
                  ):
     from read_netcdf import read_channels
-    from read_metadata import read_satellite_step
+    from read_metadata import read_satellite_step, read_channels_names
     satellite_step = read_satellite_step()
 
     ocean = get_ocean_mask(latitudes, longitudes)
     times = get_times(dfb_beginning, dfb_ending, satellite_step, slot_step)
 
+    channels = read_channels_names(type_channels)
     if type_channels == 'visible':
-        channels_visible = ['VIS160_2000', 'VIS064_2000']
         content_visible = read_channels(
-            channels_visible,
+            channels,
             latitudes,
             longitudes,
             dfb_beginning,
@@ -298,9 +298,8 @@ def get_features(type_channels, latitudes, longitudes, dfb_beginning, dfb_ending
         )
 
     elif type_channels == 'infrared':
-        channels_infrared = ['IR124_2000', 'IR390_2000']
         content_infrared = read_channels(
-            channels_infrared,
+            channels,
             latitudes,
             longitudes,
             dfb_beginning,

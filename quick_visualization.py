@@ -145,10 +145,10 @@ def visualize_hist(array_1d, title='Histogram', precision=50):
 if __name__ == '__main__':
     from get_data import get_features
     from utils import *
-    compute_indexes_ = True
+    compute_indexes_ = False
     types_channel = ['infrared', 'visible']
     channel_number = 1
-    display_curves = True
+    display_curves = False
     type_channels = types_channel[channel_number]
     dfb_beginning = 13517
     nb_days = 5
@@ -157,9 +157,19 @@ if __name__ == '__main__':
     latitude_end = 45.
     longitude_beginning = 125.
     longitude_end = 130.
+
+    from utils import get_times
+    times = get_times(dfb_beginning, dfb_ending, 10, 1)
+    from angle_zenith import get_cos_zen, get_zenith_angle
+
     date_begin, date_end = print_date_from_dfb(dfb_beginning, dfb_ending)
     lat, lon = get_latitudes_longitudes(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
+
+    cos_zen = get_cos_zen(times, lat, lon)
     bbox = get_bbox(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
+
+    visualize_map_time(cos_zen, bbox)
+
     features = get_features(type_channels, lat, lon, dfb_beginning, dfb_ending, compute_indexes_, slot_step=1,
                             normalize=False)
 

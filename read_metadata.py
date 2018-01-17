@@ -15,6 +15,19 @@ def read_indexes_dir_and_pattern(type_chan):
     return dir, pattern
 
 
+def read_channels_names(type_chan):
+    from json import load
+    metadata = load(open('metadata.json'))
+    satellite = metadata["satellite"]
+    channels = metadata[satellite]["channels_name"]
+    import re
+    if type_chan == 'infrared':
+        r = re.compile("IR")
+    elif type_chan == 'visible':
+        r = re.compile("VIS")
+    return filter(r.match, channels)
+
+
 def read_satellite_name():
     from json import load
     metadata = load(open('metadata.json'))

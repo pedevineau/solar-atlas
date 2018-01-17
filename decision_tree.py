@@ -265,8 +265,8 @@ if __name__ == '__main__':
     ending = beginning + nb_days - 1
     compute_indexes = True
 
-    # method = 'watershed-3d'  # 'on-point', 'otsu-2d', 'otsu-3d', 'watershed-2d', 'watershed-3d'
-    method = 'on-point'  # 'on-point', 'otsu-2d', 'otsu-3d', 'watershed-2d', 'watershed-3d'
+    method = 'watershed-3d'  # 'on-point', 'otsu-2d', 'otsu-3d', 'watershed-2d', 'watershed-3d'
+    # method = 'on-point'  # 'on-point', 'otsu-2d', 'otsu-3d', 'watershed-2d', 'watershed-3d'
     print method
 
     latitude_beginning = 40.
@@ -300,13 +300,17 @@ if __name__ == '__main__':
 
 
     from bias_checking import statistics_classes
-
     visualize_map_time(classes, bbox, vmin=0, vmax=nb_classes-1, title=method+' Classes 0-'+str(nb_classes-1)+
                                                                        ' from' + str(date_begin))
 
-    visualize_map_time(reduce_classes(classes), bbox, vmin=0, vmax=4, title=method+' Classes 0-'+str(5-1)+
-                                                                       ' from' + str(date_begin))
     statistics_classes(classes, display_now=True)
+
+    classes = reduce_classes(classes)
+    visualize_map_time(classes, bbox, vmin=0, vmax=4, title=method+' Classes 0-'+str(5-1)+
+                                                                       ' from' + str(date_begin))
+
+    statistics_classes(classes, display_now=True)
+
 
 
 
