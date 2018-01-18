@@ -1,5 +1,5 @@
 {
-  "satellite": "H08",
+  "satellite": "GOES16",
   "time_step": {
     "H08": 10
   },
@@ -8,20 +8,20 @@
     "channels_name": ["IR124_2000", "IR390_2000", "VIS160_2000", "VIS064_2000"],
     "indexes": {
       "visible": {
-        "dir": "/data/computed",
+        "dir": "/data/test_data/computed",
         "pattern": "{SATELLITE}LATLON_VISIBLE_INDEXES__TMON_{YYYY}_{mm}__SDEG05_r{SDEG5_LATITUDE}_c{SDEG5_LONGITUDE}.nc"
       },
       "infrared": {
-        "dir": "/data/computed",
+        "dir": "/data/test_data/computed",
         "pattern": "{SATELLITE}LATLON_INFRARED_INDEXES__TMON_{YYYY}_{mm}__SDEG05_r{SDEG5_LATITUDE}_c{SDEG5_LONGITUDE}.nc"
       },
       "classes": {
-        "dir": "/data/computed",
+        "dir": "/data/test_data/classes",
         "pattern": "{SATELLITE}LATLON_CLASSES_INDEXES__TMON_{YYYY}_{mm}__SDEG05_r{SDEG5_LATITUDE}_c{SDEG5_LONGITUDE}.nc"
       }
     },
     "channels": {
-      "dir": "/data/model_data_himawari/sat_data_procseg",
+      "dir": "/data/test_data",
       "pattern": "{SATELLITE}LATLON_{CHANNEL}__TMON_{YYYY}_{mm}__SDEG05_r{SDEG5_LATITUDE}_c{SDEG5_LONGITUDE}.nc"
     }
   },
@@ -30,27 +30,27 @@
     "channels_name": ["IR124", "IR103", "IR390", "VIS161", "VIS064"],
     "indexes": {
       "visible": {
-        "dir": "/data/computed",
-        "pattern": "{SATELLITE}LATLON_VISIBLE_INDEXES__TMON_{YYYY}_{mm}__SDEG05_r{SDEG5_LATITUDE}_c{SDEG5_LONGITUDE}.nc"
+        "dir": "/data/test_data/computed",
+        "pattern": "{SATELLITE}_VISIBLE_INDEXES_{YYYY}_{mm}_c{SDEG5_LONGITUDE}_r{SDEG5_LATITUDE}_east.nc"
       },
       "infrared": {
-        "dir": "/data/computed",
-        "pattern": "{SATELLITE}LATLON_INFRARED_INDEXES__TMON_{YYYY}_{mm}__SDEG05_r{SDEG5_LATITUDE}_c{SDEG5_LONGITUDE}.nc"
+        "dir": "/data/test_data/computed",
+        "pattern": "{SATELLITE}_INFRARED_INDEXES_{YYYY}_{mm}_c{SDEG5_LONGITUDE}_r{SDEG5_LATITUDE}_east.nc"
       },
       "classes": {
-        "dir": "/data/computed",
-        "pattern": "{SATELLITE}LATLON_CLASSES_INDEXES__TMON_{YYYY}_{mm}__SDEG05_r{SDEG5_LATITUDE}_c{SDEG5_LONGITUDE}.nc"
+        "dir": "/data/test_data/classes",
+        "pattern": "{SATELLITE}_CLASSES_INDEXES_{YYYY}_{mm}_c{SDEG5_LONGITUDE}_r{SDEG5_LATITUDE}_east.nc"
       }
     },
     "channels": {
       "dir": "/data/test_data_goesr",
-      "pattern": "{SATELLITE}LATLON_{CHANNEL}__TMON_{YYYY}_{mm}__SDEG05_r{SDEG5_LATITUDE}_c{SDEG5_LONGITUDE}.nc"
+      "pattern": "{SATELLITE}_{CHANNEL}_{YYYY}_{mm}_c{SDEG5_LONGITUDE}_r{SDEG5_LATITUDE}_east.nc"
     }
   },
 
   "masks": {
     "ocean": {
-      "dir": "/data/ocean_shape",
+      "dir": "/data/test_data/masks",
       "pattern": "landsea_mask_2arcmin.nc"
     },
     "terrain": {
