@@ -1,0 +1,4119 @@
+'''
+Created on Feb 13, 2016
+
+@author: tomas
+'''
+
+import sys
+import os
+import numpy
+import datetime
+import multiprocessing
+
+import radlib  #@UnresolvedImport
+
+
+
+from general_utils import daytimeconv
+from general_utils import solar_geom_v5
+from general_utils import latlon_nctools
+from general_utils import latlon
+from general_utils import satellite_geom
+
+from aerosols.model import atmosphere_param
+
+from himawari8.sat_model.utils import himawari_mdl_quantile_regresion
+from himawari8.sat_model.utils import prepare_sat_rast_data
+from himawari8.sat_model.utils import segmented_solar_geometry
+from himawari8.sat_model.utils import corrections
+from himawari8.sat_model.utils import himawari_nc_latlontools
+
+from general_utils import db_utils
+from general_utils import db_sites
+from msg import msg_db
+
+from general_utils.basic_logger import make_logger
+logger = make_logger(__name__)
+logger.setLevel(20)
+
+
+
+
+def init_aod_nc_files_v21v():
+    aod_monthly_correction_file='macc_aod_correction_monthly_v19.nc' 
+#    aod_monthly_scaleoffset_correction_file_2013='aod670_nrt_anomaly_correction_2013.nc' 
+#    aod_monthly_scaleoffset_correction_file_2014='aod670_nrt_anomaly_correction_2014.nc' 
+    aod_monthly_scaleoffset_correction_file_2015='aod670_nrt_anomaly_correction_2015.nc' 
+    aod_monthly_scaleoffset_correction_file_2016='aod670_nrt_anomaly_correction_2016.nc' 
+    aod_monthly_scaleoffset_correction_file_2017='aod670_nrt_anomaly_correction_2017.nc' 
+
+    aod_corr_list=[\
+                   {'type':'picewise_nc_p05p50', 'parameters':{'ncfile':aod_monthly_correction_file}},\
+                   ]
+#    aod_corr_list2013=[\
+#                   {'type':'scaleoffset_nc', 'parameters':{'ncfile':aod_monthly_scaleoffset_correction_file_2013}},\
+#                   {'type':'picewise_nc_p05p50', 'parameters':{'ncfile':aod_monthly_correction_file}},\
+#                   ]
+#    aod_corr_list2014=[\
+#                   {'type':'scaleoffset_nc', 'parameters':{'ncfile':aod_monthly_scaleoffset_correction_file_2014}},\
+#                   {'type':'picewise_nc_p05p50', 'parameters':{'ncfile':aod_monthly_correction_file}},\
+#                   ]
+    aod_corr_list2015=[\
+                   {'type':'scaleoffset_nc', 'parameters':{'ncfile':aod_monthly_scaleoffset_correction_file_2015}},\
+                   {'type':'picewise_nc_p05p50', 'parameters':{'ncfile':aod_monthly_correction_file}},\
+                   ]
+    aod_corr_list2016=[\
+                   {'type':'scaleoffset_nc', 'parameters':{'ncfile':aod_monthly_scaleoffset_correction_file_2016}},\
+                   {'type':'picewise_nc_p05p50', 'parameters':{'ncfile':aod_monthly_correction_file}},\
+                   ]
+    aod_corr_list2017=[\
+                   {'type':'scaleoffset_nc', 'parameters':{'ncfile':aod_monthly_scaleoffset_correction_file_2017}},\
+                   {'type':'picewise_nc_p05p50', 'parameters':{'ncfile':aod_monthly_correction_file}},\
+                   ]
+
+    aod_ncfiles = [\
+                ['macc_reanal2003_2009_aod670_monthly_longterm_v3_mean.nc', 'aod670', None, 'monthly','macc_reanal_geopot.nc', 'z', aod_corr_list], \
+#                ['macc_reanal_aod670_2003.nc','214.210', None, 'hourly','macc_reanal_geopot.nc', 'z', aod_corr_list], \
+#                ['macc_reanal_aod670_2004.nc','214.210', None, 'hourly','macc_reanal_geopot.nc', 'z', aod_corr_list], \
+#                ['macc_reanal_aod670_2005.nc','214.210', None, 'hourly','macc_reanal_geopot.nc', 'z', aod_corr_list], \
+#                ['macc_reanal_aod670_2006.nc','214.210', None, 'hourly','macc_reanal_geopot.nc', 'z', aod_corr_list], \
+#                ['macc_reanal_aod670_2007.nc','214.210', None, 'hourly','macc_reanal_geopot.nc', 'z', aod_corr_list], \
+#                ['macc_reanal_aod670_2008.nc','214.210', None, 'hourly','macc_reanal_geopot.nc', 'z', aod_corr_list], \
+#                ['macc_reanal_aod670_2009.nc','214.210', None, 'hourly','macc_reanal_geopot.nc', 'z', aod_corr_list], \
+#                ['macc_reanal_aod670_2010.nc','214.210', None, 'hourly','macc_reanal_geopot.nc', 'z', aod_corr_list], \
+#                ['macc_reanal_aod670_2011.nc','aod670', None, 'hourly','macc_reanal_geopot.nc', 'z', aod_corr_list], \
+#                ['macc_reanal_aod670_2012.nc','aod670', None, 'hourly','macc_reanal_geopot.nc', 'z', aod_corr_list], \
+#                ['aod670_2013.nc', 'aod670', None, 'hourly','macc_reanal_geopot.nc', 'z', aod_corr_list2013],\
+#                ['aod670_2014.nc', 'aod670', None, 'hourly','macc_reanal_geopot.nc', 'z', aod_corr_list2014],\
+                ['aod670_2015.nc', 'aod670', None, 'hourly','macc_reanal_geopot.nc', 'z', aod_corr_list2015],\
+                ['cams_nrt_aod670_075deg_2015.nc', 'aod670', None, 'hourly','cams_nrt_geopot_075deg.nc', 'z', aod_corr_list2015],\
+                ['cams_nrt_aod670_075deg_2016.nc', 'aod670', None, 'hourly','cams_nrt_geopot_075deg.nc', 'z', aod_corr_list2016],\
+                ['cams_nrt_aod670_040deg_2016.nc', 'aod670', None, 'hourly','cams_nrt_geopot_040deg.nc', 'z', aod_corr_list2016],\
+                ['cams_nrt_aod670_040deg_2017.nc', 'aod670', None, 'hourly','cams_nrt_geopot_040deg.nc', 'z', aod_corr_list2017],\
+                ]
+    wv_ncfiles = [\
+                ['era_interim_reanal2003_2007_wv_monthly_longterm.nc', 'tcwv', 0.1, 'monthly','era_interim_geopot.nc', 'z', None],\
+#                ['CFSR_pwat_1994.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+#                ['CFSR_pwat_1995.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+#                ['CFSR_pwat_1996.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+#                ['CFSR_pwat_1997.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+#                ['CFSR_pwat_1998.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+#                ['CFSR_pwat_1999.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+#                ['CFSR_pwat_2000.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+#                ['CFSR_pwat_2001.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+#                ['CFSR_pwat_2002.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+#                ['CFSR_pwat_2003.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+#                ['CFSR_pwat_2004.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+#                ['CFSR_pwat_2005.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+#                ['CFSR_pwat_2006.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+#                ['CFSR_pwat_2007.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+#                ['CFSR_pwat_2008.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+#                ['CFSR_pwat_2009.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+#                ['GFS4_pwat_2010.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+#                ['GFS4_pwat_2011.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+#                ['GFS4_pwat_2012.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+#                ['GFS4_pwat_2013.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+#                ['GFS4_pwat_2014.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+                ['GFS4_pwat_2015.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+                ['GFSprod_hires_pwat_2015.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+                ['GFSprod_hires_pwat_2016.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+                ['GFSprod_hires_pwat_2017.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+                ]
+
+    return aod_ncfiles, wv_ncfiles
+
+
+def init_aod_nc_files_v21u():
+    aod_monthly_correction_file='macc_aod_correction_monthly_v17.nc' 
+#    aod_monthly_scaleoffset_correction_file_2013='aod670_nrt_anomaly_correction_2013.nc' 
+#    aod_monthly_scaleoffset_correction_file_2014='aod670_nrt_anomaly_correction_2014.nc' 
+    aod_monthly_scaleoffset_correction_file_2015='aod670_nrt_anomaly_correction_2015.nc' 
+    aod_monthly_scaleoffset_correction_file_2016='aod670_nrt_anomaly_correction_2016.nc' 
+    aod_monthly_scaleoffset_correction_file_2017='aod670_nrt_anomaly_correction_2017.nc' 
+
+    aod_corr_list=[\
+                   {'type':'picewise_nc_p05p50', 'parameters':{'ncfile':aod_monthly_correction_file}},\
+                   ]
+#    aod_corr_list2013=[\
+#                   {'type':'scaleoffset_nc', 'parameters':{'ncfile':aod_monthly_scaleoffset_correction_file_2013}},\
+#                   {'type':'picewise_nc_p05p50', 'parameters':{'ncfile':aod_monthly_correction_file}},\
+#                   ]
+#    aod_corr_list2014=[\
+#                   {'type':'scaleoffset_nc', 'parameters':{'ncfile':aod_monthly_scaleoffset_correction_file_2014}},\
+#                   {'type':'picewise_nc_p05p50', 'parameters':{'ncfile':aod_monthly_correction_file}},\
+#                   ]
+    aod_corr_list2015=[\
+                   {'type':'scaleoffset_nc', 'parameters':{'ncfile':aod_monthly_scaleoffset_correction_file_2015}},\
+                   {'type':'picewise_nc_p05p50', 'parameters':{'ncfile':aod_monthly_correction_file}},\
+                   ]
+    aod_corr_list2016=[\
+                   {'type':'scaleoffset_nc', 'parameters':{'ncfile':aod_monthly_scaleoffset_correction_file_2016}},\
+                   {'type':'picewise_nc_p05p50', 'parameters':{'ncfile':aod_monthly_correction_file}},\
+                   ]
+    aod_corr_list2017=[\
+                   {'type':'scaleoffset_nc', 'parameters':{'ncfile':aod_monthly_scaleoffset_correction_file_2017}},\
+                   {'type':'picewise_nc_p05p50', 'parameters':{'ncfile':aod_monthly_correction_file}},\
+                   ]
+
+    aod_ncfiles = [\
+                ['macc_reanal2003_2009_aod670_monthly_longterm_v3_mean.nc', 'aod670', None, 'monthly','macc_reanal_geopot.nc', 'z', aod_corr_list], \
+#                ['macc_reanal_aod670_2003.nc','214.210', None, 'hourly','macc_reanal_geopot.nc', 'z', aod_corr_list], \
+#                ['macc_reanal_aod670_2004.nc','214.210', None, 'hourly','macc_reanal_geopot.nc', 'z', aod_corr_list], \
+#                ['macc_reanal_aod670_2005.nc','214.210', None, 'hourly','macc_reanal_geopot.nc', 'z', aod_corr_list], \
+#                ['macc_reanal_aod670_2006.nc','214.210', None, 'hourly','macc_reanal_geopot.nc', 'z', aod_corr_list], \
+#                ['macc_reanal_aod670_2007.nc','214.210', None, 'hourly','macc_reanal_geopot.nc', 'z', aod_corr_list], \
+#                ['macc_reanal_aod670_2008.nc','214.210', None, 'hourly','macc_reanal_geopot.nc', 'z', aod_corr_list], \
+#                ['macc_reanal_aod670_2009.nc','214.210', None, 'hourly','macc_reanal_geopot.nc', 'z', aod_corr_list], \
+#                ['macc_reanal_aod670_2010.nc','214.210', None, 'hourly','macc_reanal_geopot.nc', 'z', aod_corr_list], \
+#                ['macc_reanal_aod670_2011.nc','aod670', None, 'hourly','macc_reanal_geopot.nc', 'z', aod_corr_list], \
+#                ['macc_reanal_aod670_2012.nc','aod670', None, 'hourly','macc_reanal_geopot.nc', 'z', aod_corr_list], \
+#                ['aod670_2013.nc', 'aod670', None, 'hourly','macc_reanal_geopot.nc', 'z', aod_corr_list2013],\
+#                ['aod670_2014.nc', 'aod670', None, 'hourly','macc_reanal_geopot.nc', 'z', aod_corr_list2014],\
+                ['aod670_2015.nc', 'aod670', None, 'hourly','macc_reanal_geopot.nc', 'z', aod_corr_list2015],\
+                ['cams_nrt_aod670_075deg_2015.nc', 'aod670', None, 'hourly','cams_nrt_geopot_075deg.nc', 'z', aod_corr_list2015],\
+                ['cams_nrt_aod670_075deg_2016.nc', 'aod670', None, 'hourly','cams_nrt_geopot_075deg.nc', 'z', aod_corr_list2016],\
+                ['cams_nrt_aod670_040deg_2016.nc', 'aod670', None, 'hourly','cams_nrt_geopot_040deg.nc', 'z', aod_corr_list2016],\
+                ['cams_nrt_aod670_040deg_2017.nc', 'aod670', None, 'hourly','cams_nrt_geopot_040deg.nc', 'z', aod_corr_list2017],\
+                ]
+    wv_ncfiles = [\
+                ['era_interim_reanal2003_2007_wv_monthly_longterm.nc', 'tcwv', 0.1, 'monthly','era_interim_geopot.nc', 'z', None],\
+#                ['CFSR_pwat_1994.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+#                ['CFSR_pwat_1995.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+#                ['CFSR_pwat_1996.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+#                ['CFSR_pwat_1997.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+#                ['CFSR_pwat_1998.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+#                ['CFSR_pwat_1999.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+#                ['CFSR_pwat_2000.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+#                ['CFSR_pwat_2001.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+#                ['CFSR_pwat_2002.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+#                ['CFSR_pwat_2003.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+#                ['CFSR_pwat_2004.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+#                ['CFSR_pwat_2005.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+#                ['CFSR_pwat_2006.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+#                ['CFSR_pwat_2007.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+#                ['CFSR_pwat_2008.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+#                ['CFSR_pwat_2009.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+#                ['GFS4_pwat_2010.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+#                ['GFS4_pwat_2011.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+#                ['GFS4_pwat_2012.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+#                ['GFS4_pwat_2013.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+#                ['GFS4_pwat_2014.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+                ['GFS4_pwat_2015.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+                ['GFSprod_hires_pwat_2015.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+                ['GFSprod_hires_pwat_2016.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+                ['GFSprod_hires_pwat_2017.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+                ]
+
+    return aod_ncfiles, wv_ncfiles
+
+def readSiteData(dsnDataDict, siteID, dfbStart, dfbEnd, slotStart, slotEnd, SatellitesList, channelNameList):
+    #readSiteData(dataType, dbSiteConn, dbGeomConn, SiteID, chanNumList, DfbInterval, SlotInterval, SatList )
+    '''
+    Function returns: ChannelRawDataDict{chanNum: [dfb,slot] of float64 data.}
+    SatDataAvailability{sat:[dfb, slot] boolean } - for calibration performance
+    '''
+#     sat | slot |  datetime_nominal   |       datetime_real        | vis064_2000 | vis160_2000 | ir124_2000 | ir390_2000                                                                                                                                                      
+#    -----+------+---------------------+----------------------------+-------------+-------------+------------+------------                                                                                                                                                     
+#     H08 |    2 | 2015-09-09 00:10:00 | 2015-09-09 00:11:51.950181 |    0.859375 |    0.859375 |    250.188 |    281.938                                                                                                                                                      
+#     H08 |    3 | 2015-09-09 00:20:00 | 2015-09-09 00:21:51.950186 |    0.828125 |    0.828125 |      246.5 |    286.562
+    raw_data_table_preffix = 'himawari_raw_data'
+
+
+    tablename = '%s_%d' % (raw_data_table_preffix, siteID) 
+    dsnDataString = db_utils.DSNDictToDSNString(dsnDataDict)
+    
+    #tests
+    if not db_utils.test_dsn(dsnDataString):
+        logger.error('Raw data DB %s connection failure' % (dsnDataDict['db']))
+        raise  Exception('DB connection problem')
+    
+    if not db_utils.db_dtable_exist(dsnDataString, tablename):
+        logger.error('Raw data table %s not found in DB %s' % (tablename, dsnDataDict['db']))
+        raise  Exception('DB raw data read problem')
+    
+   
+    #init output dictionaries 
+    ChannelRawDataDict = {}
+    SatDataAvailabilityDict = {}
+#    SolarGeom_TimesDict = {}
+    
+    dfbs=dfbEnd-dfbStart+1
+    slots=slotEnd-slotStart+1
+    empty_data_mtx =  numpy.empty((dfbs,slots), dtype=numpy.float64)
+    empty_data_mtx[:,:] = numpy.nan
+    empty_availability_mtx =  numpy.empty((dfbs,slots), dtype=numpy.bool_)
+    empty_availability_mtx[:,:] = False
+
+    
+#    SolarGeom_TimesDict['UTC'] = empty_data_mtx.copy()
+    
+    
+    # data dict with data read individually for satellites
+    SatChannelRawDataDictionary = {}
+    for sat in SatellitesList:
+        SatChannelRawDataDictionary[sat]={}
+        for chanName in channelNameList:
+            SatChannelRawDataDictionary[sat][chanName] = empty_data_mtx.copy()
+
+    # final output data dict with sat data availability
+    for sat in SatellitesList:
+        SatDataAvailabilityDict[sat] = empty_availability_mtx.copy()
+            
+    # final output data dict with data merged from all satellites
+    for chanName in channelNameList:
+        ChannelRawDataDict[chanName] = empty_data_mtx.copy()
+
+
+    dateBeginStr = daytimeconv.dfb2yyyymmdd(dfbStart)
+    dateEndNexdayStr = daytimeconv.dfb2yyyymmdd(dfbEnd+1) # we use next day in query to include whole dfbEnd in results   
+    
+    fieldsList = ['slot','datetime_nominal','datetime_real'] + channelNameList
+    fieldsStr = ','.join(fieldsList)
+
+    aux_channelName2idxDict = {}
+    for i in range(0,len(channelNameList)):
+        aux_channelName2idxDict[channelNameList[i]]=i
+
+    #read data from NC files
+    for sat in SatChannelRawDataDictionary.keys():
+        chan_dataDict = SatChannelRawDataDictionary[sat]
+        query = "SELECT %s FROM %s WHERE sat='%s' AND datetime_nominal>='%s' AND datetime_nominal<'%s' ORDER BY datetime_nominal" % (fieldsStr, tablename, sat, dateBeginStr, dateEndNexdayStr)
+        dbData = db_utils.db_query(dsnDataString, query)
+        if dbData is None:
+            continue
+        if len(dbData) < 1:
+            continue
+#        print dbData[0]
+        for i in range(0,len(dbData)):
+            slot = dbData[i][0]
+            aDT_nominal = dbData[i][1]
+#            aDT_real = dbData[i][2]
+            dfb_nominal = daytimeconv.date2dfb(aDT_nominal.date())
+            dfb_idx = dfb_nominal-dfbStart
+            slot_idx = slot-slotStart
+            for chan in channelNameList:
+                chanVal = dbData[i][3+aux_channelName2idxDict[chan]]
+                chan_dataDict[chan][dfb_idx,slot_idx] = chanVal
+            #time in decimal hours
+#            SolarGeom_TimesDict['UTC'][dfb_idx,slot_idx] =  aDT_real.hour + (aDT_real.minute/60.) + (aDT_real.second/3600.)
+              
+    #remove extreme values
+    for sat in SatChannelRawDataDictionary.keys():
+        chan_dataDict = SatChannelRawDataDictionary[sat]
+        for chan in channelNameList:
+            aux = chan_dataDict[chan]
+            aux[aux>5000] = numpy.nan
+            aux[aux==0] = numpy.nan
+
+
+
+
+    #merge data from various satellites to one dataset - make final ChannelRawDataDict
+    for sat in SatellitesList:
+        for chan in channelNameList:
+            data_sat_chan = SatChannelRawDataDictionary[sat][chan]
+            wh = data_sat_chan==data_sat_chan
+            if wh.sum()> 1:
+                ChannelRawDataDict[chan][wh] = SatChannelRawDataDictionary[sat][chan][wh]
+            if chan == 'VIS064_2000':
+                SatDataAvailabilityDict[sat][wh] = True
+
+    #clean up -  delete if no data from given satellite - make final SatDataAvailabilityDict and DfbsBordersDict
+    total_availability_arr = numpy.empty((dfbs), dtype=numpy.bool_)
+    total_availability_arr[:] = False
+    for sat in SatellitesList:
+        if (SatDataAvailabilityDict[sat] == True).sum() < 1:
+            del SatDataAvailabilityDict[sat]
+        else:
+            sat_dfb_wh = SatDataAvailabilityDict[sat].any(axis=1)
+            total_availability_arr |= sat_dfb_wh 
+
+    #check availability of data for dfbs
+    dfb_array = numpy.arange(dfbStart,dfbEnd+1)
+    no_data_dfbs = dfb_array[numpy.logical_not(total_availability_arr)]
+    if len(no_data_dfbs) > 35:
+        logger.warning('No raw satellite data for %d days. ', len(no_data_dfbs))
+    elif len(no_data_dfbs) > 0:
+        no_data_dates = []
+        for dfb in list(no_data_dfbs):
+            no_data_dates.append(daytimeconv.dfb2yyyymmdd(dfb))
+        logger.warning('No raw satellite data for %d days: %s ', len(no_data_dfbs), " ".join(no_data_dates))
+            
+
+    return ChannelRawDataDict, SatDataAvailabilityDict
+
+
+def sat_data_read_from_db(dsnDataDict, siteID, dfbStart, dfbEnd, slotStart, slotEnd, satInfoDict, lon, lat):
+    '''
+    Wrapper for point data reader and calibration
+    '''
+    
+    satList = satInfoDict['satList']
+    chanNameList = satInfoDict['chanNameList']
+
+    
+#    dbConn = db_utils.getConnection(dsnDataDict['db'], dsnDataDict['host'], dsnDataDict['user'], dsnDataDict['password'])
+#    dbGeomConn = db_utils.getConnection(dsnGeomDict['db'], dsnGeomDict['host'], dsnGeomDict['user'], dsnGeomDict['password'])
+
+    logger.info("Data read from DB")
+    #data 
+    ChannelRawDataDict, dummy = readSiteData(dsnDataDict, siteID, dfbStart, dfbEnd, slotStart, slotEnd, satList, chanNameList)
+
+    logger.info("SolarGeometry")
+    #solar geometry
+    solarGeom_TimesDict = {}
+    #to calculate solar geometry a 4D version from raster model is used. The inputs to raster functions must be prepared accordingly
+    aux_bbox = latlon.bounding_box(xmin=lon-0.001,xmax=lon+0.001,ymin=lat-0.001,ymax=lat+0.001,width=1,height=1, resolution=0.002)
+    aux_UTC_dh_4D = segmented_solar_geometry.calculate_realscan_UTCtimes(dfbStart,dfbEnd, slotStart,slotEnd,aux_bbox) 
+    h0_r, h0_r_ref, a0_r = segmented_solar_geometry.solargeom_core(aux_bbox,dfbStart,dfbEnd,slotStart,slotEnd, aux_UTC_dh_4D)
+    solarGeom_TimesDict['h0'] = h0_r[:,:,0,0]
+    solarGeom_TimesDict['A0'] = a0_r[:,:,0,0]
+    solarGeom_TimesDict['h0_ref'] = h0_r_ref[:,:,0,0]
+    
+    #solar geometry for the center of the slot
+    aux_UTC_dh_4D_slotcenter = segmented_solar_geometry.calculate_realscan_UTCtimes_slotcenter(dfbStart,dfbEnd, slotStart,slotEnd,aux_bbox) 
+    h0_r_slotcenter, h0_r_ref_slotcenter, a0_r_slotcenter = segmented_solar_geometry.solargeom_core(aux_bbox,dfbStart,dfbEnd,slotStart,slotEnd, aux_UTC_dh_4D_slotcenter)
+    solarGeom_TimesDict['h0_slotcenter'] = h0_r_slotcenter[:,:,0,0]
+    solarGeom_TimesDict['A0_slotcenter'] = a0_r_slotcenter[:,:,0,0]
+    solarGeom_TimesDict['h0_ref_slotcenter'] = h0_r_ref_slotcenter[:,:,0,0]
+    solarGeom_TimesDict['UTC_slotcenter'] = aux_UTC_dh_4D_slotcenter[:,:,0,0]
+
+
+    #remove data with sun below horizon or is zero
+    wh=(solarGeom_TimesDict['h0_ref']<0) | (ChannelRawDataDict['VIS064_2000']<=0.0)
+    ChannelRawDataDict['VIS064_2000'][wh]=numpy.nan
+    return ChannelRawDataDict,solarGeom_TimesDict
+
+
+
+
+def output_table_init(dsnDataDict, aoutput_table, aoutput_table_descr, aoutput_fields):
+    dsn="dbname=%s host=%s user=%s password=%s" % (dsnDataDict['db'], dsnDataDict['host'], dsnDataDict['user'], dsnDataDict['password'])
+
+    #check output table and remove indexes
+    out_table_exists=db_utils.db_dtable_exist(dsn,aoutput_table)
+    if not out_table_exists:
+        result = msg_db.out_tab_init(dsn, aoutput_table, aoutput_table_descr, aoutput_fields)
+        if not result:
+            print "cannot check/create output table, exit"
+            exit()
+    #remove indexes
+    indexes=db_utils.db_table_get_indexes(dsn, aoutput_table)
+    db_utils.db_remove_indexes(dsn, indexes)
+
+
+def output_table_indexes(dsnDataDict, aoutput_table):
+    dsn="dbname=%s host=%s user=%s password=%s" % (dsnDataDict['db'], dsnDataDict['host'], dsnDataDict['user'], dsnDataDict['password'])
+    indexes={}
+    for fld in ("date", "datetime", "siteid"):
+        db_indx=aoutput_table + "_"+fld+"_idx"
+        db_query = "CREATE INDEX " + db_indx + " ON " + aoutput_table + " ("+fld+")"
+        indexes[db_indx] = db_query
+    db_utils.db_create_indexes(dsn, indexes)
+
+def output_table_write(dsnDataDict, output_table, output_fields, site, SatDataDict, solarGeom_TimesDict, dfbStart, dfbEnd, vacuum=False, verbose=False):
+    import StringIO #@UnresolvedImport
+    import psycopg2 #@UnresolvedImport
+    
+    dsn="dbname=%s host=%s user=%s password=%s" % (dsnDataDict['db'], dsnDataDict['host'], dsnDataDict['user'], dsnDataDict['password'])
+    if verbose: 
+        logger.info("DB write results")
+
+    #remove old data for given site
+    minD = daytimeconv.dfb2date(dfbStart)
+    maxD = daytimeconv.dfb2date(dfbEnd)
+    msg_db.table_drop_data(dsn, output_table, site, 1, 144, minD, maxD)
+
+    #map output_field:CalibratedPostLaunchSatDataDict.key
+    outfld_outidx_dict={\
+                    "ghi_c":"GHIc",\
+                    "ghi":"GHI",\
+                    "dni_c":"DNIc",\
+                    "dni":"DNI",\
+                    "cli":"CLI",\
+                    "ci":"CI",\
+                    "ci_flag":"CI_flag",\
+                    "ktm":"KTM",\
+                    "lb":"LB",\
+                    "lbland":"LBland",\
+                    "lbclass":"LBclass",\
+                    }
+
+    #create buffer with data
+    buffer=StringIO.StringIO()
+    
+    GHI=SatDataDict['GHI']
+    UTC=solarGeom_TimesDict['UTC_slotcenter']
+    dfbs=range(dfbStart,dfbEnd+1)
+    slots=range(1,144+1)
+
+    
+    for d_idx in range(0,len(dfbs)):
+        dfb=dfbs[d_idx]
+        aD=daytimeconv.dfb2date(dfb) 
+        for s_idx in range(0,len(slots)): 
+            ghi=GHI[d_idx, s_idx]
+            if ghi!=ghi:
+#                print aD, UTC[d_idx, s_idx], ghi
+                continue
+            slot=slots[s_idx]
+            utc=UTC[d_idx, s_idx]+0.000001  #0.000001 to avoid having HH:MM-1:59 but HH:MM:00 
+            aT=daytimeconv.dh2time(utc)
+            aDT = datetime.datetime.combine(aD, aT)
+            outvals = str(site) + "\t'" + aDT.strftime("%Y-%m-%d") + "'\t'" + aDT.strftime("%H:%M:") + str(aDT.second) + "'\t'" + aDT.strftime("%Y-%m-%d %H:%M:") + str(aDT.second) + "'\t" + str(slot) 
+#            print outvals
+            for out_fld in range(0, len(output_fields)):
+                val=SatDataDict[outfld_outidx_dict[output_fields[out_fld]]][d_idx, s_idx]
+                if (output_fields[out_fld] == 'ci_flag') or (output_fields[out_fld] == 'lbclass'):
+                    if numpy.isnan(val):
+                        val='\N'
+                    else:
+                        val = int(val)
+                    
+                outvals += "\t" + str(val)
+            buffer.write(outvals+'\n')    
+    buffer.seek(0,0)
+
+
+    #copy buffer to db
+    try:
+        conn = psycopg2.connect(dsn)
+    except:
+        print "Unable to connect to the database, exiting."
+        return False
+    curs = conn.cursor()
+
+    query = "BEGIN"
+    try:
+        curs.execute(query)
+    except:
+        print "Unable to execute query"
+        print query
+
+    outflds = ['siteid', 'date', 'time', 'datetime', 'slot']
+    for j in range(0, len(output_fields)):
+        outflds.append( output_fields[j])
+
+    try:
+        curs.copy_from(buffer, "\""+output_table+"\"", sep='\t', null='\N', columns=outflds)
+    except:
+        print sys.exc_info()
+        print "Unable to execute copy to db"
+    conn.commit()
+    conn.close()
+    buffer.close()
+    
+    if vacuum:
+        if verbose: print 'Vacuum', datetime.datetime.now()
+        db_utils.db_vacuum_table(dsn, atable=output_table)
+
+#    if verbose: print "DB write end", datetime.datetime.now()
+
+
+def sat_data_read_from_nc(subseg_bbox, DfbStart,DfbEnd, SlotStart,SlotEnd, satdata_suffix, satInfoDict, verbose=False):
+    '''
+    Wrapper for NC data reader and calibration
+    '''
+
+#    dfbs = DfbEnd - DfbStart +1
+#    slots = SlotEnd - SlotStart +1
+    
+    satList = satInfoDict['satList']
+    chanNameList = satInfoDict['chanNameList']
+    satelliteDataDirs = satInfoDict['satelliteDataDirs']
+
+    
+#    dbCalibConn = db_utils.getConnection(dsnCalibDict['db'], dsnCalibDict['host'], dsnCalibDict['user'], dsnCalibDict['password'])
+#    dbGeomConn = db_utils.getConnection(dsnGeomDict['db'], dsnGeomDict['host'], dsnGeomDict['user'], dsnGeomDict['password'])
+
+    #read data from NC
+    if verbose:
+        logger.info('Satellite data read')
+    ChannelRawDataDict, dummy = prepare_sat_rast_data.readLonLatSatelliteData(DfbStart, DfbEnd, SlotStart, SlotEnd, satList, chanNameList, satelliteDataDirs, satdata_suffix, subseg_bbox)
+
+    
+    logger.debug("Raw satellite data prepared: channels %s, shapes of arrays: %s,"%(ChannelRawDataDict.keys(), list(v.shape for v in ChannelRawDataDict.values()) ))
+
+    if verbose:
+        logger.info('Solar geometry')
+    
+    #real scan time 
+    #calculate pixel coordinates of processing bbox
+#    lat = subseg_bbox.latitudes(array2d=True)
+#    lon = subseg_bbox.longitudes(array2d=True)
+    
+    # calculate real scan time given by nominal scan time and scan time offset for each pixel  
+    UTC_dh_4D = segmented_solar_geometry.calculate_realscan_UTCtimes(DfbStart,DfbEnd, SlotStart,SlotEnd,subseg_bbox)
+    
+    
+    #calculate solar geometry
+    h0_r, h0_r_ref, a0_r = segmented_solar_geometry.solargeom(subseg_bbox,DfbStart,DfbEnd,SlotStart,SlotEnd, UTC_dh_4D)
+    
+    
+    solarGeom_TimesDict={}
+    solarGeom_TimesDict['h0_ref']=h0_r_ref
+    solarGeom_TimesDict['h0']=h0_r
+    solarGeom_TimesDict['A0']=a0_r
+    solarGeom_TimesDict['UTC']=UTC_dh_4D
+
+
+
+    #solar geometry for the center of the slot
+    UTC_dh_4D_slotcenter = segmented_solar_geometry.calculate_realscan_UTCtimes_slotcenter(DfbStart,DfbEnd, SlotStart,SlotEnd,subseg_bbox) 
+    h0_r_slotcenter, h0_r_ref_slotcenter, a0_r_slotcenter = segmented_solar_geometry.solargeom_core(subseg_bbox,DfbStart,DfbEnd, SlotStart,SlotEnd, UTC_dh_4D_slotcenter)
+    solarGeom_TimesDict['h0_slotcenter'] = h0_r_slotcenter
+    solarGeom_TimesDict['A0_slotcenter'] = a0_r_slotcenter
+    solarGeom_TimesDict['h0_ref_slotcenter'] = h0_r_ref_slotcenter
+    solarGeom_TimesDict['UTC_slotcenter'] = UTC_dh_4D_slotcenter
+
+
+
+
+
+    #remove data with sun below horizon or is zero
+    wh=(solarGeom_TimesDict['h0_ref']<0) | (ChannelRawDataDict['VIS064_2000']<=0.0)
+    ChannelRawDataDict['VIS064_2000'][wh]=numpy.nan
+
+
+
+    return ChannelRawDataDict, solarGeom_TimesDict
+
+    
+
+
+
+#check UB data output
+def check_UB_file(auxdata_file_dict, dfbStart,dfbEnd, seg_bbox):    
+    UBfile, UBvarname = auxdata_file_dict["UB"]
+    if ((os.path.exists(UBfile)) or  (os.path.isfile(UBfile))):
+            print("out file %s exists" % (UBfile))
+            return True
+    else:
+        chan_long_name='Upper bound for HIMAWARI model'
+        metadata = [['title',"HIMAWARI geometry parameters"], ['channel',UBvarname], ['projection',"geographic coordinates"], ['period',daytimeconv.dfb2yyyymmdd(dfbStart)+'-'+daytimeconv.dfb2yyyymmdd(dfbEnd)] ]
+
+        least_significant_digit=5
+
+        #create new NetCDF file with [doy, slot, lat, lon] dimensions
+        chunksizes=[12,16,16]
+        res = latlon_nctools.latlon_make_params_month_lat_lon_nc(nc_file_name=UBfile, metadata=metadata, force_overwrite=True, img_channels=[UBvarname], img_types=["NC_FLOAT"], img_units=['NORPIX'],img_long_names=[chan_long_name], novals=[-9], chunksizes=[chunksizes], least_significant_digits=[least_significant_digit], nc_extent=seg_bbox, compression=True, dims_name_colrow=False)
+        if not res:
+            print("failure while creating %s" % (UBfile))
+            return False
+        return True
+    
+       
+
+
+def calculateSatelliteGeometry_point(lon, lat, solarGeom_TimesDict, verbose=False):
+    if verbose: logger.info('Satellite Geometry')
+    satlon_r=numpy.radians(solarGeom_TimesDict['SSP'])
+    Asun_r=solarGeom_TimesDict['A0']
+    Hsun_r=solarGeom_TimesDict['h0']
+    
+    lat_r = numpy.empty([1,1],dtype=numpy.float32)
+    lon_r = numpy.empty([1,1],dtype=numpy.float32)
+    lat_r[:,:] = numpy.radians(lat) # we are using raster cersion
+    lon_r[:,:] = numpy.radians(lon)
+
+    #satellite geometry    
+    Asat_r=satellite_geom.sat_asat_r_vect2(lon_r, lat_r, satlon_r)[:,:,0,0]
+    Hsat_r=satellite_geom.sat_hsat_r_vect2(lon_r, lat_r, satlon_r)[:,:,0,0]
+
+
+    #sun - ground - satellite geometry
+    sun_sat_angle_r=satellite_geom.sat_sun_angle_r(Asun_r, Hsun_r, Asat_r, Hsat_r )
+    sun_sat_mirror_r=satellite_geom.sat_sun_mirror_angle_r(Asun_r, Hsun_r, Asat_r, Hsat_r )
+
+
+    solarGeom_TimesDict['Asat']=Asat_r
+    solarGeom_TimesDict['Hsat']=Hsat_r
+    solarGeom_TimesDict['sun_sat_angle']=numpy.degrees(sun_sat_angle_r)
+    solarGeom_TimesDict['sun_sat_mirror']=sun_sat_mirror_r
+        
+
+def calculateSatelliteGeometry_bbox(bbox, solarGeom_TimesDict, verbose=False):
+    '''
+     calcualtes satellite geometry:
+         satellite height angle
+         satelite azimuth angle
+         sun - ground - satellite angle
+         sun - ground - satellite mirror index
+    inputs 
+        bbox - used to create longitudes and latitudes grid
+        solarGeom_TimesDict - dictionary with parameters containing SSP, A0 and h0
+    results
+        updated solarGeom_TimesDict
+    '''
+    if verbose: logger.info('Satellite Geometry')
+    
+    
+    lat_r = bbox.latitudes(array2d=True, degrees=False)
+    lon_r = bbox.longitudes(array2d=True, degrees=False)
+
+    satlon_r=numpy.radians(solarGeom_TimesDict['SSP'])
+    Asun_r=solarGeom_TimesDict['A0']
+    Hsun_r=solarGeom_TimesDict['h0']
+
+    #satellite geometry    
+    Asat_r=satellite_geom.sat_asat_r_vect2(lon_r, lat_r, satlon_r)
+    Hsat_r=satellite_geom.sat_hsat_r_vect2(lon_r, lat_r, satlon_r)
+    
+    #sun - ground - satellite geometry
+    sun_sat_angle_r=satellite_geom.sat_sun_angle_r(Asun_r, Hsun_r, Asat_r, Hsat_r )
+    sun_sat_mirror_r=satellite_geom.sat_sun_mirror_angle_r(Asun_r, Hsun_r, Asat_r, Hsat_r )
+
+
+    solarGeom_TimesDict['Asat']=Asat_r
+    solarGeom_TimesDict['Hsat']=Hsat_r
+    solarGeom_TimesDict['sun_sat_angle']=numpy.degrees(sun_sat_angle_r)
+    solarGeom_TimesDict['sun_sat_mirror']=sun_sat_mirror_r
+
+
+ 
+def calculateSatelliteVariables(SatDataDict, solarGeom_TimesDict, verbose=False):
+    if verbose: logger.info('Satellite data derived variables')
+    
+    #sinh0
+    sinh0 = numpy.sin(solarGeom_TimesDict['h0'])
+    solarGeom_TimesDict['sinh0']=sinh0
+
+    sinh0_slotcenter = numpy.sin(solarGeom_TimesDict['h0_slotcenter'])
+    solarGeom_TimesDict['sinh0_slotcenter']=sinh0_slotcenter
+    
+
+    #NORPIX
+    vis_rad=SatDataDict['VIS064_2000']
+    NORPIX=vis_rad.copy()
+    
+    backforcor_offset, backforcor_rescale = corrections.backscatter_forescatter_cor_for_npix(numpy.radians(solarGeom_TimesDict['sun_sat_angle']))
+    mirrorcor_offset, mirrorcor_rescale = corrections.mirror_cor_for_npix(solarGeom_TimesDict['sun_sat_mirror'])
+    h0cor_offset, h0cor_rescale = corrections.h0_cor_for_npix(solarGeom_TimesDict['h0_ref'])
+    
+    
+    aux = ((NORPIX*h0cor_rescale)+h0cor_offset)
+    aux = ((aux*backforcor_rescale)+backforcor_offset)
+    aux=(aux*mirrorcor_rescale)+mirrorcor_offset
+    aux[aux<0.015]=0.015
+    SatDataDict['NORPIX'] = aux
+    
+    #some diagnostic plots of angular corrections 
+    if False:
+        SatDataDict['NORPIXraw']=NORPIX
+        aux=(NORPIX*backforcor_rescale)+backforcor_offset
+        aux[aux<0.015]=0.015
+        SatDataDict['NORPIXcor_bf']=aux
+        aux=(NORPIX*mirrorcor_rescale)+mirrorcor_offset
+        aux[aux<0.015]=0.015
+        SatDataDict['NORPIXcor_m']=aux
+        aux=(NORPIX*h0cor_rescale)+h0cor_offset
+        aux[aux<0.015]=0.015
+        SatDataDict['NORPIXcor_h0']=aux
+        
+        corrections.plot_backforescatter_scatterplot(solarGeom_TimesDict, SatDataDict)
+        exit()
+
+
+
+    #NDSI normalized difference snow index (Durr, Zelenka, in press)
+    if SatDataDict.has_key('VIS160_2000'):
+        refl_vis006=SatDataDict['VIS064_2000']
+        refl_ir_016=SatDataDict['VIS160_2000']
+        SatDataDict['NDSI'] = corrections.himawari_NDSI(refl_vis006, refl_ir_016)
+
+
+    #CLI - infrared cloud index      
+    SatDataDict['CLI'] = corrections.himawari_CLI2(SatDataDict['IR390_2000'], SatDataDict['IR124_2000'], sinh0)
+
+    if False:
+        import pylab #@UnresolvedImport
+        pylab.plot(SatDataDict['NDSI'][:,:].flatten(),label='NDSI')
+        pylab.plot(SatDataDict['VIS064_2000'][:,:].flatten(),label='VIS064_2000')
+    #    pylab.plot(SatDataDict['VIS160_2000'][:,:].flatten(),label='VIS160_2000')
+    #    pylab.plot(SatDataDict['NDSI'][:,:,0,0].flatten(),label='NDSI')
+    #    pylab.plot(SatDataDict['CLI'][:,:,0,0].flatten(),label='CLI')
+    #    pylab.plot(SatDataDict['VIS064_2000'][:,:,0,0].flatten(),label='NORPIX raw')
+    #    pylab.plot(SatDataDict['NORPIX'][:,:,0,0].flatten(),label='NORPIX')
+        pylab.legend()
+        pylab.show()
+
+
+
+def calculateSatelliteIndexes(CalibratedPostLaunchSatDataDict, solarGeom_TimesDict, verbose=False):
+    if verbose: 
+        logger.info('Sat indexes')
+    
+    sin_h0 = solarGeom_TimesDict['sinh0']
+    vis_ref=CalibratedPostLaunchSatDataDict['VIS064_2000']
+    ir_bt=CalibratedPostLaunchSatDataDict['IR124_2000']
+    
+
+    num_days=vis_ref.shape[0]
+    num_slots=vis_ref.shape[1]
+    size=num_days*num_slots
+
+    
+    #variability VIS
+
+    sin_h0 = sin_h0.flatten()
+    variability = numpy.empty((size),dtype=numpy.float32)
+    variability[:]=numpy.nan
+    var2=variability.copy()
+    varir=variability.copy()
+    
+    VIS_data = numpy.empty((size,5),dtype=numpy.float32)
+
+    VIS_data[:,2] = vis_ref.flatten()
+    VIS_data[sin_h0 < 0.015, 2] = numpy.nan
+    VIS_data[:,0] = numpy.roll(VIS_data[:,2],+2)
+    VIS_data[:,1] = numpy.roll(VIS_data[:,2],+1)
+    VIS_data[:,3] = numpy.roll(VIS_data[:,2],-1)
+    VIS_data[:,4] = numpy.roll(VIS_data[:,2],-2)
+    
+    wh=VIS_data[:,1]!=VIS_data[:,1]
+    VIS_data[wh,1]=0.5*(VIS_data[wh,0]+VIS_data[wh,2])
+    wh=VIS_data[:,1]!=VIS_data[:,1]
+    VIS_data[wh,1]=VIS_data[wh,2]
+    wh=VIS_data[:,3]!=VIS_data[:,3]
+    VIS_data[wh,3]=0.5*(VIS_data[wh,2]+VIS_data[wh,4])
+    wh=VIS_data[:,3]!=VIS_data[:,3]
+    VIS_data[wh,3]=VIS_data[wh,2]
+
+    VIS_data_sum_123=VIS_data[:,1:4].sum(axis=1)
+    wh_123 = (VIS_data_sum_123 == VIS_data_sum_123) & (VIS_data_sum_123 > 0.)
+    aux21 = VIS_data[wh_123,2] - VIS_data[wh_123,1]  
+    aux32 = VIS_data[wh_123,3] - VIS_data[wh_123,2]
+    
+    variability[wh_123] = (3./2.)*(numpy.abs(aux21-aux32))*(numpy.abs(aux21)+numpy.abs(aux32))/VIS_data_sum_123[wh_123]  
+    variability[variability>0.3]=0.3
+    CalibratedPostLaunchSatDataDict['variability'] = numpy.reshape(variability,(num_days,num_slots))
+
+    wh=VIS_data[:,0]!=VIS_data[:,0]
+    VIS_data[wh,0]=(VIS_data[wh,1])
+    wh=VIS_data[:,4]!=VIS_data[:,4]
+    VIS_data[wh,4]=(VIS_data[wh,3])
+    
+    VIS_data_sum_01234=VIS_data.sum(axis=1)
+    wh_01234 = (VIS_data_sum_01234 == VIS_data_sum_01234) & (VIS_data_sum_01234 > 0.)
+    aux10 = VIS_data[wh_01234,1] - VIS_data[wh_01234,0]
+    aux21 = VIS_data[wh_01234,2] - VIS_data[wh_01234,1]  
+    aux32 = VIS_data[wh_01234,3] - VIS_data[wh_01234,2]
+    aux43 = VIS_data[wh_01234,4] - VIS_data[wh_01234,3]
+    
+
+    dev=0.3
+    aux10[aux10!=aux10]=aux21[aux10!=aux10]
+    aux43[aux43!=aux43]=aux32[aux43!=aux43]
+    c1 = ((aux10/dev)-(aux21/dev))
+    c2 = ((aux21/dev)-(aux32/dev))
+    c3 = ((aux32/dev)-(aux43/dev))
+    d1=numpy.abs(c2-c1)
+    d2=numpy.abs(c3-c2)
+    wh2=(d1>d2) | (numpy.isnan(d1))
+    d1[wh2]=d2[wh2]
+    var2[wh_01234]=d1
+    
+    var2[var2[:]>3]=3
+    var2[var2[:]<0]=0
+
+    CalibratedPostLaunchSatDataDict['variability2'] = numpy.reshape(var2,(num_days,num_slots))
+
+    del (sin_h0, aux10, aux21, VIS_data, VIS_data_sum_123, VIS_data_sum_01234)
+    
+    #variability IR
+    IR_data = numpy.empty((size,5),dtype=numpy.float32)
+
+    IR_data[:,2] = ir_bt.flatten()
+    IR_data[:,0] = numpy.roll(IR_data[:,2],+2)
+    IR_data[:,1] = numpy.roll(IR_data[:,2],+1)
+    IR_data[:,3] = numpy.roll(IR_data[:,2],-1)
+    IR_data[:,4] = numpy.roll(IR_data[:,2],-2)
+
+    wh=IR_data[:,1]!=IR_data[:,1]
+    IR_data[wh,1]=0.5*(IR_data[wh,0]+IR_data[wh,2])
+    wh=IR_data[:,1]!=IR_data[:,1]
+    IR_data[wh,1]=IR_data[wh,2]
+    wh=IR_data[:,3]!=IR_data[:,3]
+    IR_data[wh,3]=0.5*(IR_data[wh,2]+IR_data[wh,4])
+    wh=IR_data[:,3]!=IR_data[:,3]
+    IR_data[wh,3]=IR_data[wh,2]
+
+
+    IR_data_sum=IR_data[:,1:4].sum(axis=1)
+    wh = (IR_data_sum == IR_data_sum) & (IR_data_sum > 0.)
+    aux10 = IR_data[wh,2] - IR_data[wh,1]  
+    aux21 = IR_data[wh,3] - IR_data[wh,2]
+
+    varir[wh] = (3./2.)*(numpy.abs(aux10-aux21))*(numpy.abs(aux10)+numpy.abs(aux21))/IR_data_sum[wh]  
+    varir[varir>2.5]=2.5
+    CalibratedPostLaunchSatDataDict['variabilityIR'] = numpy.reshape(varir,(num_days,num_slots))
+
+    del (aux10, aux21, IR_data, IR_data_sum, variability, var2)
+
+
+def _scoreatpercentile(a, per):
+    #return percentile
+    values = numpy.sort(a,axis=0)
+
+    idx = per /100. * (values.shape[0] - 1)
+    if (idx % 1 == 0):
+        return values[idx]
+    else:
+        return values[int(idx)] + (values[int(idx) + 1] - values[int(idx)])*(idx % 1);
+
+
+#derive UB (upper limit) for data on monthly basis
+#value column represents NORPIX
+#this is used only if UB is not precalcualted
+def calculate_UB(CalibratedPostLaunchSatDataDict,solarGeom_TimesDict, dfbStart_ext, dfbEnd, verbose=False):
+    if verbose: 
+        logger.info('calculate UB')
+
+    #make month-norpix data pairs
+    
+#    min_UB ,max_UB = 0.91, 0.97
+    min_UB ,max_UB = 0.90, 0.96
+    
+    percentile = 97.0
+    
+    norpix=CalibratedPostLaunchSatDataDict['NORPIX']
+    sinh0=solarGeom_TimesDict['sinh0']
+
+    #average UB from whole year
+    wh=(sinh0>0.17) & (norpix==norpix) #all with sun height >10deg (sinh0 0.17)
+    UB_year = _scoreatpercentile(norpix[wh],percentile)
+
+    
+    #for each dfb assign month
+    dfb_min=dfbStart_ext
+    dfb_max=dfbEnd
+    num_dfb=dfbEnd - dfbStart_ext +1
+    dfb2month_arr=numpy.zeros((num_dfb),dtype=numpy.int8)
+    for dfb in range(dfb_min,dfb_max+1):
+        dfb_idx=dfb-dfb_min
+        m=daytimeconv.dfb2ymd(dfb)[1]
+        if (m >= 1) or (m <= 12):
+            dfb2month_arr[dfb_idx]=m
+
+    
+
+    #calculate min_sinh0 used to define selection of the data for UB calculation
+    norpix_month_list=[]
+    all_data_count=0
+    for month in range (1, 12 + 1):
+        wh_m = (dfb2month_arr == month) #month selection filter
+        sinh0_m = sinh0[wh_m, :]
+        norpix_m = norpix[wh_m, :]
+        wh_valid_m=(sinh0_m==sinh0_m)&(norpix_m==norpix_m)
+        sinh0_m = sinh0_m[wh_valid_m]
+        norpix_m = norpix_m[wh_valid_m]
+        if wh_valid_m.sum() >1:
+            AUX=max(0,(sinh0_m).max())*0.25 #find quarter of max sinh0
+            norpix_month_list.append(norpix_m[sinh0_m > AUX])
+        else:
+            norpix_month_list.append(norpix_m)
+        all_data_count+=len(norpix_month_list[-1])
+
+    
+    month_UB = numpy.empty((12), dtype=numpy.float32)
+    month_UB[:] = numpy.NaN
+    for month in range (1, 12 + 1):
+        prev_month = month - 1
+        if prev_month < 1: prev_month = 12
+        next_month = month + 1
+        if next_month > 12: next_month = 1
+        
+        #stack data from three months
+        myvalues = numpy.hstack((norpix_month_list[month-1],norpix_month_list[prev_month-1],norpix_month_list[next_month-1]))
+        myvalues = myvalues[myvalues==myvalues]
+
+        #calculate UBV from selected values
+        myvalues_count=len(myvalues)
+        if myvalues_count > (0.05 * all_data_count):
+            month_UB[month - 1] = _scoreatpercentile(myvalues,percentile)
+            if myvalues_count < (0.15 * all_data_count):
+                rate = (0.3 + ((myvalues_count / all_data_count) / 0.15) * 0.7)
+                month_UB[month - 1] = month_UB[month - 1] * rate + UB_year * (1. - rate)
+
+#    print UB_year
+#    numpy.set_printoptions(precision=3, linewidth=120)
+#    print month_UB, 'percentiles'
+    
+    #increase UB values under yearly average UB  - just to avoid very low values
+    month_UB[((month_UB) < UB_year)] = month_UB[((month_UB) < UB_year)] * 0.2 + UB_year * 0.8
+    month_UB[((month_UB) > UB_year)] = month_UB[((month_UB) > UB_year)] * 0.97 + UB_year * 0.03
+
+    #apply min_UB to avoid pathological cases
+    month_UB[month_UB > max_UB] = max_UB
+    month_UB[month_UB < min_UB] = min_UB
+
+
+    #now resolve NaNs
+    if numpy.sum(numpy.isnan(month_UB)) > 0:
+        temp = month_UB[numpy.logical_not(numpy.isnan(month_UB))]
+        if numpy.isnan(month_UB[0]):
+            month_UB[0] = temp[0]
+        if numpy.isnan(month_UB[-1]):
+            month_UB[-1] = temp[-1]
+        for m in range(1, 11 + 1):
+            if numpy.isnan(month_UB[m]):
+                for n in range(m, 11 + 1):
+                    if numpy.logical_not(numpy.isnan(month_UB[n])):
+                        month_UB[m] = (month_UB[m - 1] + month_UB[n]) / 2.
+
+#    print month_UB, 'percentiles + UB_avg + min,max + fillgaps'
+
+    return month_UB
+
+
+
+def UB_analysis_plot(SatDataDict,solarGeom_TimesDict,UB_monthly,dfbStart_ext,dfbEnd):
+    import pylab #@UnresolvedImport
+    fig2 = pylab.figure(num=1.5,figsize=(10,5),facecolor='w')
+    ax = fig2.add_axes([0.035, 0.05, 0.94, 0.94])
+    from matplotlib.dates import  DateFormatter #@UnresolvedImport
+    from general_utils import daytimeconv_num
+    NORPIX=SatDataDict['NORPIX'][:,:]
+    UB = numpy.empty_like(NORPIX)
+    aDTn = numpy.empty((NORPIX.shape[0],NORPIX.shape[1]), dtype=numpy.float64)
+    aDTn[:]=numpy.NAN
+    UB[:]=numpy.NAN
+    for dfb in range(dfbStart_ext,dfbEnd+1):
+        UB[dfb-dfbStart_ext,:]=UB_monthly[daytimeconv.dfb2ymd(dfb)[1]-1]
+        aD = daytimeconv.dfb2date(dfb)
+        for s_idx in range(0,NORPIX.shape[1]):
+            aDTn[dfb-dfbStart_ext,s_idx]=daytimeconv_num.date2num(datetime.datetime.combine(aD,daytimeconv.dh2time(s_idx*24./144.))) 
+    
+    h0=solarGeom_TimesDict['h0'][:,:]
+    wh=(h0>numpy.radians(10))
+    pylab.plot(aDTn[wh],NORPIX[wh].flatten(),'r.',ms=1)
+    pylab.plot(aDTn[wh],UB[wh].flatten(),'b.',ms=1)
+    pylab.ylim(0,1.5)
+    daysFmt = DateFormatter('%Y-%m-%d %H:%M')
+    ax.xaxis.set_major_formatter(daysFmt)
+
+    pylab.show()
+    exit()
+
+
+
+#better numpy implementation
+#def sat_data_classif2(aSatData, channels, dfb_begin, dfb_end, slot_begin, slot_end, doy_temper_limit_era, doy_temper_limit_durr, doy_alt_snow_probab, satData_col_dict, dfb2doy_arr, inData, inData_col_dict, verbose):
+def sat_data_classif2(SatDataDict,solarGeom_TimesDict, dfb_alt_snow_probab, longit, verbose=False, use_roll_slots=True):
+    '''
+    classification of satellite data using spectral infromation, variability and aux data
+    imputs:
+        CalibratedPostLaunchSatDataDict
+        solarGeom_TimesDict
+        dfb_alt_snow_probab
+        dfb_snow_depth
+        longit - in degrees - used for data rotation (to UTC)
+    result:
+        CalibratedPostLaunchSatDataDict['class'] - a class entry to dictionary  
+    '''
+    
+    do_filters=True 
+    
+    if verbose: 
+        logger.info('Spectral classif')
+#    if verbose: print '   part1', datetime.datetime.now()
+#    print SatDataDict.keys()
+#    print solarGeom_TimesDict.keys()
+    vis=SatDataDict['VIS064_2000']
+    ir=SatDataDict['IR124_2000']
+    CLI=SatDataDict['CLI']
+    NDSI=SatDataDict['NDSI']
+    variab=SatDataDict['variability']
+    variab2=SatDataDict['variability2']
+    variabIR=SatDataDict['variabilityIR']
+    sinh0=solarGeom_TimesDict['sinh0']
+#    sun_sat_mirr=solarGeom_TimesDict['sun_sat_mirror']
+    sun_sat_angle=solarGeom_TimesDict['sun_sat_angle']
+
+    num_days=vis.shape[0]
+    num_slots=vis.shape[1]
+
+    #snow depth 2D array
+#    sd = numpy.repeat(dfb_snow_depth,num_slots).reshape(num_days,num_slots)
+#    sdwe_no_snow_limit=4
+#    wh = (sd >sdwe_no_snow_limit) | (sd!=sd)
+#    sd[wh]=1
+#    sd[numpy.logical_not(sd)]=0
+
+    #alt snow probability
+    alt_snow_prob = numpy.repeat(dfb_alt_snow_probab,num_slots).reshape(num_days,num_slots)
+
+           
+    #output data array
+    aClassData=numpy.empty((num_days,num_slots), dtype=numpy.float32) 
+    aClassData[:,:]=numpy.NaN
+
+
+    #calculate h0
+    #max sinh0 for given day
+#    sinh0_ma=numpy.ma.masked_where((sinh0!=sinh0),sinh0)
+#    sinh0_d_max=sinh0_ma.max(axis=1)
+#    sinh0_max_arr=numpy.repeat(sinh0_d_max, sinh0.shape[1]).reshape(sinh0.shape)
+
+#    if verbose: print '   part1a', datetime.datetime.now()
+    
+    
+#    aClassData[wh]=numpy.NaN
+    #1-very clear, 2-clear, 
+    wh = (sinh0<0.04) | numpy.isnan(sinh0)
+    
+    aClassData[wh]=-9
+    wh = numpy.isnan(aClassData) & (vis < 0.45) & (CLI < 12) & (variab<0.001) & (variab2<0.15) & (variabIR<0.002) 
+    aClassData[wh]=1
+    wh = numpy.isnan(aClassData) & (vis < 0.30) & (CLI < 12) & (variab<0.001) & (variab2<0.15) & (variabIR<0.002) 
+    aClassData[wh]=1
+    wh = numpy.isnan(aClassData) & (vis < 0.30) & (CLI < 12) & (variab<0.0015) & (variab2<0.15) & (variabIR<0.002)
+    aClassData[wh]=1
+    wh = numpy.isnan(aClassData) & (vis < 0.30) & (CLI <  10) & (variab<0.0025) & (variab2<0.15) & (variabIR<0.002)
+    aClassData[wh]=1
+    
+
+    wh = numpy.isnan(aClassData) & (vis < 0.32) & (CLI < 19) & (variab<0.005) & (variab2<0.25) & (variabIR<0.001) & (sun_sat_angle <10)
+    aClassData[wh]=2
+    wh = numpy.isnan(aClassData) & (vis < 0.32) & (CLI < 14) & (variab<0.005) & (variab2<0.21) & (variabIR<0.0015)
+    aClassData[wh]=2
+    wh = numpy.isnan(aClassData) & (vis < 0.35) & (CLI < 22) & (variab<0.0035) & (variab2<0.20) & (variabIR<0.002)
+    aClassData[wh]=2
+    wh = numpy.isnan(aClassData) & (vis < 0.32) & (CLI < 22) & (variab<0.002) & (variab2<0.20) & (variabIR<0.003)
+    aClassData[wh]=2
+    wh = numpy.isnan(aClassData) & (vis < 0.25) & (CLI < 20) & (variab<0.0025) & (variab2<0.15) & (variabIR<0.003)
+    aClassData[wh]=2
+    wh = numpy.isnan(aClassData) & (vis < 0.32) & (CLI < 20) & (variab<0.0025) & (variab2<0.18) & (variabIR<0.001)
+    aClassData[wh]=2
+    wh = numpy.isnan(aClassData) & (vis < 0.20) & (variab<0.003) & (variab2<0.1) & (ir>270) & (variabIR<0.03)
+    aClassData[wh]=2
+    wh = numpy.isnan(aClassData) & (vis < 0.30) & (variab<0.0015) & (variab2<0.1)  & (ir>270) & (variabIR<0.03)
+    aClassData[wh]=2
+    wh = numpy.isnan(aClassData) & (vis < 0.25) & (variab<0.002) & (variab2<0.1) & (ir!=ir)
+    aClassData[wh]=2
+    wh = numpy.isnan(aClassData) & (vis < 0.20) & (CLI < 30) & (variab<0.005) & (variab2<0.20) & (variabIR<0.001)
+    aClassData[wh]=2
+    wh = numpy.isnan(aClassData) & (vis < 0.32) & (CLI < 25) & (variab<0.002) & (variab2<0.15) & (variabIR<0.001)
+    aClassData[wh]=2
+    wh = numpy.isnan(aClassData) & (vis < 0.32) & (CLI < 20) & (variab<0.003) & (variab2<0.20) & (variabIR<0.0005)
+    aClassData[wh]=2
+    wh = numpy.isnan(aClassData) & (vis < 0.32) & (CLI < 18) & (variab<0.005) & (variab2<0.22) & (variabIR<0.0003)
+    aClassData[wh]=2
+    wh = numpy.isnan(aClassData) & (vis < 0.32) & (CLI < 45) & (variab<0.0015) & (variab2<0.13) & (variabIR<0.018)
+    aClassData[wh]=2
+    wh = numpy.isnan(aClassData) & (vis < 0.33) & (CLI < 30) & (variab<0.002) & (variab2<0.12) & (variabIR<0.001) & (sinh0<0.45)
+    aClassData[wh]=2
+    wh = numpy.isnan(aClassData) & (vis < 0.40) & (CLI < 45) & (variab<0.001) & (variab2<0.10) & (variabIR<0.001)
+    aClassData[wh]=2
+    wh = numpy.isnan(aClassData) & (vis < 0.37) & (CLI < 45) & (variab<0.006) & (variab2<0.35) & (variabIR<0.0007) & (sinh0<0.2)
+    aClassData[wh]=2
+    wh = numpy.isnan(aClassData) & (vis < 0.50) & (CLI < 45) & (variab<0.002) & (variab2<0.12) & (variabIR<0.0008) & (sinh0<0.35)
+    aClassData[wh]=2
+    wh = numpy.isnan(aClassData) & (vis < 0.68) & (CLI < 25) & (variab<0.0015) & (variab2<0.12) & (variabIR<0.002)
+    aClassData[wh]=2
+    wh = numpy.isnan(aClassData) & (vis < 0.68) & (CLI < 25) & (variab<0.0015) & (variab2<0.12) & (variabIR<0.001)
+    aClassData[wh]=2
+    wh = numpy.isnan(aClassData) & (vis < 0.68) & (CLI < 25) & (variab<0.0015) & (variab2<0.12) & (variabIR<0.003)
+    aClassData[wh]=2
+    wh = numpy.isnan(aClassData) & (vis < 0.68) & (CLI < 25) & (variab<0.001) & (variab2<0.12) & (variabIR<0.005)
+    aClassData[wh]=2
+    wh = numpy.isnan(aClassData) & (vis < 0.68) & (CLI < 25) & (variab<0.001) & (variab2<0.20) & (variabIR<0.004)
+    aClassData[wh]=2
+    wh = numpy.isnan(aClassData) & (vis < 0.68) & (CLI < 25) & (variab<0.001) & (variab2<0.07) & (variabIR<0.015)
+    aClassData[wh]=2
+    wh = numpy.isnan(aClassData) & (vis < 0.68) & (CLI < 35) & (variab<0.001) & (variab2<0.10) & (variabIR<0.002)
+    aClassData[wh]=2
+    wh = numpy.isnan(aClassData) & (vis > 0.30) & (vis < 0.65) & (variab<0.0005) & (variab2<0.12) & (ir!=ir)
+    aClassData[wh]=2
+    wh = numpy.isnan(aClassData) & (vis > 0.30) & (vis < 0.65) & (CLI < 20) & (variab<0.002) & (variab2<0.10) & (variabIR<0.0005)  & (ir>270) 
+    aClassData[wh]=2
+
+
+    #3-snow, 
+    wh = numpy.isnan(aClassData) & (vis > 0.30) & (vis < 0.65) & (CLI < 27) & (NDSI > 0.2) & (variab<0.0025) & (variab2<0.2) & (variabIR<0.0025)  & (ir>220) & (ir<285) & (alt_snow_prob>0.25) 
+    aClassData[wh]=3
+    wh = numpy.isnan(aClassData) & (vis > 0.30) & (vis < 0.65) & (CLI < 30) & (NDSI > 0.2) & (variab<0.0015) & (variab2<0.25) & (variabIR<0.001)  & (ir>220) & (ir<285) & (alt_snow_prob>0.25) 
+    aClassData[wh]=3
+    wh = numpy.isnan(aClassData) & (vis > 0.30) & (vis < 0.65) & (CLI < 34) & (NDSI > 0.2) & (variab<0.0015) & (variab2<0.15) & (variabIR<0.0015)  & (ir>220) & (ir<280) & (alt_snow_prob>0.3) 
+    aClassData[wh]=3
+    wh = numpy.isnan(aClassData) & (vis > 0.30) & (vis < 0.60) & (CLI < 55) & (NDSI > 0.05) & (variab<0.0015) & (variab2<0.10) & (variabIR<0.0008)  & (ir>220) & (ir<280) & (alt_snow_prob>0.30) 
+    aClassData[wh]=3
+    wh = numpy.isnan(aClassData) & (vis > 0.30) & (vis < 0.76) & (CLI < 25) & (NDSI > 0.4) & (variab<0.004) & (variab2<0.25) & (variabIR<0.001)  & (ir>220) & (ir<275) & (alt_snow_prob>0.30) 
+    aClassData[wh]=3
+    wh = numpy.isnan(aClassData) & (vis > 0.30) & (vis < 0.76) & (CLI < 30) & (NDSI > 0.4) & (variab<0.002) & (variab2<0.25) & (variabIR<0.0015)  & (ir>220) & (ir<275) & (alt_snow_prob>0.30) 
+    aClassData[wh]=3
+    wh = numpy.isnan(aClassData) & (vis > 0.30) & (vis < 0.79) & (CLI < 30) & (NDSI > 0.4) & (variab<0.001) & (variab2<0.25) & (variabIR<0.0015)  & (ir>220) & (ir<275) & (alt_snow_prob>0.30) 
+    aClassData[wh]=3
+    wh = numpy.isnan(aClassData) & (vis > 0.40) & (vis < 0.79) & (CLI < 40) & (NDSI > 0.4) & (variab<0.001) & (variab2<0.15) & (variabIR<0.0025)  & (ir>220) & (ir<275) & (alt_snow_prob>0.30) 
+    aClassData[wh]=3
+    wh = numpy.isnan(aClassData) & (vis > 0.30) & (vis < 0.60) & (CLI > 40) & (CLI < 72) & (NDSI > 0.05) & (variab<0.0015) & (variab2<0.13) & (variabIR<0.0008)  & (ir>220) & (ir<280) & (alt_snow_prob>0.30) & (sinh0<0.25)
+    aClassData[wh]=3
+    wh = numpy.isnan(aClassData) & (vis > 0.50) & (vis < 1.35) & (CLI < 40) & (NDSI > 0.4) & (variab<0.0015) & (variab2<0.20) & (variabIR<0.001)  & (ir>220) & (ir<275) & (alt_snow_prob>0.55) 
+    aClassData[wh]=3
+
+
+#    
+    wh = numpy.isnan(aClassData)
+    aClassData[wh]=7
+    wh = aClassData == -9
+    aClassData[wh]=numpy.NaN
+
+
+#    if verbose: print '   part1b', datetime.datetime.now()
+    if do_filters:
+        #FILTERS - removal of small groups of classified data (they are often some out-layers (pathological cases)) 
+        
+        #roll data to have data approx. centered - to avoid filterring out data at the first and last slots 
+        if use_roll_slots:
+            roll_slots=int(longit/7.5)
+            shp=aClassData.shape
+            aClassData_roll= numpy.roll(aClassData.flatten(), shift=roll_slots).reshape(shp)
+        else:
+            aClassData_roll = aClassData.copy()
+    
+        #filter out isolated pixels from classification
+        class_groups = [[1,2,3],[3]] #classes to join before filtering
+        min_px_number=3
+        to_class = 7 #class to assign isolated pixels to
+    
+        mask_whole=numpy.empty(aClassData_roll.shape,dtype=numpy.bool_) # create empty bool array to make filtering
+        mask_whole_gr=numpy.empty(aClassData_roll.shape,dtype=numpy.bool_) # create empty bool array to make filtering
+        for classg in class_groups:
+            mask_whole_gr[:,:] = False
+            mask_whole[:,:] = False
+            for clas in classg:   #make mask from all classes in group
+                mask_whole_gr=mask_whole_gr | (aClassData_roll==clas)
+    
+            for i in range(0, num_days):
+                wh1 = mask_whole_gr[i,:]
+                true_count=0
+                for j in range(0,len(wh1)):
+                    px=wh1[j]
+                    if not (px): 
+                        if (true_count>0) and (true_count<min_px_number):
+                            mask_whole[i,j-true_count:j]=True # set pixels to be filtered out
+                        true_count=0
+                    else:
+                        true_count+=1
+            aClassData_roll[mask_whole]=to_class
+    
+#        if verbose: print '   part1c', datetime.datetime.now()
+    
+        #filter out small groups of pixels with total count smaller than percent limit - LAND snow/cloud free
+        class_group = [1,2,3] #classes to join before filtering
+        to_class = 7 #class to assign isolated pixels to
+        min_num_class_limit=8. # %
+    
+        num_valid_dfb = (aClassData_roll==aClassData_roll).sum(axis=1)
+        mask_whole_gr[:,:] = False
+        mask_whole[:,:] = False
+        for clas in class_group:   #make mask from all classes in group
+            mask_whole_gr = mask_whole_gr | (aClassData_roll==clas)
+        num_valid_cls_dfb = mask_whole_gr.sum(axis=1)
+        wh =  num_valid_cls_dfb < (num_valid_dfb * min_num_class_limit * 0.01)
+        mask_whole[wh,:]=True
+        mask_whole_gr=mask_whole_gr&mask_whole
+        aClassData_roll[mask_whole_gr]=to_class
+        
+    
+#        if verbose: print '   part1d', datetime.datetime.now()
+        if use_roll_slots:
+            aClassData = numpy.roll(aClassData_roll.flatten(), shift=-roll_slots).reshape(shp)
+        else:
+            aClassData = aClassData_roll.copy()
+            
+    SatDataDict['class']=aClassData
+
+def monthly_to_dfb_array(m_arr, dfbStart_ext, dfbEnd):
+    dfbext2month_arr = numpy.empty((dfbEnd - dfbStart_ext+1), dtype=numpy.int16)
+    for dfb in range(dfbStart_ext, dfbEnd+1):
+        dfb_idx = dfb - dfbStart_ext
+        dfbext2month_arr[dfb_idx] = daytimeconv.dfb2ymd(dfb)[1]
+    dfbext2month_arr-=1 #months to indexes
+    d_arr=m_arr[dfbext2month_arr]
+    return d_arr
+    
+def monthly_to_dfbslot_arr(m_arr, dfbStart_ext, dfbEnd, slots):
+    d_arr=monthly_to_dfb_array(m_arr, dfbStart_ext, dfbEnd)
+    ds_arr = numpy.repeat(d_arr,slots).reshape(dfbEnd - dfbStart_ext+1,slots)
+    return ds_arr
+    
+
+def class_data_plot(SatDataDict, solarGeom_TimesDict, dfbStart_ext, dfbEnd, UB_monthly=None, dfb_alt_snow_probab=None):
+    if SatDataDict.has_key('LB'):
+        lb=SatDataDict['LB']
+    else:
+        fake=numpy.empty_like(SatDataDict['VIS064_2000'])
+        fake[:,:]=0.
+        lb=fake
+        
+    if UB_monthly is not None:
+        ub = monthly_to_dfbslot_arr(UB_monthly, dfbStart_ext, dfbEnd, 144)
+    else:
+        fake=numpy.empty_like(SatDataDict['VIS064_2000'])
+        fake[:,:]=0.91
+        ub=fake
+    
+    
+    classData=SatDataDict['class']
+    vis_ref=SatDataDict['VIS064_2000']
+    ir4_bt=SatDataDict['IR124_2000']
+    CLI=SatDataDict['CLI']
+    NDSI=SatDataDict['NDSI']
+    variab=SatDataDict['variability']
+    variab2=SatDataDict['variability2']
+    variab_ir=SatDataDict['variabilityIR']
+    sinh0=solarGeom_TimesDict['sinh0']
+    sun_sat_mirr=solarGeom_TimesDict['sun_sat_mirror']
+    sun_sat_angle=solarGeom_TimesDict['sun_sat_angle']
+    
+    num_days=vis_ref.shape[0]
+    num_slots=vis_ref.shape[1]
+
+    
+    alt_snow_prob = numpy.repeat(dfb_alt_snow_probab,num_slots).reshape(num_days,num_slots)
+        
+    classDict = {1: ["land str.", '#22CC22'], 2: ["land rel.", '#99FF99'], 8: ["land snow mix.", '#DDDD22'], 3: ["snow str.", '#2222EE'], 4: ["snow rel.", '#9999FF'], 5: ["cloud thin", '#FFBBBB'], 6: ["cloud opaque", '#EE4433'], 7: ["other", '#CCCCCC']}
+    inData = [vis_ref, ir4_bt, CLI, NDSI,alt_snow_prob, variab, variab2, variab_ir, sinh0, sun_sat_mirr, sun_sat_angle] 
+    labels = ["vis", "ir", "CLI","NDSI", "snow prob.","var_VIS", "var_VIS2", "var_IR","sinh0","sun_sat_mirr","sun_sat_ang"]
+    colors = ['r', 'r', 'b','b', 'b', 'b', 'b', 'b', 'g', 'g','g']
+    hlines = [["ir", 230, "#1010BB"], ["ir", 265, "#1010BB"], ["ir", 290, "#1010BB"], ["CLI", 25, "#1010BB"], ["var_VIS", 0.005, "#1010BB"], ["var_IR", 0.005, "#1010BB"]]
+    minmaxDict = {"vis": (0.0, 1.1),"ir": (200, None),"CLI":( 0, 80), "NDSI":(-0.5,0.8), "var_VIS":(0.0,0.02), "var_VIS2":(0.0,0.5), "var_IR":(0.0,0.01) }
+
+#    hlines = []
+    class_data_plot_core(inData,labels,colors,hlines,minmaxDict,classData,classDict, lb, ub, dfbStart_ext, dfbEnd,solarGeom_TimesDict)
+    exit()
+    
+    
+
+def class_data_plot_core(inData,labels,colors,hlines,minmaxDict,classData,classDict, lb, ub, dfbStart_ext, dfbEnd,solarGeom_TimesDict):
+    daily_profiles=True
+    
+    print "preparing plots"
+    
+    from pylab import date2num, show, figure, xticks, yticks, setp, ylabel, ma #@UnresolvedImport
+    from matplotlib.dates import MonthLocator, DateFormatter, DayLocator #@UnresolvedImport
+
+    dfb_1d = numpy.arange(dfbStart_ext,dfbEnd+1)
+#    dfb_3d = numpy.repeat(dfb_1d,144).reshape(dfbEnd-dfbStart_ext+1,144)
+#    dfbs=dfb_3d.flatten()
+    dh_1d= (numpy.arange(1,144+1)*24./144.) -5./60.
+    x=numpy.empty((dfbEnd-dfbStart_ext+1,144),dtype=numpy.float64)
+    x[:]=numpy.NaN
+    for d_idx in range(0,len(dfb_1d)):
+        aD=daytimeconv.dfb2date(dfb_1d[d_idx])
+        for s_idx in range(0,144):
+            aT=daytimeconv.dh2time(dh_1d[s_idx])
+            x[d_idx,s_idx]=date2num(datetime.datetime.combine(aD,aT))
+    x = x.flatten()
+
+    
+    sinh0=(solarGeom_TimesDict['sinh0']).flatten()
+
+    if daily_profiles:
+        fig1 = figure(num=1,figsize=(18,10),facecolor='w')
+        fig1.clear()
+
+        ax_ymin=0.05
+        ax_ymax=0.95
+        ax_ysep=0.015
+        min_sun_sinH0=0.087
+        axes=[]
+        numaxes=len(inData)
+        
+        
+        if classDict is not None:
+            numaxes+=1
+            
+        step = (ax_ymax-ax_ymin)/numaxes
+        for i in range(0,len(inData)):
+#            print i
+            alabel=labels[i]
+            acolor=colors[i]
+
+            y = (inData[i]).flatten()
+            yma = ma.masked_where((y != y) | (sinh0<min_sun_sinH0), y)
+            
+            if i ==0:
+                ax = fig1.add_axes([0.06,ax_ymin + (i*step),0.90,step-ax_ysep])
+            else:
+                ax = fig1.add_axes([0.06,ax_ymin + (i*step),0.90,step-ax_ysep], sharex=axes[0])
+            ax.grid(True,  linestyle=':', marker='.',  markersize=1., linewidth=0.5, color='#999999', alpha=0.5)
+            ylabel(alabel, fontsize=9)
+            
+            ax.plot(x, yma, acolor,  lw=1.5, marker='.',  markersize=1. ,label=alabel)
+
+            if alabel in minmaxDict.keys():
+                ax.set_ylim(minmaxDict[alabel])
+
+            if not hlines is None:
+                for hl_lab, hl_y, hl_col in hlines:
+                    if alabel==hl_lab:
+                        ax.axhline(y=hl_y, color=hl_col, lw=1, ls=':')
+
+            dummy,labs=xticks()
+            setp(labs,rotation=35,fontsize=8)
+            dummy,labs=yticks()
+            setp(labs,fontsize=8)
+            axes.append(ax)
+            i+=1
+        
+
+        #add classified 
+        if (classDict is not None):
+            ax = fig1.add_axes([0.06,ax_ymin + ((numaxes-1)*step),0.90,step-ax_ysep], sharex=axes[0])
+            classifData=(classData).flatten()
+            y = (inData[0]).flatten()
+            
+            for aclass in classDict.keys():
+                yma = ma.masked_where((y != y) | (sinh0<min_sun_sinH0) | (classifData[:]!=aclass), y)
+                ax.plot(x,yma, lw=2.5, color=classDict[aclass][1], label=classDict[aclass][0] \
+                        , marker='.', markeredgewidth=None, markerfacecolor=classDict[aclass][1], markersize=3)
+            
+            if 'vis' in minmaxDict.keys():
+                ax.set_ylim(minmaxDict['vis'])
+
+            
+            #add LB
+            if lb is not None:
+                y = lb.flatten()
+                yma = ma.masked_where((y != y) | (sinh0<min_sun_sinH0) , y)
+                ax.plot(x, yma, ':',c='#222222',  lw=1 ,label='LB')
+            
+            #add UB
+            if ub is not None:
+                y = ub.flatten()
+                yma = ma.masked_where((y != y) | (sinh0<min_sun_sinH0) , y)
+                ax.plot(x, yma, ':',c='#222222',  lw=1 ,label='UB')
+            
+            
+            ax.grid(True,  linestyle=':', linewidth=0.5, color='#999999', alpha=0.5)
+            dummy,labels=xticks()
+            setp(labels,rotation=35,fontsize=8)
+            dummy,labels=yticks()
+            setp(labels,fontsize=8)
+            axes.append(ax)
+
+
+        for i in range(0,len(axes)):
+            if i==0: continue
+            ax=axes[i]
+            for ticklabel in ax.get_xticklabels():
+                ticklabel.set_visible(False)
+                
+                
+        ax1=axes[-1]
+#        ax1.set_xlim(min(x),max(x))
+        
+        months    = MonthLocator()   # every month
+        days   = DayLocator()  # every  hr
+        ax1.xaxis.set_major_locator(months)
+        daysFmt = DateFormatter('%y-%m-%d')
+        ax1.xaxis.set_major_formatter(daysFmt)
+        ax1.xaxis.set_minor_locator(days)
+        
+            
+        show()
+
+
+
+#read LB and LBland from NC - used in LB+quantile regression trailing window
+def read_previous_LB(dfb_begin,slot_begin,slot_end, outdata_path_dict,outdata_suffix, bbox,file_time_segmentation='month'):
+    ncfiledict_previous = himawari_nc_latlontools.outdata_ncfile_dict(dfb_begin-1, dfb_begin-1,['LB','LBland'], outdata_path_dict, outdata_suffix, None, None, None, create_missing=False, slot_min=slot_begin, slot_max=slot_end, model_version=None, file_time_segmentation=file_time_segmentation)
+    
+    if len(ncfiledict_previous) >1:
+        try:
+            LB_previous=himawari_nc_latlontools.outdata_nc_read('LB', ncfiledict_previous, outdata_suffix, dfb_begin-1, dfb_begin-1, slot_begin, slot_end, bbox)
+            LBland_previous=himawari_nc_latlontools.outdata_nc_read('LBland', ncfiledict_previous, outdata_suffix, dfb_begin-1, dfb_begin-1, slot_begin, slot_end, bbox)
+            if (LB_previous[LB_previous==LB_previous].sum()==0) or (LB_previous[LB_previous==LB_previous].mean()<0):
+                print "warning: problem reading previous LB - no valid value"
+                LB_previous=None
+            if (LBland_previous[LBland_previous==LBland_previous].sum()==0) or (LBland_previous[LBland_previous==LBland_previous].mean()<0):
+                print "warning: problem reading previous LBland - no valid value"
+                LBland_previous=None
+        except:
+            print "warning: problem reading previous LB or LBland"
+            LB_previous, LBland_previous = None, None
+    else:
+        print "warning: no nc files found for LB,LBland"
+        return None, None
+    return LB_previous, LBland_previous
+
+#make mask for classes
+def class_mask(aCData, class_grp=[]):
+    awh=numpy.empty((aCData[:,:]).shape, dtype=numpy.bool_)
+    awh[:,:]=False
+    for acls in class_grp:
+        awh = awh | (aCData[:,:] == acls)
+    return awh
+
+
+
+
+def remove_trial_window(SatDataDict, solarGeom_TimesDict, trail_window_size):
+    solarGeom_TimesDict_keystoprocess=None
+    solarGeom_TimesDict2={}
+    for key in solarGeom_TimesDict.keys():
+        if (solarGeom_TimesDict_keystoprocess is not None) and (key not in solarGeom_TimesDict_keystoprocess):
+            continue
+        data=solarGeom_TimesDict[key]
+        if data.ndim==1:
+            solarGeom_TimesDict2[key]=data[trail_window_size:]
+        elif data.ndim==2:
+            solarGeom_TimesDict2[key]=data[trail_window_size:,:]
+        else:
+            continue
+        
+    SatDataDict_keystoprocess=None
+    SatDataDict2={}
+    for key in SatDataDict.keys():
+        if (SatDataDict_keystoprocess is not None) and (key not in SatDataDict_keystoprocess):
+            continue
+        data=SatDataDict[key]
+        if data.ndim==1:
+            SatDataDict2[key]=data[trail_window_size:]
+        elif data.ndim==2:
+            SatDataDict2[key]=data[trail_window_size:,:]
+        else:
+            continue
+
+    return SatDataDict2, solarGeom_TimesDict2
+        
+
+
+def calculate_LB(SatDataDict,solarGeom_TimesDict,LB_loaded, LBland_loaded, trail_window_size, longit, latit, dfbStart_ext, dfbEnd, LB_QR_weights=None, verbose=False):
+    if verbose: 
+        logger.info('calculate LB')
+    
+    shp = SatDataDict['NORPIX'].shape
+    num_dfbs, num_slots = shp
+     
+    #remove low sun_sat data from analysis
+    low_sun_sat_angle_threshold = 2.5
+    wh_low_sun_sat_angle = solarGeom_TimesDict['sun_sat_angle'] < low_sun_sat_angle_threshold
+    SatDataDict['NORPIX'][wh_low_sun_sat_angle] = numpy.nan    
+    
+    
+    
+    #define masks
+    sinh0=solarGeom_TimesDict["sinh0"]
+    wh=sinh0!=sinh0
+    sinh0[wh]=solarGeom_TimesDict["sinh0_slotcenter"][wh]
+
+    mask5_data = sinh0 >= 0.087155 #5 degrees limit
+    mask0_data = sinh0 >= 0.0 #0 degrees limit
+    
+    NORPIX = SatDataDict['NORPIX'].copy()
+    aClassData = SatDataDict['class']
+
+
+    #roll data    
+    roll_slots=int(longit/2.5)
+    aClassData= numpy.roll(aClassData.flatten(), shift=roll_slots).reshape(shp)
+    NORPIX= numpy.roll(NORPIX.flatten(), shift=roll_slots).reshape(shp)
+    mask5_data= numpy.roll(mask5_data.flatten(), shift=roll_slots).reshape(shp)
+    mask0_data= numpy.roll(mask0_data.flatten(), shift=roll_slots).reshape(shp)
+    if LB_loaded is not None:
+        LB_loaded=numpy.roll(LB_loaded, shift=roll_slots)
+        LBland_loaded=numpy.roll(LBland_loaded, shift=roll_slots)
+
+    #full data
+    full_data = NORPIX.copy()
+
+    #land data
+    land_mask = class_mask(aClassData, [1, 2])
+    land_data = NORPIX.copy()
+    land_data[numpy.logical_not(land_mask)] = numpy.NaN
+
+    #snow data
+    snow_mask = class_mask(aClassData, [3, 4])
+    snow_data = NORPIX.copy()
+    snow_data[numpy.logical_not(snow_mask)] = numpy.NaN
+
+
+    #missing days at the beginning of the window
+    missing_days = himawari_mdl_quantile_regresion.sat_data_missing_init_days(NORPIX.copy(), trail_window_size)
+    LB_QR_window_history_data = himawari_mdl_quantile_regresion.LB_quantile_regression_init_window_data(trail_window_size, land_data, snow_data, full_data, mask5_data, missing_days)
+
+
+    numpy.set_printoptions(precision=2)
+
+    #calculate lower boundary - quantile regression approach
+
+    # this is empirical correction of quantile used (changing with doy) in quantile regresion 
+    dfb_corr_quantile=numpy.empty((num_dfbs-trail_window_size),dtype=numpy.float32)
+    latit_factor=max(min(-latit,20.),-20.)/20.
+    correction=0.08
+    for dfb_idx in  range(trail_window_size,num_dfbs):
+        doy=daytimeconv.dfb2doy(dfb_idx+dfbStart_ext)
+        dfb_corr_quantile[dfb_idx-trail_window_size]=latit_factor*correction*numpy.sin(6.28318*(doy-5)/365.)
+#    print 'quantile correction', dfb_corr_quantile
+    
+    
+    
+    #half hour calculation
+        
+    lb_optimize_min_lim = 0.025 # lower limit of LB optimization (minimum allowed LB value) 
+    lb_optimize_max_lim = 1.1 # upper limit of LB optimization (maximum allowed LB value, e.g fresh snow)
+    lb_optimize_converg_lim = 0.001 # LB optimization convergence limit
+    LBquantile = 0.34
+
+#    #TEST START
+#    LBquantile = 0.45
+#
+#    dfb_corr_quantile_test=dfb_corr_quantile.copy()
+#    dfb_corr_quantile_test[:] = 0.
+#    LB_data_QR, LBland_data_QR = himawari_mdl_quantile_regresion.LB_quantile_regression3(land_data[trail_window_size:,:], snow_data[trail_window_size:,:], full_data[trail_window_size:,:], mask5_data[trail_window_size:,:], mask0_data[trail_window_size:,:], trail_window_size, LB_QR_window_history_data, LB_QR_weights, lb_optimize_min_lim, lb_optimize_max_lim, lb_optimize_converg_lim, LBquantile, LB_loaded=LB_loaded, LBland_loaded=LBland_loaded, dfb_corr_quantile=dfb_corr_quantile_test)
+#
+#    aux  = land_data[trail_window_size:,:] - LBland_data_QR
+#    aux[numpy.abs(aux) >0.1] = numpy.nan
+#    print 'difference land - LB: avg, std', aux[aux==aux].mean(), aux[aux==aux].std()
+#    #TEST END
+    
+
+
+    LB_data_QR, LBland_data_QR = himawari_mdl_quantile_regresion.LB_quantile_regression3(land_data[trail_window_size:,:], snow_data[trail_window_size:,:], full_data[trail_window_size:,:], mask5_data[trail_window_size:,:], mask0_data[trail_window_size:,:], trail_window_size, LB_QR_window_history_data, LB_QR_weights, lb_optimize_min_lim, lb_optimize_max_lim, lb_optimize_converg_lim, LBquantile, LB_loaded=LB_loaded, LBland_loaded=LBland_loaded, dfb_corr_quantile=dfb_corr_quantile)
+
+#    aux  = land_data[trail_window_size:,:] - LB_data_QR
+#    aux[numpy.abs(aux) >0.1] = numpy.nan
+#    print 'difference land - LB: avg, std', aux[aux==aux].mean(), aux[aux==aux].std()
+
+
+    #plot LB output
+    if False:
+        showplot=True
+        all_data = NORPIX.copy()
+        himawari_mdl_quantile_regresion.plot_LB_data(0, "xxx", [land_data[trail_window_size:,:], all_data[trail_window_size:,:], LB_data_QR, land_data[trail_window_size:,:] - LBland_data_QR, all_data[trail_window_size:,:] - LB_data_QR], ['snow/cloud free', 'full', 'LB', 'snow/cloud free - LB', 'all - LB'], [[.01, 1.2], [.01, 1.2], [.01, 1.2], [-0.15, 0.15], [-0.25, 0.25]], [None, None, None, None, None], ["jet", "jet", "jet", "blue_red3", "blue_red3"], saveplot=False, showplot=showplot)
+        del(all_data)
+        exit()
+
+    #roll back
+    shp=LB_data_QR.shape
+    LB_data_QR= numpy.roll(LB_data_QR.flatten(), shift=-roll_slots).reshape(shp)
+    LBland_data_QR= numpy.roll(LBland_data_QR.flatten(), shift=-roll_slots).reshape(shp)
+
+    #extend data to include window
+    fake=numpy.empty((trail_window_size,num_slots))
+    fake[:,:]=numpy.nan
+    LB_data_QR=numpy.vstack((fake,LB_data_QR))
+    LBland_data_QR=numpy.vstack((fake,LBland_data_QR))
+
+    SatDataDict['LB']=LB_data_QR
+    SatDataDict['LBland']=LBland_data_QR
+
+
+def _rescale_data(aData=[],in_min=40, in_max=140, out_min=0.1, out_max=0.5):
+    
+    aData=aData.copy()
+    if in_min<in_max:
+        aData[aData<in_min]=in_min 
+        aData[aData>in_max]=in_max
+    else:
+        aData[aData>in_min]=in_min 
+        aData[aData<in_max]=in_max
+    res = out_min+((out_max-out_min)*(aData-in_min)/(in_max-in_min))
+    return res
+
+
+
+
+
+
+#calculate CLUD INDEX (CI) 
+def calculate_CI(SatDataDict, solarGeom_TimesDict, UB_monthly, dfbStart, dfbEnd, verbose=False):
+    if verbose: 
+        logger.info('calculate CI')
+        
+            
+    NORPIX = SatDataDict['NORPIX'] #NORMALIZED PIXEL COUNTS
+    LB = SatDataDict['LB'] #LOWER BOUND
+    wh_npx=NORPIX!=NORPIX #used to mask ci calculation - NAN for input NORPIX NANS 
+
+    num_slots = LB.shape[1]
+
+    #convert monthly UB to dfbslot array
+    UB = monthly_to_dfbslot_arr(UB_monthly, dfbStart, dfbEnd, num_slots) #UPPER BOUND 
+
+    # CORE CI CALULATION - clasical approach, no corrections
+    CI_orig = numpy.zeros(NORPIX.shape, dtype=numpy.float64) # CLOUD INDEX
+    wh1 = ((UB - LB) > 0.01) & (NORPIX==NORPIX) & (LB==LB) & (UB==UB) 
+    CI_orig[wh1] = ((NORPIX[wh1] - LB[wh1]) / (UB[wh1] - LB[wh1]))
+
+    
+    CI_orig[wh_npx]=numpy.nan
+    SatDataDict['CI_orig'] = CI_orig
+   
+    CI = CI_orig.copy()
+
+    
+    
+    
+    #(1) ADAPTATION FOR CLASSIFIED DATA - using number of classsified data per day and high lower bound (high reflectivity surfaces) 
+    #calculate     daily CLS_ratio - ratio od classified cludless (class 1, 2, 3) slots to daytime slots (sinh0 > 0)  
+    sinh0 = solarGeom_TimesDict['sinh0_slotcenter']
+    sinh0_wh = numpy.logical_not((sinh0!=sinh0) | (sinh0<0))
+    sinh0_d_sum=sinh0_wh.sum(axis=1).astype(numpy.float32)
+    cls = SatDataDict['class']
+    cls_wh = ((cls==1) | (cls==2)| (cls==3))
+    cls_d_sum=cls_wh.sum(axis=1).astype(numpy.float32)
+    
+    wh = sinh0_d_sum>0
+    CLS_ratio=numpy.zeros(cls_d_sum.shape, dtype=numpy.float32)
+    CLS_ratio[wh]=cls_d_sum[wh]/sinh0_d_sum[wh]
+    
+    #claculate mean LB for each day
+    LB_mean = numpy.ma.fix_invalid(LB).mean(axis=1) 
+
+    #core of adaptation  -  decrease CI in case wh have high albedo and lots of classified values in a given day
+    LB_mean_wght = _rescale_data(aData=LB_mean,in_min=0.35, in_max=0.8, out_min=0.0, out_max=0.7)
+    CLS_ratio_wght = _rescale_data(aData=CLS_ratio,in_min=0.10, in_max=0.80, out_min=0.1, out_max=0.8)
+    LB_mean_wght[LB_mean<0.35]=0.0
+    correction=LB_mean_wght*CLS_ratio_wght
+    correction = numpy.repeat(correction,CI.shape[1]).reshape(CI.shape)
+    wh1 = (correction==correction)
+    if wh1.sum() > 0:
+        CI[wh1]-=correction[wh1]
+    wh2 = wh1 & (CI < -0.005)
+    CI[wh2]=-0.005
+
+    CI[wh_npx]=numpy.nan
+
+
+    #(2) HIMAWARI data come truncated to 2 decimal, that results in noise of very low CI, this is reduced 
+    CI_orig2 = CI.copy()
+    wh = cls_wh & (CI_orig2 >=-0.02) & (CI_orig2 <= 0.025) 
+    CI_orig2[wh] = CI_orig2[wh]*0.3 
+
+
+    #(3) USE of spectral cloud index (CLI) derived from spectral images
+    #very bright surfaces - high NORPIX, low LB and classified as cloudless, high CLS ratio 
+    CI_final=CI_orig2.copy()
+    CLS_ratio_wght2 = _rescale_data(aData=CLS_ratio,in_min=0.15, in_max=0.90, out_min=0.75, out_max=0.9)
+    CLS_ratio_wght2[CLS_ratio < 0.20] = 0.0 
+    CLS_ratio_wght2 = numpy.repeat(CLS_ratio_wght2,CI.shape[1]).reshape(CI.shape)
+
+    # CLI applies separately for positive and negative cloud indexes
+    # positive CI is decreased by CLI 
+    # negative CI indicates that LB is higher than NORPIX - maybe fast change of albedo such as snow melting - here increase of CI may be introduced     
+    CLI = SatDataDict['CLI']
+    CI_from_CLI=_rescale_data(CLI,in_min=18, in_max=55, out_min=0.0, out_max=1.0)
+    #correction using spectral CLI for higher LB and CI
+    wght_LB_pos=_rescale_data(LB,in_min=0.35, in_max=0.75, out_min=0.0, out_max=1.0)
+    wght_LB_neg=_rescale_data(LB,in_min=0.35, in_max=0.80, out_min=0.0, out_max=0.9)
+    wght_CI_pos=_rescale_data(CI_orig,in_min=0.14, in_max=0.30, out_min=0.0, out_max=1.0)
+    wght_CI_neg=_rescale_data(CI_orig,in_min=-0.03, in_max=-0.4, out_min=0.0, out_max=1.0)
+    
+    #calculate combined  LB and CI weights for positive and negative CIs
+    wght_LBCI_pos = wght_LB_pos*wght_CI_pos
+    wght_LBCI_neg = wght_LB_neg*wght_CI_neg
+
+    #use CLI in case of higher CI (cloudiness)
+    wh = (wght_LBCI_pos>=wght_LBCI_neg) & (wght_LBCI_pos>0) 
+    CI_final[wh] =  CI_orig2[wh]*(1.-wght_LBCI_pos[wh]) + CI_from_CLI[wh]*(wght_LBCI_pos[wh])
+    wh2 = (CI_orig2 < CI_final)
+    CI_final[wh2] = CI_orig2[wh2]
+
+    #use CLI in case of lower CI (cloudfree CI close to 0)
+    wh = (wght_LBCI_pos<wght_LBCI_neg) 
+    CI_final[wh] =  CI_orig2[wh]*(1.-wght_LBCI_neg[wh]) + CI_from_CLI[wh]*(wght_LBCI_neg[wh])
+
+    # low LB, high NORPIX, with something classified as cloudless
+    wh_high = cls_wh & (NORPIX > (1.6*LB)) 
+    CI_final[wh_high] =  CI_orig2[wh_high]*(1.-CLS_ratio_wght2[wh_high]) + CI_from_CLI[wh_high]*(CLS_ratio_wght2[wh_high])
+    
+
+
+    #(4) VERY HIGH LB - all cases  (15 Nov 2015 in GOES model)
+    CI_final2 = CI_final.copy() 
+    wh = wh1 & (LB>0.80)
+    wght_LB_high=_rescale_data(LB,in_min=0.8, in_max=1.3, out_min=0.0, out_max=0.8)
+    
+    CI_final2[wh] =  CI_final[wh]*(1.-wght_LB_high[wh]) + CI_from_CLI[wh]*(wght_LB_high[wh])
+     
+    CI_final2[wh_npx]=numpy.nan
+    
+    CI_final2[CI_final2>1.25] = 1.25
+    SatDataDict['CI'] = CI_final2
+
+
+    #debug visualization
+    if False:
+        import pylab #@UnresolvedImport
+        fig1 = pylab.figure(num=1,figsize=(20, 6),facecolor='w')
+        ax1 = fig1.add_subplot(1,1,1)
+        dfbs = numpy.arange(dfbStart,dfbEnd+1)
+        dhs=(numpy.arange(0,144)/6.)+(5./60.)
+        x=numpy.empty((dfbs.shape[0]*144),dtype=numpy.float64)
+        x[:]=numpy.NaN
+        
+        for d_idx in range(0,len(dfbs)):
+            aD=daytimeconv.dfb2date(dfbs[d_idx])
+            for s_idx in range(0,len(dhs)):
+                x_idx = (d_idx*144)+s_idx 
+                aT=daytimeconv.dh2time(dhs[s_idx])
+                x[x_idx]=pylab.date2num(datetime.datetime.combine(aD,aT))
+    
+        
+        pylab.plot( x, SatDataDict['CI_orig'].flatten(), c='b', alpha=0.5, label='CI orig' )
+#        pylab.plot( x, CI_orig2.flatten(), label='CI orig2' )
+        pylab.plot( x, CLS_ratio_wght2.flatten(), c='r', alpha=0.5,label='CLS_ratio_wght2' )
+        pylab.plot( x, CI_final.flatten(), c='c', ls=':', alpha=0.5, label='CI_final' )
+        pylab.plot( x, CI_final2.flatten(),ls='-',lw=1, c='b', label='CI_final2' )
+        pylab.plot( x, CI_from_CLI.flatten(),ls=':', c='y', label='CI_from_CLI' )
+        pylab.plot( x, LB.flatten(), c='k', alpha=0.9, label='LB' )
+        pylab.plot( x, SatDataDict['NORPIX'].flatten(), c='k', alpha=0.3,label='NORPIX' )
+
+#        from matplotlib.dates import MonthLocator, DateFormatter, DayLocator #@UnresolvedImport
+        from matplotlib.dates import DateFormatter, DayLocator #@UnresolvedImport
+#        months    = MonthLocator()   # every month
+        days   = DayLocator()  # every  hr
+#        ax1.xaxis.set_major_locator(days)
+        daysFmt = DateFormatter('%y-%m-%d')
+        ax1.xaxis.set_major_formatter(daysFmt)
+        ax1.xaxis.set_minor_locator(days)
+        ax1.set_ylim(-0.1,1.2)
+
+        pylab.legend()
+        pylab.show()
+        exit()
+
+
+
+#postprocess CI 
+#    - fill missing slots 
+#    - replace two (three) tail slots
+#    - implement high variability filter (exaggerate extremes if high variability)
+#0 sun below horizon, 1 OK, 2 interpolated <=1hour 3 extrapolated <=1hour 4 intrapolated/extrapolated >1hour
+def postprocess_CI(CalibratedPostLaunchSatDataDict, solarGeom_TimesDict, longit, latit, dfbStart, dfbEnd, verbose=False, use_roll_slots=True, empty_tail_rolled_slots=True):
+    if verbose: 
+        logger.info('postprocess CI')
+    
+    sinh0=solarGeom_TimesDict['sinh0'].copy()
+    CI_data=CalibratedPostLaunchSatDataDict['CI'].copy()
+    sat_h0=solarGeom_TimesDict['Hsat'].copy()
+    
+    sat_h0=numpy.degrees(sat_h0)
+    wh=sinh0!=sinh0
+    sinh0[wh]=solarGeom_TimesDict['sinh0_slotcenter'][wh]
+    
+    shp = sinh0.shape
+    days, slots = shp 
+
+    #roll data    
+    if use_roll_slots:
+        roll_slots=int(longit/2.5)
+        CI_data= numpy.roll(CI_data.flatten(), shift=roll_slots).reshape(shp)
+        sinh0= numpy.roll(sinh0.flatten(), shift=roll_slots).reshape(shp)
+        sat_h0= numpy.roll(sat_h0.flatten(), shift=roll_slots).reshape(shp)
+    
+
+    CI_flag=numpy.empty(shp,dtype=numpy.int8)
+    CI_flag[:,:]=0
+
+
+
+    #LOW SAT ANGLE correction
+    # additional correction for low sat angle - decrease the CI - because low viewing angle.
+    # purely empirical - needs to be elaborated more
+    
+    CI_data[CI_data>1.1]=1.1
+    
+    corr_limit = 35.
+    wh_sath0 = (sat_h0==sat_h0) & (sat_h0<corr_limit)
+    if wh_sath0.sum() > 0:
+        #GENERAL CORRECTION - low sat angle
+        aux=numpy.pi*0.5*(corr_limit - sat_h0[wh_sath0])/corr_limit
+        aux[aux<0]=0
+        corr1=1+((numpy.cos(aux)-1)*0.6)
+        corr1[corr1<0.7]=0.7
+        CI_data[wh_sath0] = CI_data[wh_sath0]*corr1
+        
+        #LOW VALUE CORRECTION FOR LOW SAT ANGLE        
+        CI_limit=0.30
+        value_to_shrink_to_zero=0.05
+        wh_low_ci = (CI_data<CI_limit) & (CI_data>0.) & (sinh0>0.02) & wh_sath0
+        aux=numpy.pi*0.5*(corr_limit - sat_h0[wh_low_ci])/corr_limit
+        aux[aux<0]=0
+        corr2=((numpy.sin(aux))*4)
+        corr2[corr2>1.]=1.
+        low_data=CI_data[wh_low_ci]
+        low_data=((low_data-CI_limit)*CI_limit/(CI_limit-value_to_shrink_to_zero))+CI_limit
+        low_data[low_data<0.]=0.
+        CI_data[wh_low_ci]=(corr2*low_data)+((1-corr2)*CI_data[wh_low_ci])
+
+
+
+    #POSTPROCESS MISSING DATA
+    #temp search variables
+    dist_left = numpy.zeros((slots), dtype=numpy.int8)
+    dist_right = dist_left.copy()
+    lastval_left = numpy.zeros((slots), dtype=numpy.float32)
+    lastval_right = lastval_left.copy()
+    tail_left = dist_left.copy()
+        
+    dfb_arr =  numpy.zeros((days), dtype=numpy.int32)
+    doy_arr =  numpy.zeros((days), dtype=numpy.int32)
+    month_arr =  numpy.zeros((days), dtype=numpy.int16)
+        
+        
+    #loop days
+    missing_days=0
+    missing_dfbs_list=[]
+    for d_idx in range(0, days):
+        dfb = dfbStart+d_idx
+        month = daytimeconv.dfb2ymd(dfb)[1]
+        dfb_arr[d_idx] = dfb
+        month_arr[d_idx] = month
+        doy_arr[d_idx] = daytimeconv.dfb2doy(dfb)
+        
+        wh_sinh0_day = (sinh0[d_idx, :] > 0.)
+        CI_day = CI_data[d_idx, :]
+        flag_day = CI_flag[d_idx, :]
+
+        #no data with valid sinh0 values
+        if (wh_sinh0_day.sum() < 1) : continue
+        
+        #init daytime flag , later 1 will be replaced by correct flag
+        flag_day[wh_sinh0_day & (flag_day==0)] = 1#assuming all correct
+
+        #identify missing CI data
+        whnot_CI_day = (CI_day <> CI_day)
+        whnot_CI_daytime = (wh_sinh0_day & whnot_CI_day)
+        if whnot_CI_daytime.sum() < 1:    #if no missing data found continue to another day
+            continue
+
+        if numpy.logical_not(whnot_CI_day).sum() < 1:    #whole missing days data found continue to another day
+            missing_days+=1
+            missing_dfbs_list.append(dfb)
+            continue
+
+        
+        #analyze missing data from left to right
+        lastval = -9
+        dist_count = 0
+        dist_left[:] = 0
+        lastval_left[:] = 0
+        tail_left[:] = 0
+        for s_idx in range(0, slots):
+            if not(wh_sinh0_day[s_idx]): continue
+            #missing values
+            if whnot_CI_daytime[s_idx] and (lastval > -9):
+                dist_count += 1
+                dist_left[s_idx] = dist_count
+                lastval_left[s_idx] = lastval
+            elif whnot_CI_daytime[s_idx] and (lastval == -9):
+                dist_count = 0
+            else:
+                dist_count = 0
+                lastval = CI_day[s_idx]
+
+        #analyze missing data from  right to left
+        lastval = -9
+        dist_count = 0
+        dist_right[:] = 0
+        lastval_right[:] = 0
+        for s_idx in range(slots - 1, -1, -1):
+            if not(wh_sinh0_day[s_idx]): continue
+            #missing values
+            if whnot_CI_daytime[s_idx] and lastval > -9:
+                dist_count += 1
+                dist_right[s_idx] = dist_count
+                lastval_right[s_idx] = lastval
+            elif whnot_CI_daytime[s_idx] and (lastval == -9):
+                dist_count = 0
+            else:
+                dist_count = 0
+                lastval = CI_day[s_idx]
+
+        #make weighted (by distance to closest valid data slot) average
+        dist_both = dist_right + dist_left
+        wh_both = (dist_right > 0) & (dist_left > 0)
+
+        #flags
+        flag_day[wh_both] = 2#interpolated
+        wh_extr = whnot_CI_day & numpy.logical_not(wh_both) & wh_sinh0_day
+        flag_day[wh_extr] = 3#extrapolated
+
+        wh_both_large = ((dist_right > 4) & (dist_left > 4)) | ((dist_right > 4) & (dist_left == 0)) | ((dist_right == 0) & (dist_left > 4))
+        flag_day[wh_both_large] = 4#extrapolated or interpolated more than 1 hour
+
+        #interpolate
+        dist_right[wh_both] = dist_both[wh_both] - dist_right[wh_both]
+        dist_left[wh_both] = dist_both[wh_both] - dist_left[wh_both]
+        
+        dist_leftright = (dist_right[whnot_CI_daytime] + dist_left[whnot_CI_daytime])
+        out_CI = ((dist_right[whnot_CI_daytime] * lastval_right[whnot_CI_daytime]) + (dist_left[whnot_CI_daytime] * lastval_left[whnot_CI_daytime])) / dist_leftright
+        CI_data[d_idx, whnot_CI_daytime] = out_CI
+
+
+    #POSTPROCESS TAILS (IF NO DATA MISSING)
+    #calculate left and right tails
+    daytime=numpy.zeros((days, slots), dtype=numpy.int8)
+    tail_left_arr=daytime.copy()
+    tail_right_arr=daytime.copy()
+    daytime[sinh0>0.]=1
+
+    
+    #determine number of tail slots
+#    CI_num=(CI_data==CI_data).sum()
+
+    sat_h0_min = sat_h0[sat_h0==sat_h0].min()
+    
+    if sat_h0_min < 27:
+        tail_slots=5
+        sinh0_threshold=0.235
+    elif sat_h0_min < 30:
+        tail_slots=4
+        sinh0_threshold=0.175
+    elif sat_h0_min < 35:
+        tail_slots=3
+        sinh0_threshold=0.135
+    else:
+        tail_slots=3
+        sinh0_threshold=0.1205
+    
+    daytime_tmp = daytime.copy()
+    for i in range(1,tail_slots+1):
+        daytime_tmp[:,-1]=0
+        daytime_tmp2=numpy.roll(daytime_tmp, shift=1, axis=1)
+        tail_left_arr[daytime_tmp2<daytime_tmp] = i
+        daytime_tmp=daytime_tmp2
+    daytime_tmp = daytime.copy()
+    for i in range(1,tail_slots+1):
+        daytime_tmp[:,0]=0
+        daytime_tmp2=numpy.roll(daytime_tmp, shift=-1, axis=1)
+        tail_right_arr[daytime_tmp2<daytime_tmp] = i
+        daytime_tmp=daytime_tmp2
+
+    tail_left_arr[sinh0>sinh0_threshold]=0
+    tail_right_arr[sinh0>sinh0_threshold]=0
+
+    for d_idx in range(0, days):
+        amax = tail_left_arr[d_idx,:].max()
+        if amax > 0:
+            wh_tail_l_max = tail_left_arr[d_idx,:] == amax
+            if wh_tail_l_max.sum() == 1:
+                wh_tail_l = tail_left_arr[d_idx,:]>0
+                tail_l_CI = CI_data[d_idx, wh_tail_l_max]
+                if tail_l_CI==tail_l_CI:
+                    CI_data[d_idx, wh_tail_l]=tail_l_CI
+                    CI_flag[d_idx, wh_tail_l]=3
+                
+        amax = tail_right_arr[d_idx,:].max()
+        if amax > 0:
+            wh_tail_r_max = tail_right_arr[d_idx,:] == amax
+            if wh_tail_r_max.sum() == 1:
+                wh_tail_r = tail_right_arr[d_idx,:]>0
+                tail_r_CI = CI_data[d_idx, wh_tail_r_max]
+                if tail_r_CI==tail_r_CI:
+                    CI_data[d_idx, wh_tail_r]=tail_r_CI
+                    CI_flag[d_idx, wh_tail_r]=3
+
+
+    #POSTPROCESS very low values - smooth and slightly decrease
+    CI_limit=0.07
+    wh_low_ci = (CI_data<CI_limit) & (sinh0>0.)
+    CI_data_stack=numpy.empty((3,CI_data.shape[0],CI_data.shape[1]),dtype=CI_data.dtype)
+    CI_data_stack[0,:,:]=numpy.roll(CI_data, shift=1, axis=1)
+    CI_data_stack[0,:,0]=CI_data[:,0]
+    CI_data_stack[1,:,:]=CI_data
+    CI_data_stack[2,:,:]=numpy.roll(CI_data, shift=-1, axis=1)
+    CI_data_stack[2,:,-1]=CI_data[:,-1]
+    CI_data_stack=numpy.ma.masked_where((CI_data_stack!=CI_data_stack)|(CI_data_stack>CI_limit) ,CI_data_stack)
+    CI_data_mean=CI_data_stack.mean(axis=0)
+    wh_low_ci=wh_low_ci & (CI_data_mean==CI_data_mean)
+    #influence of smoothed data
+    wght_smooth = 1.0    
+    CI_data[wh_low_ci]=(wght_smooth * CI_data_mean[wh_low_ci]) + ((1-wght_smooth)*CI_data[wh_low_ci])
+
+
+    CI_limit=0.075
+    value_to_shrink_to_zero=0.020
+    wh_low_ci = (CI_data<CI_limit) & (CI_data>0.) &(sinh0>0.) 
+    low_data=CI_data[wh_low_ci]
+    low_data=((low_data-CI_limit)*CI_limit/(CI_limit-value_to_shrink_to_zero))+CI_limit
+    low_data[low_data<0.]=0.
+    CI_data[wh_low_ci]=low_data
+    
+
+    
+    #POSTPROCESS HIGH VARIABILITY - exaggerate high variability data
+    wh_daytime = sinh0>0.
+    #left to right
+    CI_data2 = numpy.roll(CI_data, shift=1, axis=1)
+    CI_data2[:,0]=CI_data[:,0]
+    adiff=CI_data-CI_data2
+    #right to left
+    CI_data2 = numpy.roll(CI_data, shift=-1, axis=1)
+    CI_data2[:,-1]=CI_data[:,-1]
+    adiff += CI_data-CI_data2
+
+    adiff[numpy.logical_not(wh_daytime)]=numpy.nan
+
+    adiff[(adiff>-0.15) & (adiff<0.15)] = 0.
+    adiff[adiff>0.15]-=0.15
+    adiff[adiff<-0.15]+=0.15
+    adiff[adiff>0.65]=0.65
+    adiff[adiff<-0.65]=-0.65
+    CI_data[adiff>0] += (adiff[adiff>0] * (0.05 / 0.65))   #decrease bottom values
+    CI_data[adiff<0] += (adiff[adiff<0] * (0.075 / 0.65))   #increase peak values
+    
+    
+    
+    #FILL WHOLE MISSING DAYS
+    wh_notCI_dfb = ((CI_data==CI_data).sum(axis=1)) == 0
+#    missing_days=wh_notCI_dfb.sum()
+    if missing_days > 0:
+        left_count=0
+        right_count=0
+        left_arr=numpy.zeros((days))
+        right_arr=numpy.zeros((days))
+        for d in range(0,days):
+            l_idx=d
+            if (wh_notCI_dfb[l_idx]==1): # 
+                left_count+=1
+                if ((left_count-1)!=d):
+                    left_arr[l_idx]=left_count
+            else:
+                left_count=0
+            r_idx=-d-1
+            if (wh_notCI_dfb[r_idx]==1):
+                right_count+=1
+                if ((right_count-1)!=d):
+                    right_arr[r_idx]=right_count
+            else:
+                right_count=0
+
+
+        if False: #old version of multiday gap filling
+            
+            
+            wh_tofill = (left_arr>0) & (right_arr>0)
+            for d in range(0,days):
+                if wh_tofill[d]:
+                    if left_arr[d] <= right_arr[d]:
+                        CI_data[d,:]=CI_data[d-left_arr[d],:]
+                    else:
+                        CI_data[d,:]=CI_data[d+right_arr[d],:]
+            filled_gaps=wh_tofill.sum()
+
+        
+        else: #advanced version of multiday gap filling
+
+    
+            #CALC GAP SIZE
+            l_aux=left_arr.copy()
+            r_aux=right_arr.copy()
+            l_fill_value = 0.
+            r_fill_value = 0.
+            for d in range(0,days):
+                l_idx=-d-1
+                r_idx=d
+                if left_arr[l_idx]>0:
+                    l_fill_value =  max(l_fill_value, left_arr[l_idx])
+                    l_aux[l_idx] = l_fill_value 
+                else:
+                    l_fill_value = 0.
+                if right_arr[r_idx]>0:
+                    r_fill_value =  max(r_fill_value, right_arr[r_idx])
+                    r_aux[r_idx] = r_fill_value 
+                else:
+                    r_fill_value = 0.
+    
+            #merge left and right gaps
+            gap_size_arr = l_aux 
+            gap_size_arr[r_aux>l_aux] = r_aux[r_aux>l_aux]
+            
+            #MISSING TAILS - override by 0 
+            for d in range(0,days):
+                l_idx=d
+                if left_arr[l_idx]>0:
+                    print 'l',l_idx
+                    left_arr[l_idx]=0
+                else:
+                    break
+                
+            for d in range(0,days):
+                r_idx=-d-1
+                if right_arr[r_idx]>0:
+                    print 'r',r_idx
+                    right_arr[r_idx]=0
+                else:
+                    break
+            
+            
+            wh_tofill = (left_arr>0) & (right_arr>0)
+            
+            
+            flag_5_days = 0
+            flag_6_days = 0
+            persist_limit = 1
+            for d in range(0,days):
+                if wh_tofill[d]:
+                    dfb_str=daytimeconv.dfb2yyyymmdd(int(dfb_arr[d]))
+                    #simple persistence
+                    if (left_arr[d] <= right_arr[d]) and (gap_size_arr[d]<=persist_limit):
+                        CI_data[d,:]=CI_data[d-left_arr[d],:]
+    #                    print 'persistence from left', gap_size_arr[d], left_arr[d], right_arr[d], d, dfb_str
+                        CI_flag[d, CI_data[d,:]==CI_data[d,:]]=5
+                        flag_5_days+=1
+                    #simple persistence
+                    elif (right_arr[d] < left_arr[d]) and (gap_size_arr[d]<=persist_limit):
+                        CI_data[d,:]=CI_data[d+right_arr[d],:]
+    #                    print 'persistence from right', gap_size_arr[d], left_arr[d], right_arr[d], d, dfb_str
+                        CI_flag[d, CI_data[d,:]==CI_data[d,:]]=5
+                        flag_5_days+=1
+                    else:
+                        doy = daytimeconv.dfb2doy(dfb_arr[d])
+                        maxsearch=5
+                        search=0
+                        while (search<=maxsearch):
+                            wh_doy = ((doy_arr == (doy-search)) | (doy_arr == (doy+search))) & numpy.logical_not(wh_tofill)
+                            search+=1
+                            if (wh_doy.sum()>0):
+                                break
+                            
+                        if wh_doy.sum() <1: 
+                            CI_data[d,:]= ((CI_data[d+right_arr[d],:]) * (left_arr[d]/(right_arr[d] + left_arr[d]))) + ((CI_data[d-left_arr[d],:]) * (right_arr[d]/(right_arr[d] + left_arr[d])))
+    #                        print 'persistence averaged', gap_size_arr[d], left_arr[d], right_arr[d], d, dfb_str
+                            CI_flag[d, CI_data[d,:]==CI_data[d,:]]=5
+                            flag_5_days+=1
+                        else:
+                            candidate_d_indexes = numpy.argwhere(wh_doy).flatten()
+                            if left_arr[d] >0:
+                                aux=int(left_arr[d])
+                            else:
+                                aux=int(right_arr[d])
+                            if len(candidate_d_indexes) == 1:
+                                selected_d_index = candidate_d_indexes[0]
+                            else:
+                                selected_d_index = candidate_d_indexes[aux % (len(candidate_d_indexes)-1)]
+                            CI_data[d,:]= CI_data[selected_d_index]
+                            CI_flag[d, CI_data[d,:]==CI_data[d,:]]=6
+                            flag_6_days+=1
+                            dfbnew_str=daytimeconv.dfb2yyyymmdd(int(dfb_arr[selected_d_index]))
+                            if False:
+                                print 'replacing %s by %s' % (dfb_str, dfbnew_str)
+    #                        print 'different year data', gap_size_arr[d], left_arr[d], right_arr[d], d, dfb_str ,'replaced by',daytimeconv.dfb2yyyymmdd(int(dfb_arr[selected_d_index])) 
+    
+    
+#            start_gaps = (numpy.logical_not(wh_tofill) & (right_arr >0))
+#            end_gaps = (numpy.logical_not(wh_tofill) & (left_arr >0))
+            #filled_gaps=wh_tofill.sum()
+            filled_gaps=flag_5_days+flag_6_days
+
+        
+        
+        biggest_gap=0
+        if filled_gaps>0:
+            biggest_gap=max(left_arr[wh_tofill].max(), right_arr[wh_tofill].max())
+        print "   warning: %d days without CI found. %d days filled by nearest days. Biggest filled gap was %d days long. %d days without data left (in the start or end of period)" % (missing_days, filled_gaps, biggest_gap, missing_days-filled_gaps) 
+#        print "   warning: %d days without CI found. filled days: %d by nearest days, %d by other years. Biggest filled gap was %d days long. Gaps left at the start: %d at the end: %d (of processing period)" % (missing_days, flag_5_days, flag_6_days, biggest_gap, start_gaps.sum(), end_gaps.sum()) 
+        if missing_days<100:
+            print '     days: ',
+            for dfb in missing_dfbs_list:
+                print daytimeconv.dfb2yyyymmdd(int(dfb)),
+            print ''
+    
+                
+    
+ 
+    #ROLL BACK THE DATA
+    if use_roll_slots:
+        CI_data= numpy.roll(CI_data.flatten(), shift=-roll_slots).reshape(shp)
+        CI_flag= numpy.roll(CI_flag.flatten(), shift=-roll_slots).reshape(shp)
+    if use_roll_slots and empty_tail_rolled_slots:
+        CI_data[-1,-roll_slots:] = numpy.nan
+        CI_flag[-1,-roll_slots:] = 0
+    
+    CalibratedPostLaunchSatDataDict['CI']=CI_data
+    CalibratedPostLaunchSatDataDict['CI_flag']=CI_flag
+
+
+
+#cloud index to clearsky index
+#numpy vector version
+def ci2ktm_vect(ci, version=1):
+
+    if version==1:
+        #-0.250959 +1.025086 -1.313115 +1.011693 -1.387776 +0.996085
+
+        Ktm = ci * (ci * (ci * (ci * ((-0.250959 * ci) +1.025086) -1.313115) +1.011693) -1.387776) +0.996085
+        #this is extrapolation, because above eq. is not stable outside 0,1 interval
+        wh = (ci < -0.15)
+        Ktm[wh] = 1.124 #fixed (extreme) max
+        wh = (ci > 1.2)
+        Ktm[wh] = 0.036 #fixed (extreme) min
+        return (Ktm)
+
+    
+    elif version==2:
+        #-0.446051 +1.759064 -2.473535 +1.845054 -1.607203 +0.995519   #CENTER v1
+#        Ktm = ci * (ci * (ci * (ci * (-0.446051 * ci +1.759064) -2.473535) +1.845054) -1.607203) +0.995519
+        #-0.399010 +1.717290 -2.569176 +1.978522 -1.649679 +0.994912  #v2
+#        Ktm = ci * (ci * (ci * (ci * (-0.399010 * ci +1.717290) -2.569176) +1.978522) -1.649679) +0.994912
+        -0.621009 +2.044705 -2.390284 +1.537003 -1.491429 +0.993735
+        Ktm = ci * (ci * (ci * (ci * (-0.621009 * ci +2.044705) -2.390284) +1.537003) -1.491429) +0.993735
+
+
+        #this is extrapolation, because above eq. is not stable outside 0,1 interval
+        wh = (ci<-0.065)
+        Ktm[wh] = 1.1
+        wh = (ci>1.05)
+        Ktm[wh] = 0.048
+        return (Ktm)
+
+        
+    elif version==3:
+        #-1.052922 +3.048647 -3.008328 +1.540010 -1.442058 +0.995931   #SOUTH
+#        Ktm = ci * (ci * (ci * (ci * (-1.052922 * ci +3.048647) -3.008328) +1.540010) -1.442058) +0.995931
+#        -1.610035 +4.355280 -3.713298 +1.276189 -1.226982 +0.990648
+        Ktm = ci * (ci * (ci * (ci * (-1.610035 * ci +4.355280) -3.713298) +1.276189) -1.226982) +0.990648
+        #this is extrapolation, because above eq. is not stable outside 0,1 interval
+        wh = (ci<-0.08)
+        Ktm[wh] = 1.1
+        wh = (ci>1.05)
+        Ktm[wh] = 0.049
+        return (Ktm)
+
+        
+    elif version==4:
+#        -0.270665 +0.911949 -1.035210 +0.816197 -1.338130 +1.001553   #NORTH v1
+#        Ktm = ci * (ci * (ci * (ci * (-0.270665 * ci +0.911949) -1.035210) +0.816197) -1.338130) +1.001553
+#        +0.075009 +0.053808 -0.318668 +0.597040 -1.318016 +1.001437  #v2
+#        Ktm = ci * (ci * (ci * (ci * (+0.075009 * ci +0.053808) -0.318668) +0.597040) -1.318016) +1.001437
+#        +0.110897 -0.644421 +1.181941 -0.518700 -1.048994 +0.999466 #v3
+        Ktm = ci * (ci * (ci * (ci * (+0.110897 * ci -0.644421) +1.181941) -0.518700) -1.048994) +0.999466
+
+        #this is extrapolation, because above eq. is not stable outside 0,1 interval
+        wh = (ci<-0.1)
+        Ktm[wh] = 1.1
+        wh = (ci>1.05)
+        Ktm[wh] = 0.054
+        return (Ktm)
+
+    else:
+        logger.error('ci2ktm version not supported')
+        exit()
+
+
+
+    
+   
+#calculate KTM frm CI 
+def calculate_ktm(SatDataDict, solarGeom_TimesDict, latitude, verbose=False):
+    if verbose: 
+        logger.info('calculate KTM')
+
+    sinh0=solarGeom_TimesDict['sinh0'].copy()
+    wh=sinh0!=sinh0
+    sinh0[wh]=solarGeom_TimesDict['sinh0_slotcenter'][wh]
+    CI_data=SatDataDict['CI']
+#    CI_data=CalibratedPostLaunchSatDataDict['CI_orig']
+
+    wh_sinh0 = (sinh0 > 0.)
+    KTM=numpy.zeros_like(CI_data)
+
+
+#    KTM[wh_sinh0]=ci2ktm_vect(CI_data[wh_sinh0])
+
+
+#    #correction for low sun angle
+    low_corr_h0_wght=(0.5-sinh0)*2.
+    low_corr_h0_wght[low_corr_h0_wght<0.]=0.
+    low_corr_h0_wght[low_corr_h0_wght>1.]=1.
+    
+#    h0=solarGeom_TimesDict['h0'].copy()
+#    import pylab
+#    pylab.plot(h0, low_corr_h0_wght)
+#    pylab.show()
+#    exit()
+
+
+    if latitude >12:
+        KTM[wh_sinh0]=ci2ktm_vect(CI_data[wh_sinh0], version=4)
+        rescale_low_factor=0.15
+        wh = KTM < 0.6
+        aux=(((KTM[wh]-0.6)*(0.6+(rescale_low_factor*low_corr_h0_wght[wh]))/0.6) + 0.6)
+        aux[aux<0.01] = 0.01
+        KTM[wh]=aux
+  
+    elif latitude<-12:
+#        print 'lat < -12'
+        KTM[wh_sinh0]=ci2ktm_vect(CI_data[wh_sinh0], version=3)
+        rescale_low_factor=0.13
+        wh = KTM < 0.6
+        aux=(((KTM[wh]-0.6)*(0.6+(rescale_low_factor*low_corr_h0_wght[wh]))/0.6) + 0.6)
+        aux[aux<0.01] = 0.01
+        KTM[wh]=aux
+    
+    
+    elif latitude>0:
+#        print 'lat 0 - 12'
+        aux1=ci2ktm_vect(CI_data[wh_sinh0], version=4) #north
+        aux2=ci2ktm_vect(CI_data[wh_sinh0], version=2) #center
+        wght_lat=max(0.,min(1.,(12-latitude)/2.))
+        KTM[wh_sinh0]=(wght_lat*aux2) + ((1.-wght_lat)*aux1)
+        rescale_low_factor1=0.05
+        rescale_low_factor2=0.12
+        rescale_low_factor=(wght_lat*rescale_low_factor2) + ((1.-wght_lat)*rescale_low_factor1)
+        wh = KTM < 0.6
+        aux=(((KTM[wh]-0.6)*(0.6+(rescale_low_factor*low_corr_h0_wght[wh]))/0.6) + 0.6)
+        aux[aux<0.01] = 0.01
+        KTM[wh]=aux
+##        print 'wght_lat',wght_lat
+    
+    
+    elif latitude<0:
+#        print 'lat -12 - 0'
+        aux1=ci2ktm_vect(CI_data[wh_sinh0], version=3) #south
+        aux2=ci2ktm_vect(CI_data[wh_sinh0], version=2) #center
+        wght_lat=max(0.,min(1.,(12.-abs(latitude))/2.))
+        KTM[wh_sinh0]=(wght_lat*aux2) + ((1.-wght_lat)*aux1)
+        rescale_low_factor1=0.13
+        rescale_low_factor2=0.13
+        rescale_low_factor=(wght_lat*rescale_low_factor2) + ((1.-wght_lat)*rescale_low_factor1)
+        wh = KTM < 0.6
+        aux=(((KTM[wh]-0.6)*(0.6+(rescale_low_factor*low_corr_h0_wght[wh]))/0.6) + 0.6)
+        aux[aux<0.01] = 0.01
+        KTM[wh]=aux
+##        print 'wght_lat',wght_lat
+    
+    
+    SatDataDict['KTM']=KTM
+    
+    return None
+
+
+
+#calculate global irradiance
+def calculate_GHI(SatDataDict, solarGeom_TimesDict, dfb_eps, dfb_aod, dfb_wv, alt, longit, atmosph, verbose=False):
+    if verbose: 
+        logger.info('calculate GHI')
+    
+    I0 = solar_geom_v5.I0
+    
+    KTM=SatDataDict['KTM']
+    sinh0=solarGeom_TimesDict['sinh0_slotcenter']
+    
+    shp=sinh0.shape
+    
+    eps = numpy.repeat(dfb_eps,shp[1]).reshape(shp)
+    aod = numpy.repeat(dfb_aod,shp[1]).reshape(shp)
+    wv = numpy.repeat(dfb_wv,shp[1]).reshape(shp)
+
+
+    #roll data   -   to avoid steps on UTC 00:00
+    roll_slots=int(longit/2.5)
+    aod= numpy.roll(aod.flatten(), shift=-roll_slots).reshape(shp)
+    aod[-1,:]=aod[-1,0]
+    wv = numpy.roll(wv.flatten(), shift=-roll_slots).reshape(shp)
+    wv[-1,:]=wv[-1,0]
+
+    #select only valid data
+    valid_wh = (sinh0 == sinh0) & (sinh0>0) & (KTM==KTM)
+    KTM_valid = KTM[valid_wh]
+    sinh0_valid = sinh0[valid_wh]
+    eps_valid = eps[valid_wh]
+    aod_valid = aod[valid_wh]
+    wv_valid = wv[valid_wh]
+    
+    #top of atmosphere irrad I0 corrcted by sun-earth distance
+    I0_toa = I0 * eps_valid
+
+
+    
+    if (len(sinh0) > 0) & (valid_wh.sum()>0):
+        if (atmosph.secondary_type is None) or (atmosph.secondary_weight == 0.):
+            ghc_solis2_vect = numpy.vectorize(solar_geom_v5.ghc_solis2)
+            GHIc_valid = ghc_solis2_vect(I0_toa, aod_valid, wv_valid, None, alt, atmosph.primary_type, sinh0_valid)
+        else:
+            ghc_solis2_2atm_vect = numpy.vectorize(solar_geom_v5.ghc_solis2_2atmospheres)
+            GHIc_valid = ghc_solis2_2atm_vect(I0_toa, aod_valid, wv_valid, None, alt, atmosph.primary_type, atmosph.secondary_type, atmosph.secondary_weight, sinh0_valid)
+            
+#        GHI = KTM * GHIc * ((0.00002 * KTM * GHIc) + 0.98)
+#        GHI_valid = KTM_valid * GHIc_valid * ((0.00004 * KTM_valid * GHIc_valid) + 0.96)
+        GHI_valid = KTM_valid * GHIc_valid * ((0.00002 * KTM_valid * GHIc_valid) + 0.98)
+    
+    else:
+        GHI_valid = numpy.NaN
+        GHIc_valid = numpy.NaN
+
+    #output array
+    GHI = numpy.empty(shp, dtype=numpy.float32)
+    GHI[:, :] = numpy.NaN
+    GHIc = GHI.copy()
+
+    GHI[valid_wh] = GHI_valid
+    GHIc[valid_wh] = GHIc_valid
+    
+    SatDataDict['GHI']=GHI
+    SatDataDict['GHIc']=GHIc
+    
+
+
+    
+def calculate_DNI(SatDataDict, solarGeom_TimesDict, dfb_eps, dfb_aod, dfb_wv, alt, longit, atmosph, verbose=False):
+    if verbose: 
+        logger.info('calculate DNI')
+ 
+    I0 = solar_geom_v5.I0
+    
+    sinh0=solarGeom_TimesDict['sinh0_slotcenter'].astype(numpy.float64)
+    Z = numpy.arccos(sinh0).astype(numpy.float64)
+    GHI=SatDataDict['GHI'].astype(numpy.float64)
+    GHIc=SatDataDict['GHIc'].astype(numpy.float64)
+    shp=sinh0.shape
+    num_days, num_slots = shp
+
+    wh_notvalid = numpy.logical_not((sinh0 == sinh0) & (sinh0>0) & (GHI==GHI))
+
+    #output array
+    DNI = numpy.empty(shp, dtype=numpy.float32)
+    DNI[:, :] = numpy.NaN
+#    DNIc = DNI.copy()
+    DNI2 = DNI.copy()
+    DNIc2 = DNI.copy()
+
+    #output vector used to get by reference output from dirindex
+    b_vect = numpy.zeros((num_slots),dtype=numpy.float64)
+
+
+
+#    #calculate on day basis
+#    dt=-999.
+#    for dfb_idx in range(0, num_days):
+#
+#        aod = dfb_aod[dfb_idx]
+#        wv = dfb_wv[dfb_idx]
+#        I0_toa = I0 * dfb_eps[dfb_idx]
+#        z_vect = Z[dfb_idx,:]
+#        gc_vect = GHIc[dfb_idx,:]
+#        g_vect = GHI[dfb_idx,:]
+#        
+#        #fill in -999 - NAN in C code 
+#        wh=wh_notvalid[dfb_idx,:]
+#        z_vect[wh] = dt
+#        gc_vect[wh] = dt
+#        g_vect[wh] = dt
+#
+#        #DNIc return by reference version
+#        try:
+#            dummy = radlib.dirindex_solis_ref(gc_vect, z_vect, dt, I0_toa, alt, aod, wv, atmosph.primary_type, atmosph.secondary_type, atmosph.secondary_weight, b_vect)
+#            DNIc[dfb_idx, :] = b_vect
+#        except:
+#            print "Unexpected error:", sys.exc_info()[0]
+#            raise
+#            print " something goes wrong with DNIc dirindex"
+#
+#        #DNI return by reference version
+#        try:
+#            dummy = radlib.dirindex_solis_ref(g_vect, z_vect, dt, I0_toa, alt, aod, wv, atmosph.primary_type, atmosph.secondary_type, atmosph.secondary_weight, b_vect)
+#            DNI[dfb_idx, :] = b_vect
+#        except:
+#            print "Unexpected error:", sys.exc_info()[0]
+#            raise
+#            print " something goes wrong with DNI dirindex"
+#
+#    
+#    DNI[wh_notvalid]=numpy.nan
+#    DNIc[wh_notvalid]=numpy.nan
+#
+#    SatDataDict['DNI']=DNI
+#    SatDataDict['DNIc']=DNIc
+
+
+#    print 'rolling AOD version' 
+    #roll inputs
+    roll_slots=int(longit/2.5)
+    Z = numpy.roll(Z.flatten(), shift=roll_slots).reshape(shp)
+    GHIc = numpy.roll(GHIc.flatten(), shift=roll_slots).reshape(shp)
+    GHI = numpy.roll(GHI.flatten(), shift=roll_slots).reshape(shp)
+    wh_notvalid = numpy.roll(wh_notvalid.flatten(), shift=roll_slots).reshape(shp)
+    
+    
+    #calculate on day basis
+    dt=-999.
+    for dfb_idx in range(0, num_days):
+
+        aod = dfb_aod[dfb_idx]
+        wv = dfb_wv[dfb_idx]
+        I0_toa = I0 * dfb_eps[dfb_idx]
+        z_vect = Z[dfb_idx,:]
+        gc_vect = GHIc[dfb_idx,:]
+        g_vect = GHI[dfb_idx,:]
+        
+        #fill in -999 - NAN in C code 
+        wh=wh_notvalid[dfb_idx,:]
+        z_vect[wh] = dt
+        gc_vect[wh] = dt
+        g_vect[wh] = dt
+
+        #DNIc return by reference version
+        try:
+            dummy = radlib.dirindex_solis_ref(gc_vect, z_vect, dt, I0_toa, alt, aod, wv, atmosph.primary_type, atmosph.secondary_type, atmosph.secondary_weight, b_vect)
+            DNIc2[dfb_idx, :] = b_vect
+        except:
+            print "Unexpected error:", sys.exc_info()[0]
+            raise
+            print " something goes wrong with DNIc dirindex"
+
+        #DNI return by reference version
+        try:
+            dummy = radlib.dirindex_solis_ref(g_vect, z_vect, dt, I0_toa, alt, aod, wv, atmosph.primary_type, atmosph.secondary_type, atmosph.secondary_weight, b_vect)
+            DNI2[dfb_idx, :] = b_vect
+        except:
+            print "Unexpected error:", sys.exc_info()[0]
+            raise
+            print " something goes wrong with DNI dirindex"
+
+    
+    DNI2[wh_notvalid]=numpy.nan
+    DNIc2[wh_notvalid]=numpy.nan
+
+    #roll back outputs
+    DNI2 = numpy.roll(DNI2.flatten(), shift=-roll_slots).reshape(shp)
+    DNIc2 = numpy.roll(DNIc2.flatten(), shift=-roll_slots).reshape(shp)
+    
+    SatDataDict['DNI']=DNI2
+    SatDataDict['DNIc']=DNIc2
+
+
+
+#    import pylab
+#    pylab.plot(DNI.flatten()) 
+#    pylab.plot(DNI2.flatten())
+#    pylab.show()
+#    exit() 
+#    
+
+                
+def reduce_segDict_to_pixDict(Dict_seg, keystoprocess, seg_y_px, seg_x_px):
+    Dict_pix={}
+    for key in keystoprocess:
+        Dict_pix[key]=Dict_seg[key][:,:,seg_y_px,seg_x_px]
+    return Dict_pix
+    
+def insert_pixDict_to_segDict(Dict_pix, Dict_seg, keystoprocess, seg_bbox, seg_y_px, seg_x_px ):
+    for key in keystoprocess:
+        arr=Dict_pix[key]
+        if not Dict_seg.has_key(key):
+#            print 'creating array for', key 
+            #create empty array
+            arr_seg = numpy.empty((arr.shape[0],arr.shape[1], seg_bbox.height, seg_bbox.width), dtype=arr.dtype)
+            Dict_seg[key] = arr_seg
+        Dict_seg[key][:,:,seg_y_px,seg_x_px]=arr.copy()
+    return Dict_seg
+
+
+def init_rast_noktm_multiprocessing_queues(ncpus):
+    #queue to hold requests to process
+    request_queue = multiprocessing.JoinableQueue() #queue to be used for requests to process
+    #queue to hold results
+    out_queue = multiprocessing.JoinableQueue() #queue to be used for outputs process
+
+    # daemon worker waiting to process data 
+    class worker_model_core_pnt(multiprocessing.Process):
+        def run(self):
+            # run forever
+            while 1:
+                job = request_queue.get()
+                id = job[0]
+                if id is None:
+                    break
+                inputs = job[1]
+                OutDataDict, solarGeom_TimesDict, dfbStart, dfbEnd, lon, lat, alt, dfb_eps, dfb_aod, dfb_wv, atmosph, dfb2doy_arr, dfb2year_arr, dfb_pert, verbose = inputs
+                try:
+                    result=model_core_pnt_noktm(OutDataDict, solarGeom_TimesDict, dfbStart, dfbEnd, lon, lat, alt, dfb_eps, dfb_aod, dfb_wv, atmosph, dfb2doy_arr, dfb2year_arr, dfb_pert, verbose)
+                except:
+                    print 'job failed', id, sys.exc_info()
+                    result= None
+                    
+                out_queue.put((id, result))
+                request_queue.task_done() # Let the queue know the job is finished.
+
+    #starting daemons (wrkers)
+    if ncpus=='autodetect': 
+        ncpus=multiprocessing.cpu_count()
+    ncpus=max(ncpus,1) #minimum 1 CPU
+    workers=[]
+    for dummy in xrange(ncpus):
+        t=worker_model_core_pnt()
+        t.daemon=True
+        t.start()
+        workers.append(t)
+    print 'parallel processes initiated, ncpus', ncpus
+    
+    return request_queue, out_queue, workers
+
+    
+def init_rast_multiprocessing_queues(ncpus):
+    #queue to hold requests to process
+    request_queue = multiprocessing.JoinableQueue() #queue to be used for requests to process
+    #queue to hold results
+    out_queue = multiprocessing.JoinableQueue() #queue to be used for outputs process
+
+    # daemon worker waiting to process data 
+    class worker_model_core_pnt(multiprocessing.Process):
+        def run(self):
+            # run forever
+            while 1:
+                job = request_queue.get()
+                id = job[0]
+                if id is None:
+                    break
+                inputs = job[1]
+                SatDataDict, solarGeom_TimesDict, dfbStart_ext, dfbStart, dfbEnd, trail_window_size, lon, lat, alt, dfb_eps, dfb_aod, dfb_wv, atmosph, dfbext2doy_arr, dfbext2year_arr, dfbext_pert, UB_monthly, LB_loaded, LBland_loaded, LB_QR_weights, verbose = inputs
+                try:
+                    result=model_core_pnt(SatDataDict, solarGeom_TimesDict, dfbStart_ext, dfbStart, dfbEnd, trail_window_size, lon, lat, alt, dfb_eps, dfb_aod, dfb_wv, atmosph, dfbext2doy_arr, dfbext2year_arr, dfbext_pert, UB_monthly, LB_loaded, LBland_loaded, LB_QR_weights, verbose)
+                except:
+                    print 'job failed', id, sys.exc_info()
+                    result= None
+                    
+                out_queue.put((id, result))
+                request_queue.task_done() # Let the queue know the job is finished.
+
+    #starting daemons (wrkers)
+    if ncpus=='autodetect': 
+        ncpus=multiprocessing.cpu_count()
+    ncpus=max(ncpus,1) #minimum 1 CPU
+    workers=[]
+    for dummy in xrange(ncpus):
+        t=worker_model_core_pnt()
+        t.daemon=True
+        t.start()
+        workers.append(t)
+    print 'parallel processes initiated, ncpus', ncpus
+    
+    return request_queue, out_queue, workers
+
+def init_rast_multiprocessing_queues_nolb(ncpus):
+    #queue to hold requests to process
+    request_queue = multiprocessing.JoinableQueue() #queue to be used for requests to process
+    #queue to hold results
+    out_queue = multiprocessing.JoinableQueue() #queue to be used for outputs process
+
+    # daemon worker waiting to process data 
+    class worker_model_core_pnt(multiprocessing.Process):
+        def run(self):
+            # run forever
+            while 1:
+                job = request_queue.get()
+                id = job[0]
+                if id is None:
+                    break
+                inputs = job[1]
+                SatDataDict, solarGeom_TimesDict, dfbStart, dfbEnd , lon, lat, alt, dfb_eps, dfb_aod, dfb_wv, atmosph, dfb2doy_arr, dfb2year_arr, dfb_pert, UB_monthly, verbose = inputs
+                try:
+                    result=model_core_pnt_nolb(SatDataDict, solarGeom_TimesDict, dfbStart, dfbEnd , lon, lat, alt, dfb_eps, dfb_aod, dfb_wv, atmosph, dfb2doy_arr, dfb2year_arr, dfb_pert, UB_monthly, verbose)
+                except:
+                    print 'job failed', id, sys.exc_info()
+                    result= None
+                    
+                out_queue.put((id, result))
+                request_queue.task_done() # Let the queue know the job is finished.
+
+    #starting daemons (wrkers)
+    if ncpus=='autodetect': 
+        ncpus=multiprocessing.cpu_count()
+    ncpus=max(ncpus,1) #minimum 1 CPU
+    workers=[]
+    for dummy in xrange(ncpus):
+        t=worker_model_core_pnt()
+        t.daemon=True
+        t.start()
+        workers.append(t)
+    print 'parallel processes initiated, ncpus', ncpus
+    
+    return request_queue, out_queue, workers
+
+
+def sat_model_rast_noktm_pp(dfbStart, dfbEnd, slotStart, slotEnd, atmosph, out_channels, auxdata_file_dict, out_files_dict, outdata_path_dict, outdata_suffix, process_bbox, seg_bbox, do_parallel=False, ncpus='autodetect', segment_sizex=4, segment_sizey=4, file_time_segmentation='month', verbose = False):
+    
+    SSP = 140.7
+
+    #initialize the multiprocessing and queues to pass and retreive data
+    if do_parallel:
+        request_queue, out_queue, workers = init_rast_noktm_multiprocessing_queues(ncpus)
+
+
+#    num_dfb = dfbEnd - dfbStart + 1
+    num_dfb = dfbEnd - dfbStart + 1
+    num_slot = slotEnd - slotStart+1
+    
+    #######################################################################
+    #make dfb2doy array
+    #######################################################################
+    dfb2doy_arr = numpy.empty((num_dfb), dtype=numpy.int16)
+    dfb2year_arr = numpy.empty((num_dfb), dtype=numpy.int16)
+    for dfb in range(dfbStart,dfbEnd+1):
+        dfb_idx = dfb - dfbStart
+        dfb2doy_arr[dfb_idx] = daytimeconv.dfb2doy(dfb)
+        dfb2year_arr[dfb_idx] = daytimeconv.dfb2ymd(dfb)[0]
+    
+    #init doy related parameters (two values per doy)
+    #data used in raw sat data correction
+    doy_vect=numpy.arange(0,366+1,dtype=numpy.int16)
+    doy_eps = solar_geom_v5.epsilon_cor_vect(doy_vect)
+    doy_pert = solar_geom_v5.perturbation_vect(doy_vect)
+    #data used in clearsky model
+    dfb_eps = doy_eps[dfb2doy_arr]
+#    dfbext_eps = doy_eps[dfbext2doy_arr]
+    dfb_pert = doy_pert[dfb2doy_arr]
+    
+    
+
+    #####################################
+    #loop segments
+    #####################################
+    if verbose: print 'Segmented processing', datetime.datetime.now()
+    #segmentation
+    subsegs=process_bbox.subsegments_by_pxsize_xy(segment_sizex, segment_sizey)
+    subseg_count=0
+    for subseg_bbox in subsegs:
+        subseg_count+=1
+        seg_start_time = datetime.datetime.now()
+        print "\nSegment :%d/%d" % (subseg_count, len(subsegs)), datetime.datetime.now()
+        if verbose:
+            print " bbox: %s" % (str(subseg_bbox))
+
+#        subseg_px_xmin, dummy, subseg_px_ymin, dummy = seg_bbox.pixel_coords_of_bbox(subseg_bbox)
+    
+        if verbose: logger.info( "Latit, Longit, Dem")
+        seg_longit = subseg_bbox.longitudes(px_order=True, array2d=True)
+        seg_latit = subseg_bbox.latitudes(px_order=True, array2d=True)
+
+        dem_file, dem_var = auxdata_file_dict["altitude"][0:2]
+        seg_dem = latlon_nctools.latlon_read_lat_lon_nc_bbox(dem_file, dem_var, seg_bbox=subseg_bbox, interpolate='nearest')
+        
+    
+        solarGeom_TimesDict_seg={}
+        outDataDict_seg = {}
+
+        #solar geometry for the center of the slot
+        UTC_dh_4D_slotcenter = segmented_solar_geometry.calculate_realscan_UTCtimes_slotcenter(dfbStart,dfbEnd, slotStart,slotEnd,subseg_bbox) 
+        h0_r_slotcenter, h0_r_ref_slotcenter, a0_r_slotcenter = segmented_solar_geometry.solargeom_core(subseg_bbox,dfbStart,dfbEnd, slotStart,slotEnd, UTC_dh_4D_slotcenter)
+        solarGeom_TimesDict_seg['sinh0_slotcenter'] = numpy.sin(h0_r_slotcenter)
+#        solarGeom_TimesDict['A0_slotcenter'] = a0_r_slotcenter
+#        solarGeom_TimesDict['h0_ref_slotcenter'] = h0_r_ref_slotcenter
+        solarGeom_TimesDict_seg['UTC_slotcenter'] = UTC_dh_4D_slotcenter
+    
+
+        #read KTM
+        seg_ktm=himawari_nc_latlontools.outdata_nc_read('KTM', out_files_dict, outdata_suffix, dfbStart,dfbEnd, slotStart,slotEnd,subseg_bbox)
+        outDataDict_seg['KTM'] = seg_ktm
+
+
+        #load secondary atmosphere weight
+        if verbose: logger.info( "Init AOD")
+        atmosph.load_secondary_weight_from_file_for_segment(seg_longit, seg_latit)
+        #read aod for segment and dfbs
+        result = atmosphere_param.init_dfb_aod_nc_segment(atmosph.aod_ncfiles, atmosph.wv_ncfiles, seg_longit, seg_latit, seg_dem, dfbStart, dfbEnd, do_smoothing=atmosph.do_smoothing, do_extreme_correction=atmosph.do_extreme_correction, extreme_correction_params=atmosph.extreme_correction_params, hourly_data_persistence=atmosph.hourly_data_persistence, aod_data_path=atmosph.aod_path)
+        if (result is None):
+            print "cannot read dfb aod or wv param from NC, skipping segment"
+            return False
+        dfb_aod_seg, dfb_wv_seg = result
+
+
+        jobs = {}
+        
+        # core processing - each pixel separately
+        for seg_x_px in range(0, subseg_bbox.width):
+            for seg_y_px in range(0, subseg_bbox.height):
+                job_key = seg_x_px + (1000 * seg_y_px)
+                jobs[job_key] = [seg_x_px, seg_y_px]
+                
+                lon, lat = subseg_bbox.lonlat_of_px(seg_x_px, seg_y_px)
+                alt = seg_dem[seg_y_px, seg_x_px]
+#                if verbose: print "segment point c%d r%d at lon %f, lat %f alt %d" % (seg_x_px, seg_y_px, lon, lat, alt)
+
+                atmosph.set_secondary_weight_for_segment_px(seg_x_px, seg_y_px)
+                #make copy to avoid multiprocessing problems 
+                atmosph_px=atmosphere_param.atmosphere_param(secondary_weight=atmosph.secondary_weight, primary_type=atmosph.primary_type, secondary_type=atmosph.secondary_type)
+
+                dfb_aod = dfb_aod_seg[:,seg_y_px, seg_x_px]
+                dfb_wv = dfb_wv_seg[:,seg_y_px, seg_x_px]
+                
+                # reduce segment dictionaries to pixel dictionary
+                out_keystoprocess =  ['KTM']
+                outDataDict = reduce_segDict_to_pixDict(outDataDict_seg, out_keystoprocess, seg_y_px, seg_x_px)
+                
+                solarGeom_keystoprocess = ['UTC_slotcenter', 'sinh0_slotcenter']
+                solarGeom_TimesDict = reduce_segDict_to_pixDict(solarGeom_TimesDict_seg, solarGeom_keystoprocess, seg_y_px, seg_x_px)
+                
+                #CORE CALCULATION
+                if do_parallel:
+                    inputs = [outDataDict, solarGeom_TimesDict, dfbStart, dfbEnd , lon, lat, alt, dfb_eps, dfb_aod, dfb_wv, atmosph_px, dfb2doy_arr, dfb2year_arr, dfb_pert, verbose]
+                    request_queue.put((job_key, inputs))
+                else:
+                    OutDataDict_px, dummy = model_core_pnt_noktm(outDataDict, solarGeom_TimesDict, dfbStart, dfbEnd , lon, lat, alt, dfb_eps, dfb_aod, dfb_wv, atmosph, dfb2doy_arr, dfb2year_arr, dfb_pert, verbose)
+                    
+                    # put output data for current pixel to resulting arrays         
+                    output_keystoprocess =  ['DNI', 'DNIc', 'GHI', 'GHIc']
+                    outDataDict_seg = insert_pixDict_to_segDict(OutDataDict_px, outDataDict_seg, output_keystoprocess, subseg_bbox, seg_y_px, seg_x_px )
+
+        if do_parallel:
+        # get data form output queue and put it to resulting arrays            
+            request_queue.join()
+            
+            while out_queue.qsize()>0:
+                job = out_queue.get()
+                job_key=job[0]
+                data=job[1]
+                seg_x_px, seg_y_px = jobs[job_key]
+                
+                if data is  None:
+                    if verbose: print "job results empty", job_key,seg_x_px, seg_y_px 
+                else:
+                    #put point data to whole egment dictionary
+                    OutDataDict_px, dummy = data
+                    output_keystoprocess =  ['DNI', 'DNIc', 'GHI', 'GHIc']
+                    outDataDict_seg = insert_pixDict_to_segDict(OutDataDict_px, outDataDict_seg, output_keystoprocess, subseg_bbox, seg_y_px, seg_x_px )
+
+                    jobs.__delitem__(job_key)
+                out_queue.task_done() #remove job outputs form queue
+
+
+
+        #write output to NC files
+        if verbose: print 'Write output', datetime.datetime.now()
+        for ochan in out_channels:
+            if not(ochan in outDataDict_seg.keys()):
+                print 'Missing %s to write to NC' % (ochan)
+                continue
+            out_array = outDataDict_seg[ochan]
+            himawari_nc_latlontools.write_output_nc(ochan, out_array, out_files_dict, outdata_suffix, dfbStart, dfbEnd, slotStart, slotEnd, subseg_bbox, verbose=verbose)
+       
+        seg_end_time = datetime.datetime.now()
+        if verbose: 
+            print 'Segment finished:', datetime.datetime.now()
+            print "Segment processing time:" + str(seg_end_time - seg_start_time)
+
+
+             
+            
+        del(solarGeom_TimesDict_seg,outDataDict_seg)
+            
+
+    if do_parallel:
+        #kill the workers
+        for t in workers:
+#            print t.name
+            t.terminate()
+            t.join()
+    
+    return True
+
+    
+    
+def sat_model_point_db(dsnSiteDict, dsnDataDict, site, dfbStart, dfbEnd, slotStart, slotEnd, satInfoDict, atmosph, output_table, output_fields, auxdata_file_dict, trail_window_size, init_by_previousday=False, verbose=True):
+    
+    SSP = 140.7
+
+    dfbStart_ext = dfbStart - trail_window_size
+    
+#    num_dfb = dfbEnd - dfbStart + 1
+    num_dfb_ext = dfbEnd - dfbStart_ext + 1
+    num_slot = slotEnd - slotStart+1
+
+    #######################################################################
+    #make dfb2doy array
+    #######################################################################
+    dfbext2doy_arr = numpy.empty((num_dfb_ext), dtype=numpy.int16)
+    dfbext2year_arr = numpy.empty((num_dfb_ext), dtype=numpy.int16)
+    for dfb in range(dfbStart_ext,dfbEnd+1):
+        dfb_idx = dfb - dfbStart_ext
+        dfbext2doy_arr[dfb_idx] = daytimeconv.dfb2doy(dfb)
+        dfbext2year_arr[dfb_idx] = daytimeconv.dfb2ymd(dfb)[0]
+    dfb2doy_arr = dfbext2doy_arr[trail_window_size:]
+
+    
+    #init doy related parameters (two values per doy)
+    #data used in raw sat data correction
+    doy_vect=numpy.arange(0,366+1,dtype=numpy.int16)
+    doy_eps = solar_geom_v5.epsilon_cor_vect(doy_vect)
+    doy_pert = solar_geom_v5.perturbation_vect(doy_vect)
+    #data used in clearsky model
+    dfb_eps = doy_eps[dfb2doy_arr]
+#    dfbext_eps = doy_eps[dfbext2doy_arr]
+    dfbext_pert = doy_pert[dfbext2doy_arr]
+
+
+    LB_QR_weights = himawari_mdl_quantile_regresion.LB_quantile_regression_init_weights_with_param(trail_window_size, 144)
+    
+    if verbose: logger.info("Processing site: %d"% (site))
+
+    #read site coordinates 
+    sitetable = "site_coordinates"
+    dsn="dbname=%s host=%s user=%s password=%s" % (dsnSiteDict['db'], dsnSiteDict['host'], dsnSiteDict['user'], dsnSiteDict['password'])
+    lon, lat, alt = db_sites.db_get_site_lonlatalt(site, dsn, sitetable, verbose=False)
+    if (lon is None) or (lat is None) or (alt is None):
+        logger.error("Cannot read site coordinates, skipping site")
+        return False
+    if verbose: logger.info( 'lon, lat, alt:  %.5f %.5f %.0f' % (lon, lat, alt))
+
+
+    #read satellite data and make calibrations
+    SatDataDict, solarGeom_TimesDict = sat_data_read_from_db(dsnDataDict, site, dfbStart_ext, dfbEnd, slotStart, slotEnd, satInfoDict, lon, lat)
+
+    # SSP is 2D (dfb, slot) to have capability to work with data from various positionas
+    SSP_arr = numpy.empty((num_dfb_ext,num_slot))
+    SSP_arr[:,:]=SSP
+    solarGeom_TimesDict['SSP']=SSP_arr
+
+    #calculate satellite geometry
+    calculateSatelliteGeometry_point(lon, lat, solarGeom_TimesDict, verbose=verbose)
+    
+    #variables such as NORPIX, vis_ref, lowmodify, CLI
+    calculateSatelliteVariables(SatDataDict, solarGeom_TimesDict, verbose=verbose)
+
+#    print SatDataDict.keys()
+#    print solarGeom_TimesDict.keys()
+#    
+#    aux = solarGeom_TimesDict['sun_sat_mirror']
+##    aux = SatDataDict['CLI']
+#    wh = aux == aux 
+#    print aux.shape
+#    print wh.sum() 
+#    print aux[wh].mean()
+#    print aux[wh].min()
+#    print aux[wh].max()
+#    exit()
+
+    
+    print 'TODO:UB from FILE'
+
+    # load precalculated UBdata
+    UB_monthly=None
+    # load data from previous run
+    LB_loaded, LBland_loaded=None, None
+ 
+
+    if True:     
+        #read AOD and VW parameters
+        if verbose: logger.info( 'Init AOD')
+        atmosph.set_secondary_weight_from_file_for_lonlat(lon, lat)
+        
+        #aod data used in clearsky model
+        result = atmosphere_param.init_dfb_aod_nc(atmosph.aod_ncfiles, atmosph.wv_ncfiles, lon, lat, alt, dfbStart, dfbEnd, do_smoothing=atmosph.do_smoothing, do_extreme_correction=atmosph.do_extreme_correction, extreme_correction_params=atmosph.extreme_correction_params, hourly_data_persistence=atmosph.hourly_data_persistence,aod_data_path=atmosph.aod_path)
+        if (result is None):
+            logger.error("cannot read dfb aod or wv param from NC, skipping site")
+            return False
+        dfb_aod, dfb_wv=result
+    else:
+        print 'SKIPPED AOD INIT' # testing of CI and KTM is slow due to not needed AOD
+        dfb_aod, dfb_wv=None, None
+    
+    # snow depth water equivalent
+#    if verbose: logger.info( 'init SDWE')
+#    snow_ncfile_pattern, sdwe_var_name = auxdata_file_dict["SDWE"]
+#    dfb_snow_depth = init_dfb_snow_nc(snow_ncfile_pattern, sdwe_var_name, lon, lat, dfbIntervalExt.getValueStart(), dfbInterval.getValueEnd(), interpolate='bilinear', data_persistence=3)
+
+  
+    SatDataDict, solarGeom_TimesDict, UB_monthly = model_core_pnt(SatDataDict, solarGeom_TimesDict, dfbStart_ext, dfbStart, dfbEnd , trail_window_size, lon, lat, alt, dfb_eps, dfb_aod, dfb_wv, atmosph, dfbext2doy_arr, dfbext2year_arr, dfbext_pert, UB_monthly, LB_loaded, LBland_loaded, LB_QR_weights, verbose)
+
+
+    #write results to DB
+    output_table_write(dsnDataDict, output_table, output_fields, site, SatDataDict, solarGeom_TimesDict, dfbStart, dfbEnd, vacuum=False, verbose=verbose)
+ 
+
+#
+#
+#    print 'solarGeom_TimesDict', solarGeom_TimesDict.keys()
+#    for k in solarGeom_TimesDict.keys():
+#        print k, solarGeom_TimesDict[k].shape
+#    
+#    print 'CalibratedPostLaunchSatDataDict_seg', CalibratedPostLaunchSatDataDict.keys()
+#    for k in CalibratedPostLaunchSatDataDict.keys():
+#        print k, CalibratedPostLaunchSatDataDict[k].shape
+#    
+#    import pylab
+#    pylab.plot(solarGeom_TimesDict['h0'][:,:].flatten())
+#    pylab.plot(CalibratedPostLaunchSatDataDict['vis_rad'][:,:].flatten())
+#    pylab.show()
+#    
+#    exit()
+#
+#
+#    if False:
+#        import pylab
+#        CI=SatDataDict['CI_orig'][:,:]
+#        CI_final=SatDataDict['CI'][:,:]
+#        CLI=SatDataDict['CLI'][:,:]
+#        LB=SatDataDict['LB'][:,:]
+#        h0=solarGeom_TimesDict['h0'][:,:]
+##        wh=(h0>numpy.radians(15)) & (CLI < 15) & (CI >0.25)
+#        wh=(h0>numpy.radians(10))
+#        pylab.plot(CI[wh].flatten(),CLI[wh].flatten(),'r.')
+#        wh=(h0>numpy.radians(10)) & (CLI < 15) & (CI >0.25) & (LB>120)
+#        pylab.plot(CI[wh].flatten(),CLI[wh].flatten(),'b.')
+#
+#        pylab.show()
+#        exit()
+#
+#    if False:
+#        import pylab
+#        CI=SatDataDict['CI_orig'][:,:]
+#        CI_final=SatDataDict['CI'][:,:]
+#        CLI=SatDataDict['CLI'][:,:]
+#        LB=SatDataDict['LB'][:,:]
+#        NORPIX=SatDataDict['NORPIX'][:,:]
+#        GHI=SatDataDict['GHI'][:,:]
+#        h0=solarGeom_TimesDict['h0'][:,:]
+#        wh=(h0>numpy.radians(15)) & (CLI < 15) & (CI >0.25)  & (LB>120)
+#        wh=(h0>numpy.radians(10))
+#        wh = numpy.logical_not(wh)
+#        
+#        himawari_mdl_quantile_regresion.plot_LB_data(site, "", [NORPIX, LB, CLI, CI, CI_final, CI_final-CI, GHI], ['NORPIX', 'LB', 'CLI', 'CI', 'CIfinal', 'CIfinal-CI', 'GHI'], [[0, 250.], [.0, 250.], [0, 70.], [-0.2,1.0], [-0.2,1.0], [-0.8, 0.8], [0, 1000]], [None, None, None, None, None, None], ["jet", "jet", "jet", "jet", "jet", "blue_red3", "blue_red3", "blue_red3"], saveplot=False, showplot=True)
+#        exit()
+
+
+    logger.info('Done site: %d\n', site)
+    
+    return
+   
+
+    
+
+def sat_model_rast_pp(dsnCalibDict, dsnGeomDict, dfbStart, dfbEnd, slotStart, slotEnd, satInfoDict, atmosph, out_channels, auxdata_file_dict, satdata_suffix, out_files_dict, outdata_path_dict, outdata_suffix, process_bbox, seg_bbox, do_parallel=False, ncpus='autodetect', segment_sizex=4, segment_sizey=4,trail_window_size=30, init_by_previousday=False, save_UB=False, file_time_segmentation='month', verbose = False):
+    
+    SSP = 140.7
+
+    #initialize the multiprocessing and queues to pass and retreive data
+    if do_parallel:
+        request_queue, out_queue, workers = init_rast_multiprocessing_queues(ncpus)
+
+    #prepare some data used for all processes
+
+    dfbStart_ext = dfbStart - trail_window_size
+    
+#    num_dfb = dfbEnd - dfbStart + 1
+    num_dfb_ext = dfbEnd - dfbStart_ext + 1
+    num_slot = slotEnd - slotStart+1
+    
+    #######################################################################
+    #make dfb2doy array
+    #######################################################################
+    dfbext2doy_arr = numpy.empty((num_dfb_ext), dtype=numpy.int16)
+    dfbext2year_arr = numpy.empty((num_dfb_ext), dtype=numpy.int16)
+    for dfb in range(dfbStart_ext,dfbEnd+1):
+        dfb_idx = dfb - dfbStart_ext
+        dfbext2doy_arr[dfb_idx] = daytimeconv.dfb2doy(dfb)
+        dfbext2year_arr[dfb_idx] = daytimeconv.dfb2ymd(dfb)[0]
+    dfb2doy_arr = dfbext2doy_arr[trail_window_size:]
+    
+    
+    #init doy related parameters (two values per doy)
+    #data used in raw sat data correction
+    doy_vect=numpy.arange(0,366+1,dtype=numpy.int16)
+    doy_eps = solar_geom_v5.epsilon_cor_vect(doy_vect)
+    doy_pert = solar_geom_v5.perturbation_vect(doy_vect)
+    #data used in clearsky model
+    dfb_eps = doy_eps[dfb2doy_arr]
+#    dfbext_eps = doy_eps[dfbext2doy_arr]
+    dfbext_pert = doy_pert[dfbext2doy_arr]
+    
+    
+    #calculate QR weights 
+    LB_QR_weights = himawari_mdl_quantile_regresion.LB_quantile_regression_init_weights_with_param(trail_window_size, 144)
+
+    #this is used to save UB (long term calculations) for later use (short term applications)
+    if save_UB:
+        result = check_UB_file(auxdata_file_dict, dfbStart,dfbEnd, seg_bbox)
+        if not result:
+            return False 
+        #empty UB
+        UB=numpy.zeros((12, seg_bbox.height, seg_bbox.width))
+
+
+    #####################################
+    #loop segments
+    #####################################
+    if verbose: print 'Segmented processing', datetime.datetime.now()
+    
+    
+    #segmentation
+    subsegs=process_bbox.subsegments_by_pxsize_xy(segment_sizex, segment_sizey)
+    subseg_count=0
+    for subseg_bbox in subsegs:
+        subseg_count+=1
+        seg_start_time = datetime.datetime.now()
+        print "\nSegment :%d/%d" % (subseg_count, len(subsegs)), datetime.datetime.now()
+        if verbose:
+            print " bbox: %s" % (str(subseg_bbox))
+
+        subseg_px_xmin, dummy, subseg_px_ymin, dummy = seg_bbox.pixel_coords_of_bbox(subseg_bbox)
+    
+        if verbose: logger.info( "Latit, Longit, Dem")
+        seg_longit = subseg_bbox.longitudes(px_order=True, array2d=True)
+        seg_latit = subseg_bbox.latitudes(px_order=True, array2d=True)
+
+        dem_file, dem_var = auxdata_file_dict["altitude"][0:2]
+        seg_dem = latlon_nctools.latlon_read_lat_lon_nc_bbox(dem_file, dem_var, seg_bbox=subseg_bbox, interpolate='nearest')
+        
+    
+        #read satellite data and calculate solar geometry
+        SatDataDict_seg, solarGeom_TimesDict_seg = sat_data_read_from_nc(subseg_bbox, dfbStart_ext, dfbEnd, slotStart, slotEnd, satdata_suffix, satInfoDict, verbose)
+
+        # SSP is 2D (dfb, slot) to have capability to work with data from various positionas
+        SSP_arr = numpy.empty((num_dfb_ext,num_slot))
+        SSP_arr[:,:]=SSP
+        solarGeom_TimesDict_seg['SSP']=SSP_arr
+
+        #calculate satellite geometry
+        calculateSatelliteGeometry_bbox(subseg_bbox, solarGeom_TimesDict_seg, verbose=verbose)
+
+        #variables such as NORPIX, vis_ref, lowmodify, CLI
+        calculateSatelliteVariables(SatDataDict_seg, solarGeom_TimesDict_seg, verbose=verbose)
+        
+#        print SatDataDict_seg.keys()
+#        print solarGeom_TimesDict_seg.keys()
+#        aux = solarGeom_TimesDict_seg['sun_sat_mirror']
+##        aux = SatDataDict_seg['CLI']
+#        wh = aux == aux 
+#        print aux.shape
+#        print wh.sum() 
+#        print aux[wh].mean()
+#        print aux[wh].min()
+#        print aux[wh].max()
+#        exit()
+        
+
+        if verbose: logger.info( "UB")
+        seg_UB=None
+        if not save_UB:
+            UB_file, UB_varname = auxdata_file_dict["UB"]
+            if ((os.path.exists(UB_file)) or  (os.path.isfile(UB_file))):
+                seg_UB = latlon_nctools.latlon_read_months_lat_lon_nc_bbox(UB_file, UB_varname, seg_bbox=subseg_bbox, interpolate='nearest')
+
+#        if seg_UB is not None:
+#            print 'UB', seg_UB[:,0,0]               
+        
+#        #init LB from previous run 
+        if init_by_previousday:
+            LB_previous, LBland_previous = read_previous_LB(dfbStart,slotStart,slotEnd, outdata_path_dict, outdata_suffix, subseg_bbox, file_time_segmentation=file_time_segmentation)
+            if LB_previous is not None:
+                if verbose:
+                    print "Previous LB and LB land data", datetime.datetime.now()
+        else:
+            LB_previous, LBland_previous = None, None
+#        init_by_previous_list = [init_by_previousday, LB_previous, LBland_previous]
+#        LB_previous, LBland_previous = None, None
+
+
+
+
+        #load secondary atmosphere weight
+        if verbose: logger.info( "Init AOD")
+        atmosph.load_secondary_weight_from_file_for_segment(seg_longit, seg_latit)
+        #read aod for segment and dfbs
+        result = atmosphere_param.init_dfb_aod_nc_segment(atmosph.aod_ncfiles, atmosph.wv_ncfiles, seg_longit, seg_latit, seg_dem, dfbStart, dfbEnd, do_smoothing=atmosph.do_smoothing, do_extreme_correction=atmosph.do_extreme_correction, extreme_correction_params=atmosph.extreme_correction_params, hourly_data_persistence=atmosph.hourly_data_persistence, aod_data_path=atmosph.aod_path)
+        if (result is None):
+            print "cannot read dfb aod or wv param from NC, skipping segment"
+            return False
+        dfb_aod_seg, dfb_wv_seg = result
+
+        outDataDict_seg = {}
+
+        jobs = {}
+        
+        # core processing - each pixel separately
+        for seg_x_px in range(0, subseg_bbox.width):
+            for seg_y_px in range(0, subseg_bbox.height):
+                job_key = seg_x_px + (1000 * seg_y_px)
+                jobs[job_key] = [seg_x_px, seg_y_px]
+                
+                lon, lat = subseg_bbox.lonlat_of_px(seg_x_px, seg_y_px)
+                alt = seg_dem[seg_y_px, seg_x_px]
+#                if verbose: print "segment point c%d r%d at lon %f, lat %f alt %d" % (seg_x_px, seg_y_px, lon, lat, alt)
+
+                if seg_UB is not None:
+                    UB_monthly = seg_UB[:, seg_y_px, seg_x_px]
+                else:
+                    UB_monthly = None
+                    
+
+##                init_by_previousday, LB_previous, LBland_previous = init_by_previous_list
+                if not(init_by_previousday) or (LB_previous is None) or (LBland_previous is None):
+                    LB_loaded, LBland_loaded=None, None
+                else:
+                    LB_loaded = LB_previous[0,:, seg_y_px, seg_x_px]
+                    LBland_loaded = LBland_previous[0,:, seg_y_px, seg_x_px]
+
+                atmosph.set_secondary_weight_for_segment_px(seg_x_px, seg_y_px)
+                #make copy to avoid multiprocessing problems 
+                atmosph_px=atmosphere_param.atmosphere_param(secondary_weight=atmosph.secondary_weight, primary_type=atmosph.primary_type, secondary_type=atmosph.secondary_type)
+
+                dfb_aod = dfb_aod_seg[:,seg_y_px, seg_x_px]
+                dfb_wv = dfb_wv_seg[:,seg_y_px, seg_x_px]
+                
+                # reduce segment dictionaries to pixel dictionary
+                satData_keystoprocess =  ['CLI', 'NORPIX', 'NDSI', 'IR124_2000', 'VIS064_2000']
+                SatDataDict = reduce_segDict_to_pixDict(SatDataDict_seg, satData_keystoprocess, seg_y_px, seg_x_px)
+                
+                solarGeom_keystoprocess = ['Hsat', 'Asat', 'sun_sat_mirror', 'UTC', 'UTC_slotcenter','h0', 'h0_ref', 'A0', 'sinh0', 'sinh0_slotcenter', 'sun_sat_angle']
+                solarGeom_TimesDict = reduce_segDict_to_pixDict(solarGeom_TimesDict_seg, solarGeom_keystoprocess, seg_y_px, seg_x_px)
+                
+                #CORE CALCULATION
+                if do_parallel:
+                    inputs = [SatDataDict, solarGeom_TimesDict, dfbStart_ext, dfbStart, dfbEnd , trail_window_size, lon, lat, alt, dfb_eps, dfb_aod, dfb_wv, atmosph_px, dfbext2doy_arr, dfbext2year_arr, dfbext_pert, UB_monthly, LB_loaded, LBland_loaded, LB_QR_weights, verbose]
+                    request_queue.put((job_key, inputs))
+                else:
+                    SatDataDict_px, dummy, UB_monthly = model_core_pnt(SatDataDict, solarGeom_TimesDict, dfbStart_ext, dfbStart, dfbEnd , trail_window_size, lon, lat, alt, dfb_eps, dfb_aod, dfb_wv, atmosph, dfbext2doy_arr, dfbext2year_arr, dfbext_pert, UB_monthly, LB_loaded, LBland_loaded, LB_QR_weights, verbose)
+                    
+                    # put output data for current pixel to resulting arrays         
+                    output_keystoprocess =  ['LB', 'LBland', 'LBclass', 'CI', 'CI_flag', 'CLI', 'KTM', 'DNI', 'DNIc', 'GHI', 'GHIc']
+                    outDataDict_seg = insert_pixDict_to_segDict(SatDataDict_px, outDataDict_seg, output_keystoprocess, subseg_bbox, seg_y_px, seg_x_px )
+#                    solarGeom_keystoprocess = ['UTC_slotcenter']
+#                    out_solarGeom_TimesDict_seg = insert_pixDict_to_segDict(solarGeom_TimesDict, solarGeom_TimesDict_seg, solarGeom_keystoprocess, subseg_bbox, seg_y_px, seg_x_px )
+                    if save_UB:
+                        UB[:,subseg_px_ymin+seg_y_px, subseg_px_xmin+seg_x_px] = UB_monthly
+
+
+        if do_parallel:
+        # get data form output queue and put it to resulting arrays            
+            request_queue.join()
+            
+            while out_queue.qsize()>0:
+                job = out_queue.get()
+                job_key=job[0]
+                data=job[1]
+                seg_x_px, seg_y_px = jobs[job_key]
+                
+                if data is  None:
+                    if verbose: print "job results empty", job_key,seg_x_px, seg_y_px 
+                else:
+                    #put point data to whole egment dictionary
+                    SatDataDict_px, dummy, UB_monthly = data
+                    output_keystoprocess =  ['LB', 'LBland', 'LBclass', 'CI', 'CI_flag', 'CLI', 'KTM', 'DNI', 'DNIc', 'GHI', 'GHIc']
+                    outDataDict_seg = insert_pixDict_to_segDict(SatDataDict_px, outDataDict_seg, output_keystoprocess, subseg_bbox, seg_y_px, seg_x_px )
+#                    solarGeom_keystoprocess = ['UTC_slotcenter']
+#                    solarGeom_TimesDict_seg = insert_pixDict_to_segDict(solarGeom_TimesDict, solarGeom_TimesDict_seg, solarGeom_keystoprocess, subseg_bbox, seg_y_px, seg_x_px )
+                    if save_UB:
+                        UB[:,subseg_px_ymin+seg_y_px, subseg_px_xmin+seg_x_px] = UB_monthly
+
+                    jobs.__delitem__(job_key)
+                out_queue.task_done() #remove job outputs form queue
+
+
+
+        #write output to NC files
+        if verbose: print 'Write output', datetime.datetime.now()
+        for ochan in out_channels:
+            if not(ochan in outDataDict_seg.keys()):
+                print 'Missing %s to write to NC' % (ochan)
+                continue
+            out_array = outDataDict_seg[ochan]
+            himawari_nc_latlontools.write_output_nc(ochan, out_array, out_files_dict, outdata_suffix, dfbStart, dfbEnd, slotStart, slotEnd, subseg_bbox, verbose=verbose)
+
+        if save_UB:
+            UB_file, UB_varname = auxdata_file_dict["UB"]
+            latlon_nctools.latlon_write_months_lat_lon_nc(UB_file, UB_varname, UB)
+        
+        seg_end_time = datetime.datetime.now()
+        if verbose: 
+            print 'Segment finished:', datetime.datetime.now()
+            print "Segment processing time:" + str(seg_end_time - seg_start_time)
+
+
+         
+#        if False:
+#            import pylab #@UnresolvedImport
+##            data=solarGeom_TimesDict_seg['Asat'][:,:,0,0]
+##            data=solarGeom_TimesDict_seg['Hsat'][:,:,0,0]
+##            data=solarGeom_TimesDict_seg['sun_sat_angle'][:,:,0,0]
+##            data=solarGeom_TimesDict_seg['sun_sat_mirror'][:,:,0,0]
+##            data=solarGeom_TimesDict_seg['UTC'][:,:,0,0]
+##            data=solarGeom_TimesDict_seg['sinh0'][:,:,0,0]
+##            data=solarGeom_TimesDict_seg['A0_slotcenter'][:,:,0,0]
+##            data=solarGeom_TimesDict_seg['h0_slotcenter'][:,:,0,0]
+##            data=solarGeom_TimesDict_seg['h0_ref_slotcenter'][:,:,0,0]
+##            data=solarGeom_TimesDict_seg['sinh0_slotcenter'][:,:,0,0]
+##            data=solarGeom_TimesDict_seg['UTC_slotcenter'][:,:,0,0]
+##            data=CalibratedPostLaunchSatDataDict_seg['vis_rad'][:,:,0,0]
+##            data=CalibratedPostLaunchSatDataDict_seg['lowmodify'][:,:,0,0]
+##            data=CalibratedPostLaunchSatDataDict_seg['vis_ref'][:,:,0,0]
+##            data=CalibratedPostLaunchSatDataDict_seg['CLI'][:,:,0,0]
+#            data=CalibratedPostLaunchSatDataDict_seg['NORPIX'][:,:,0,0]
+##            data=CalibratedPostLaunchSatDataDict_seg['DNI'][:,:,0,0]
+#            print (data==data).sum()
+#            print data[data==data].mean()
+#
+#
+#            pylab.imshow(data.transpose(),interpolation='nearest')
+#            pylab.colorbar()
+#            pylab.show()
+#            exit()
+            
+            
+        del(solarGeom_TimesDict_seg,SatDataDict)
+            
+
+    if do_parallel:
+        #kill the workers
+        for t in workers:
+#            print t.name
+            t.terminate()
+            t.join()
+    
+    return True
+
+
+
+def sat_model_rast_realtime_pp(dfbStart, dfbEnd, himawariSlotStart, himawariSlotEnd, slotStart_calc, slotEnd_calc, dfbEnd_clearsky, slotEnd_calc_clearsky, satInfoDict, atmosph, auxdata_file_dict, satdata_suffix, realtime_channels, regular_files_dict, realtime_files_dict, outdata_suffix, process_bbox, seg_bbox, do_parallel=False, ncpus='autodetect', segment_sizex=8, segment_sizey=4, regular_file_time_segmentation='month', realtime_file_time_segmentation='day', verbose=False, do_sat_classification=True):
+    
+    SSP = 140.7
+
+    #initialize the multiprocessing and queues to pass and retreive data
+    if do_parallel:
+        request_queue, out_queue, workers = init_rast_multiprocessing_queues_nolb(ncpus)
+
+    #prepare some data used for all processes
+    
+    num_dfb = dfbEnd - dfbStart + 1
+    num_slot = himawariSlotEnd - himawariSlotStart+1
+    
+    
+    #######################################################################
+    #make dfb2doy array
+    #######################################################################
+    dfb2doy_arr = numpy.empty((num_dfb), dtype=numpy.int16)
+    dfb2year_arr = numpy.empty((num_dfb), dtype=numpy.int16)
+#    for dfb in range(dfbStart,dfbEnd+1):
+    for dfb in range(dfbStart,dfbEnd+1):
+        dfb_idx = dfb - dfbStart
+        dfb2doy_arr[dfb_idx] = daytimeconv.dfb2doy(dfb)
+        dfb2year_arr[dfb_idx] = daytimeconv.dfb2ymd(dfb)[0]
+    
+    
+    #init doy related parameters (two values per doy)
+    #data used in raw sat data correction
+    doy_vect=numpy.arange(0,366+1,dtype=numpy.int16)
+    doy_eps = solar_geom_v5.epsilon_cor_vect(doy_vect)
+    doy_pert = solar_geom_v5.perturbation_vect(doy_vect)
+    #data used in clearsky model
+    dfb_eps = doy_eps[dfb2doy_arr]
+    dfb_pert = doy_pert[dfb2doy_arr]
+    
+    
+    #####################################
+    #loop segments
+    #####################################
+    if verbose: print 'Segmented processing', datetime.datetime.now()
+    
+    
+    #segmentation
+    subsegs=process_bbox.subsegments_by_pxsize_xy(segment_sizex, segment_sizey)
+    subseg_count=0
+    for subseg_bbox in subsegs:
+        subseg_count+=1
+        seg_start_time = datetime.datetime.now()
+        print "\nSegment :%d/%d" % (subseg_count, len(subsegs)), datetime.datetime.now()
+        if verbose:
+            print " bbox: %s" % (str(subseg_bbox))
+
+#        subseg_px_xmin, dummy, subseg_px_ymin, dummy = seg_bbox.pixel_coords_of_bbox(subseg_bbox)
+    
+        if verbose: logger.info( "Latit, Longit, Dem")
+        seg_longit = subseg_bbox.longitudes(px_order=True, array2d=True)
+        seg_latit = subseg_bbox.latitudes(px_order=True, array2d=True)
+
+        dem_file, dem_var = auxdata_file_dict["altitude"][0:2]
+        seg_dem = latlon_nctools.latlon_read_lat_lon_nc_bbox(dem_file, dem_var, seg_bbox=subseg_bbox, interpolate='nearest')
+        
+
+        #read satellite data and calculate solar geometry
+        SatDataDict_seg, solarGeom_TimesDict_seg = sat_data_read_from_nc(subseg_bbox, dfbStart, dfbEnd, himawariSlotStart, himawariSlotEnd, satdata_suffix, satInfoDict, verbose)
+
+        # SSP is 2D (dfb, slot) to have capability to work with data from various positionas
+        SSP_arr = numpy.empty((num_dfb,num_slot))
+        SSP_arr[:,:]=SSP
+        solarGeom_TimesDict_seg['SSP']=SSP_arr
+
+        #calculate satellite geometry
+        calculateSatelliteGeometry_bbox(subseg_bbox, solarGeom_TimesDict_seg, verbose=verbose)
+
+        #variables such as NORPIX, vis_ref, lowmodify, CLI
+        calculateSatelliteVariables(SatDataDict_seg, solarGeom_TimesDict_seg, verbose=verbose)
+        
+
+        if verbose: logger.info( "UB")
+        seg_UB=None
+        UB_file, UB_varname = auxdata_file_dict["UB"]
+        if ((os.path.exists(UB_file)) or  (os.path.isfile(UB_file))):
+            seg_UB = latlon_nctools.latlon_read_months_lat_lon_nc_bbox(UB_file, UB_varname, seg_bbox=subseg_bbox, interpolate='nearest')
+
+        if (seg_UB is None) or (seg_UB.sum()==0.0):
+            print 'Unable to read UB' 
+            return False
+
+#        #init LB  from previous run 
+        LB_previous=himawari_nc_latlontools.outdata_nc_read('LB', regular_files_dict, outdata_suffix, dfbStart-1, dfbEnd-1, himawariSlotStart, himawariSlotEnd, subseg_bbox, file_time_segmentation=regular_file_time_segmentation)
+        SatDataDict_seg['LB'] = LB_previous
+
+        #load secondary atmosphere weight
+        if verbose: logger.info( "Init AOD")
+        atmosph.load_secondary_weight_from_file_for_segment(seg_longit, seg_latit)
+        #read aod for segment and dfbs
+        result = atmosphere_param.init_dfb_aod_nc_segment(atmosph.aod_ncfiles, atmosph.wv_ncfiles, seg_longit, seg_latit, seg_dem, dfbStart, dfbEnd, do_smoothing=atmosph.do_smoothing, do_extreme_correction=atmosph.do_extreme_correction, extreme_correction_params=atmosph.extreme_correction_params, hourly_data_persistence=atmosph.hourly_data_persistence, aod_data_path=atmosph.aod_path)
+        if (result is None):
+            print "cannot read dfb aod or wv param from NC, skipping segment"
+            return False
+        dfb_aod_seg, dfb_wv_seg = result
+
+
+        outDataDict_seg = {}
+        jobs = {}
+
+
+
+
+        reduce_dim0 = False
+        if (dfbEnd - dfbStart) <=1:
+            dfbStart_calc = dfbStart
+            dfbEnd_calc = dfbStart
+            reduce_dim0 = True
+            dfb_aod_seg_calc = dfb_aod_seg[0:1,...]
+            dfb_wv_seg_calc = dfb_wv_seg[0:1,...]
+            dfb2doy_arr_calc = dfb2doy_arr[0:1]
+            dfb2year_arr_calc = dfb2year_arr[0:1]
+            dfb_eps_calc = dfb_eps[0:1]
+            dfb_pert_calc = dfb_pert[0:1]
+            him_slots = himawariSlotEnd - himawariSlotStart + 1
+            num_slots_calc = (him_slots - slotStart_calc +1) + slotEnd_calc + (him_slots * (dfbEnd - dfbStart -1))
+
+            SatDataDict_seg_calc = {}
+            solarGeom_TimesDict_seg_calc = {}
+            for dfb in range(dfbStart, dfbEnd+1):
+                dfb_idx = dfb -  dfbStart
+                slotStart_in = himawariSlotStart
+                slotEnd_in = himawariSlotEnd
+                if dfb==dfbStart:
+                    slotStart_in = max(slotStart_calc,himawariSlotStart)
+                if dfb==dfbEnd:
+                    slotEnd_in = min(slotEnd_calc,himawariSlotEnd)
+                slotStart_in_idx=slotStart_in-himawariSlotStart
+                slotEnd_in_idx=slotEnd_in-himawariSlotStart
+                slotStart_out_idx = ((him_slots - slotStart_calc +1) * min(1, dfb_idx)) + (him_slots*max(0, dfb_idx-1))
+                slotEnd_out_idx  = slotStart_out_idx + slotEnd_in_idx - slotStart_in_idx
+                for k in SatDataDict_seg.keys():
+                    if not SatDataDict_seg_calc.has_key(k):
+                        shp = list(SatDataDict_seg[k].shape)
+                        shp[0] = 1
+                        shp[1] = num_slots_calc
+                        SatDataDict_seg_calc[k] = numpy.empty(shp, SatDataDict_seg[k].dtype)
+                    SatDataDict_seg_calc[k][0,slotStart_out_idx:slotEnd_out_idx+1,...] = SatDataDict_seg[k][dfb_idx,slotStart_in_idx:slotEnd_in_idx+1,...]
+                for k in solarGeom_TimesDict_seg.keys():
+                    if not solarGeom_TimesDict_seg_calc.has_key(k):
+                        shp = list(solarGeom_TimesDict_seg[k].shape)
+                        shp[0] = 1
+                        shp[1] = num_slots_calc
+                        solarGeom_TimesDict_seg_calc[k] = numpy.empty(shp, solarGeom_TimesDict_seg[k].dtype)
+                    solarGeom_TimesDict_seg_calc[k][0,slotStart_out_idx:slotEnd_out_idx+1,...] = solarGeom_TimesDict_seg[k][dfb_idx,slotStart_in_idx:slotEnd_in_idx+1,...]
+        else:
+            dfbStart_calc = dfbStart
+            dfbEnd_calc = dfbEnd
+            SatDataDict_seg_calc = SatDataDict_seg
+            solarGeom_TimesDict_seg_calc = solarGeom_TimesDict_seg
+            dfb_aod_seg_calc = dfb_aod_seg
+            dfb_wv_seg_calc = dfb_wv_seg
+            dfb2doy_arr_calc = dfb2doy_arr
+            dfb2year_arr_calc = dfb2year_arr
+            dfb_eps_calc = dfb_eps
+            dfb_pert_calc =dfb_pert
+
+
+
+            
+        # core processing - each pixel separately
+        for seg_x_px in range(0, subseg_bbox.width):
+            for seg_y_px in range(0, subseg_bbox.height):
+                job_key = seg_x_px + (1000 * seg_y_px)
+                jobs[job_key] = [seg_x_px, seg_y_px]
+                
+                lon, lat = subseg_bbox.lonlat_of_px(seg_x_px, seg_y_px)
+                alt = seg_dem[seg_y_px, seg_x_px]
+#                if verbose: print "segment point c%d r%d at lon %f, lat %f alt %d" % (seg_x_px, seg_y_px, lon, lat, alt)
+
+                if seg_UB is not None:
+                    UB_monthly = seg_UB[:, seg_y_px, seg_x_px]
+                else:
+                    UB_monthly = None
+                    
+
+                atmosph.set_secondary_weight_for_segment_px(seg_x_px, seg_y_px)
+                #make copy to avoid multiprocessing problems 
+                atmosph_px=atmosphere_param.atmosphere_param(secondary_weight=atmosph.secondary_weight, primary_type=atmosph.primary_type, secondary_type=atmosph.secondary_type)
+
+                dfb_aod = dfb_aod_seg_calc[:,seg_y_px, seg_x_px]
+                dfb_wv = dfb_wv_seg_calc[:,seg_y_px, seg_x_px]
+                
+                # reduce segment dictionaries to pixel dictionary
+                satData_keystoprocess =  ['CLI', 'NORPIX', 'NDSI', 'IR124_2000', 'VIS064_2000', 'LB']
+                SatDataDict = reduce_segDict_to_pixDict(SatDataDict_seg_calc, satData_keystoprocess, seg_y_px, seg_x_px)
+                
+                solarGeom_keystoprocess = ['Hsat', 'Asat', 'sun_sat_mirror', 'UTC', 'UTC_slotcenter','h0', 'h0_ref', 'A0', 'sinh0', 'sinh0_slotcenter', 'sun_sat_angle']
+                solarGeom_TimesDict = reduce_segDict_to_pixDict(solarGeom_TimesDict_seg_calc, solarGeom_keystoprocess, seg_y_px, seg_x_px)
+                
+                
+                #CORE CALCULATION
+                inputs = [SatDataDict, solarGeom_TimesDict, dfbStart_calc, dfbEnd_calc , lon, lat, alt, dfb_eps_calc, dfb_aod, dfb_wv, atmosph_px, dfb2doy_arr_calc, dfb2year_arr_calc, dfb_pert_calc, UB_monthly, verbose, do_sat_classification]
+                if do_parallel:
+                    request_queue.put((job_key, inputs))
+                else:
+#                    SatDataDict_px = model_core_pnt_nolb(SatDataDict, solarGeom_TimesDict, dfbStart_calc, dfbEnd_calc , lon, lat, alt, dfb_eps_calc, dfb_aod, dfb_wv, atmosph, dfb2doy_arr_calc, dfb2year_arr_calc, dfb_pert_calc, UB_monthly, verbose)
+                    SatDataDict_px = model_core_pnt_nolb(*inputs)
+                    
+                    # put output data for current pixel to resulting arrays         
+                    output_keystoprocess =  ['LB', 'LBland', 'LBclass', 'CI', 'CI_flag', 'CLI', 'KTM', 'DNI', 'DNIc', 'GHI', 'GHIc']
+                    outDataDict_seg = insert_pixDict_to_segDict(SatDataDict_px, outDataDict_seg, output_keystoprocess, subseg_bbox, seg_y_px, seg_x_px )
+                
+                
+
+        # get data form output queue and put it to resulting arrays            
+        if do_parallel:
+            request_queue.join()
+            
+            while out_queue.qsize()>0:
+                job = out_queue.get()
+                job_key=job[0]
+                data=job[1]
+                seg_x_px, seg_y_px = jobs[job_key]
+                
+                if data is  None:
+                    if verbose: print "job results empty", job_key,seg_x_px, seg_y_px 
+                else:
+                    #put point data to whole egment dictionary
+                    SatDataDict_px = data
+                    output_keystoprocess =  ['LB', 'LBland', 'LBclass', 'CI', 'CI_flag', 'CLI', 'KTM', 'DNI', 'DNIc', 'GHI', 'GHIc']
+                    outDataDict_seg = insert_pixDict_to_segDict(SatDataDict_px, outDataDict_seg, output_keystoprocess, subseg_bbox, seg_y_px, seg_x_px )
+
+                    jobs.__delitem__(job_key)
+                out_queue.task_done() #remove job outputs form queue
+
+        
+
+        #write output to NC files
+        if verbose: print 'Write output', datetime.datetime.now()
+        for ochan in realtime_channels:
+            if not(ochan in outDataDict_seg.keys()):
+                print 'Missing %s to write to NC' % (ochan)
+                continue
+            #this is to wrtite only slots that had to be calculated
+            for dfb in range(dfbStart, dfbEnd+1):
+                dfb_idx = dfb -  dfbStart
+                slotStart_write = himawariSlotStart
+                slotEnd_write = himawariSlotEnd
+                if dfb==dfbStart:
+                    slotStart_write = max(slotStart_calc,himawariSlotStart)
+                if dfb==dfbEnd:
+                    slotEnd_write = min(slotEnd_calc,himawariSlotEnd)
+                slotStart_write_idx=slotStart_write-himawariSlotStart
+                slotEnd_write_idx=slotEnd_write-himawariSlotStart
+                if reduce_dim0:
+                    slotStart_out_idx = ((him_slots - slotStart_calc +1) * min(1, dfb_idx)) + (him_slots*max(0, dfb_idx-1))
+                    slotEnd_out_idx  = slotStart_out_idx + slotEnd_write_idx - slotStart_write_idx
+                    out_array = outDataDict_seg[ochan][0:1,slotStart_out_idx:slotEnd_out_idx+1 ,:,:]
+                else:
+                    out_array = outDataDict_seg[ochan][dfb_idx:dfb_idx+1,slotStart_write_idx:slotEnd_write_idx+1 ,:,:]
+                himawari_nc_latlontools.write_output_nc(ochan, out_array, realtime_files_dict, outdata_suffix, dfb, dfb, slotStart_write, slotEnd_write, subseg_bbox, verbose=verbose, file_time_segmentation = realtime_file_time_segmentation)
+
+
+        
+
+        #upfront clearsky irradiance
+        dfbStart, dfbEnd, himawariSlotStart, himawariSlotEnd, slotStart_calc, slotEnd_calc, dfbEnd_clearsky, slotEnd_calc_clearsky, 
+        if (slotEnd_calc_clearsky is not None) and\
+                ((dfbEnd_clearsky > dfbEnd) or ((dfbEnd_clearsky == dfbEnd) and (slotEnd_calc_clearsky > slotEnd_calc))):
+            if verbose: print 'Calculate upfront clearsky, for slots'
+            slotBegin_calc_clearsky = slotEnd_calc+1
+            dfbStart_clearsky = dfbEnd
+            if slotBegin_calc_clearsky > himawariSlotEnd:
+                slotBegin_calc_clearsky = himawariSlotStart
+                dfbStart_clearsky += 1 
+
+
+
+            result = atmosphere_param.init_dfb_aod_nc_segment(atmosph.aod_ncfiles, atmosph.wv_ncfiles, seg_longit, seg_latit, seg_dem, dfbStart_clearsky, dfbEnd_clearsky, do_smoothing=atmosph.do_smoothing, do_extreme_correction=atmosph.do_extreme_correction, extreme_correction_params=atmosph.extreme_correction_params, hourly_data_persistence=atmosph.hourly_data_persistence, aod_data_path=atmosph.aod_path)
+            if (result is None):
+                print "cannot read dfb aod or wv param from NC, skipping segment"
+                return False
+            dfb_aod_seg_cls, dfb_wv_seg_cls = result
+
+
+            for dfb in range(dfbStart_clearsky, dfbEnd_clearsky+1):
+                dfb_idx = dfb -  dfbStart_clearsky
+                slotStart_clr = himawariSlotStart
+                slotEnd_clr = himawariSlotEnd
+                if dfb==dfbStart_clearsky:
+                    slotStart_clr = max(slotBegin_calc_clearsky,himawariSlotStart)
+                if dfb==dfbEnd_clearsky:
+                    slotEnd_clr = min(slotEnd_calc_clearsky,himawariSlotEnd)
+                
+            
+                # calculate real scan time given by nominal scan time and scan time offset for each pixel
+                UTC_dh_4D = segmented_solar_geometry.calculate_realscan_UTCtimes(dfb,dfb, slotStart_clr,slotEnd_clr,subseg_bbox)
+                
+                #calculate solar geometry
+                h0_r, h0_r_ref, a0_r = segmented_solar_geometry.solargeom(subseg_bbox,dfb,dfb,slotStart_clr,slotEnd_clr, UTC_dh_4D)
+                seg_sinh0 = numpy.sin(h0_r)
+
+
+                seg_dfb_aod = dfb_aod_seg_cls[dfb_idx:dfb_idx+1,...]
+                seg_dfb_wv = dfb_wv_seg_cls[dfb_idx:dfb_idx+1,...]
+#                print dfb_idx, seg_dfb_aod.shape, seg_dfb_wv.shape
+                
+                #clearsky irrad
+                GHIc, DNIc = sat_model_clearsky(seg_sinh0, dfb, dfb, slotStart_clr, slotEnd_clr, dfb_eps, seg_dfb_aod, seg_dfb_wv, solar_geom_v5.I0, seg_dem, atmosph)
+            
+            
+                #write clearsky
+                if 'GHIc' in realtime_channels:
+                    himawari_nc_latlontools.write_output_nc('GHIc', GHIc, realtime_files_dict, outdata_suffix, dfb, dfb, slotStart_clr,slotEnd_clr, subseg_bbox, verbose=verbose, file_time_segmentation = realtime_file_time_segmentation)
+                if 'DNIc' in realtime_channels:
+                    himawari_nc_latlontools.write_output_nc('DNIc', DNIc, realtime_files_dict, outdata_suffix, dfb, dfb, slotStart_clr,slotEnd_clr, subseg_bbox, verbose=verbose, file_time_segmentation = realtime_file_time_segmentation)
+                
+
+
+
+
+        
+        seg_end_time = datetime.datetime.now()
+        if verbose: 
+            print 'Segment finished:', datetime.datetime.now()
+            print "Segment processing time:" + str(seg_end_time - seg_start_time)
+
+
+
+            
+        del(solarGeom_TimesDict_seg,SatDataDict)
+            
+
+    if do_parallel:
+        #kill the workers
+        for t in workers:
+            t.terminate()
+            t.join()
+    
+    return True
+
+
+
+
+def sat_model_clearsky(sinh0_4D, dfb_begin, dfb_end, slot_begin, slot_end, dfb_eps, seg_dfb_aod, seg_dfb_wv, I0, seg_dem, atmosph):
+    
+    num_days = dfb_end - dfb_begin + 1
+    num_slots = slot_end - slot_begin + 1
+    num_rows = sinh0_4D.shape[2]
+    num_cols = sinh0_4D.shape[3]
+
+    #expand data to 4D to have high speed calculation
+    dem_4D = numpy.tile(seg_dem,(num_days*num_slots,1,1)).reshape(num_days,num_slots,num_rows,num_cols)
+
+    dfb_idx_1D = numpy.arange(dfb_begin,dfb_end+1)-dfb_begin
+    eps_1D = dfb_eps[dfb_idx_1D]
+    eps_4D = numpy.repeat(eps_1D, num_slots*num_rows*num_cols).reshape((num_days,num_slots,num_rows,num_cols))
+    
+    if (atmosph.secondary_type is not None) and (atmosph.secondary_weight_segment.ndim == 2):
+        secondary_weight_4D  = numpy.tile(atmosph.secondary_weight_segment,(num_days*num_slots,1,1)).reshape(num_days,num_slots,num_rows,num_cols)
+
+    aod_4D = numpy.empty((num_days,num_slots,num_rows,num_cols))
+    wv_4D = numpy.empty((num_days,num_slots,num_rows,num_cols))
+    for s_idx in range(0,num_slots):
+        aod_4D[:,s_idx,:,:] = seg_dfb_aod
+        wv_4D[:,s_idx,:,:] = seg_dfb_wv
+
+    
+
+    #######################################################################
+    #out data
+    #######################################################################
+    GHIc = numpy.empty((num_days,num_slots,num_rows,num_cols))
+    DNIc = numpy.empty((num_days,num_slots,num_rows,num_cols))
+    GHIc[:,:,:,:]=numpy.nan
+    DNIc[:,:,:,:]=numpy.nan
+
+    GHIc[sinh0_4D <0]=0.0
+    DNIc[sinh0_4D <0]=0.0
+
+    
+    wh = (sinh0_4D == sinh0_4D)  & (sinh0_4D >=0)
+    if wh.sum() > 0:
+
+        I0_toa_4D = I0 * eps_4D
+    
+        
+    
+        if (atmosph.secondary_type is None) or (atmosph.secondary_weight_segment.ndim != 2):
+            ghc_solis2_vect = numpy.vectorize(solar_geom_v5.ghc_solis2)
+            aux_GHIc = ghc_solis2_vect(I0_toa_4D[wh], aod_4D[wh], wv_4D[wh], None, dem_4D[wh], atmosph.primary_type, sinh0_4D[wh])
+        else:
+            ghc_solis2_2atm_vect = numpy.vectorize(solar_geom_v5.ghc_solis2_2atmospheres)
+            aux_GHIc = ghc_solis2_2atm_vect(I0_toa_4D[wh], aod_4D[wh], wv_4D[wh], None, dem_4D[wh], atmosph.primary_type, atmosph.secondary_type, secondary_weight_4D[wh], sinh0_4D[wh])
+                
+        GHIc[wh] = aux_GHIc
+    
+    
+    
+        z_arr = numpy.arccos(sinh0_4D.astype(numpy.float64))
+        gc_arr = GHIc.astype(numpy.float64)
+        dt = -999.
+        z_arr[z_arr!=z_arr] = dt
+        gc_arr[gc_arr!=gc_arr] = dt
+        
+        #output vector used to get by reference output from dirindex
+        b_vect = numpy.zeros_like((GHIc[0,:,0,0]).astype(numpy.float64))
+    
+        #DNIc return by reference version
+        for px_y in range(0,num_rows):
+            for px_x in range(0,num_cols):
+                for dfb_idx in range(0,num_days):
+                    I0_toa = I0_toa_4D[dfb_idx,0,px_y, px_x]
+                    alt = seg_dem[px_y, px_x]
+                    aod = aod_4D[dfb_idx,0,px_y, px_x]
+                    wv = wv_4D[dfb_idx,0,px_y, px_x]
+                    asw = secondary_weight_4D[dfb_idx,0,px_y, px_x]
+                    gc_vect = gc_arr[dfb_idx,:,px_y, px_x].copy()  #copy must be used to have in memory continuous vector
+                    z_vect = z_arr[dfb_idx,:,px_y, px_x].copy()  #copy must be used to have in memory continuous vector
+                    try:
+                        dummy = radlib.dirindex_solis_ref(gc_vect, z_vect, dt, I0_toa, alt, aod, wv, atmosph.primary_type, atmosph.secondary_type, asw, b_vect)
+                        DNIc[dfb_idx, :,px_y,px_x] = b_vect.copy()
+                    except:
+                        print " Something goes wrong with DNIc dirindex. Unexpected error:", sys.exc_info()[0]
+                        raise
+        GHIc[sinh0_4D <0]=numpy.nan
+        DNIc[sinh0_4D <0]=numpy.nan
+    return GHIc, DNIc
+
+
+#def sat_model_rast_realtime_pp_BAK(dfbStart, dfbEnd, himawariSlotStart, himawariSlotEnd, slotStart_calc, slotEnd_calc, dfbEnd_clearsky, slotEnd_calc_clearsky, satInfoDict, atmosph, auxdata_file_dict, satdata_suffix, realtime_channels, regular_files_dict, realtime_files_dict, outdata_suffix, process_bbox, seg_bbox, do_parallel=False, ncpus='autodetect', segment_sizex=8, segment_sizey=4, slot_end_clearsky=None, regular_file_time_segmentation='month', realtime_file_time_segmentation='day', verbose=False):
+#    
+#    SSP = 140.7
+#
+#    #initialize the multiprocessing and queues to pass and retreive data
+#    if do_parallel:
+#        request_queue, out_queue, workers = init_rast_multiprocessing_queues_nolb(ncpus)
+#
+#    #prepare some data used for all processes
+#    
+#    num_dfb = dfbEnd - dfbStart + 1
+#    num_slot = himawariSlotEnd - himawariSlotStart+1
+#    
+#    
+#    #######################################################################
+#    #make dfb2doy array
+#    #######################################################################
+#    dfb2doy_arr = numpy.empty((num_dfb), dtype=numpy.int16)
+#    dfb2year_arr = numpy.empty((num_dfb), dtype=numpy.int16)
+##    for dfb in range(dfbStart,dfbEnd+1):
+#    for dfb in range(dfbStart,dfbEnd+1):
+#        dfb_idx = dfb - dfbStart
+#        dfb2doy_arr[dfb_idx] = daytimeconv.dfb2doy(dfb)
+#        dfb2year_arr[dfb_idx] = daytimeconv.dfb2ymd(dfb)[0]
+#    
+#    
+#    #init doy related parameters (two values per doy)
+#    #data used in raw sat data correction
+#    doy_vect=numpy.arange(0,366+1,dtype=numpy.int16)
+#    doy_eps = solar_geom_v5.epsilon_cor_vect(doy_vect)
+#    doy_pert = solar_geom_v5.perturbation_vect(doy_vect)
+#    #data used in clearsky model
+#    dfb_eps = doy_eps[dfb2doy_arr]
+#    dfb_pert = doy_pert[dfb2doy_arr]
+#    
+#    
+#    #####################################
+#    #loop segments
+#    #####################################
+#    if verbose: print 'Segmented processing', datetime.datetime.now()
+#    
+#    
+#    #segmentation
+#    subsegs=process_bbox.subsegments_by_pxsize_xy(segment_sizex, segment_sizey)
+#    subseg_count=0
+#    for subseg_bbox in subsegs:
+#        subseg_count+=1
+#        seg_start_time = datetime.datetime.now()
+#        print "\nSegment :%d/%d" % (subseg_count, len(subsegs)), datetime.datetime.now()
+#        if verbose:
+#            print " bbox: %s" % (str(subseg_bbox))
+#
+##        subseg_px_xmin, dummy, subseg_px_ymin, dummy = seg_bbox.pixel_coords_of_bbox(subseg_bbox)
+#    
+#        if verbose: logger.info( "Latit, Longit, Dem")
+#        seg_longit = subseg_bbox.longitudes(px_order=True, array2d=True)
+#        seg_latit = subseg_bbox.latitudes(px_order=True, array2d=True)
+#
+#        dem_file, dem_var = auxdata_file_dict["altitude"][0:2]
+#        seg_dem = latlon_nctools.latlon_read_lat_lon_nc_bbox(dem_file, dem_var, seg_bbox=subseg_bbox, interpolate='nearest')
+#        
+#
+#        #read satellite data and calculate solar geometry
+#        SatDataDict_seg, solarGeom_TimesDict_seg = sat_data_read_from_nc(subseg_bbox, dfbStart, dfbEnd, himawariSlotStart, himawariSlotEnd, satdata_suffix, satInfoDict, verbose)
+#
+#        # SSP is 2D (dfb, slot) to have capability to work with data from various positionas
+#        SSP_arr = numpy.empty((num_dfb,num_slot))
+#        SSP_arr[:,:]=SSP
+#        solarGeom_TimesDict_seg['SSP']=SSP_arr
+#
+#        #calculate satellite geometry
+#        calculateSatelliteGeometry_bbox(subseg_bbox, solarGeom_TimesDict_seg, verbose=verbose)
+#
+#        #variables such as NORPIX, vis_ref, lowmodify, CLI
+#        calculateSatelliteVariables(SatDataDict_seg, solarGeom_TimesDict_seg, verbose=verbose)
+#        
+#
+#        if verbose: logger.info( "UB")
+#        seg_UB=None
+#        UB_file, UB_varname = auxdata_file_dict["UB"]
+#        if ((os.path.exists(UB_file)) or  (os.path.isfile(UB_file))):
+#            seg_UB = latlon_nctools.latlon_read_months_lat_lon_nc_bbox(UB_file, UB_varname, seg_bbox=subseg_bbox, interpolate='nearest')
+#
+#        if (seg_UB is None) or (seg_UB.sum()==0.0):
+#            print 'Unable to read UB' 
+#            return False
+#
+##        #init LB  from previous run 
+#        LB_previous=himawari_nc_latlontools.outdata_nc_read('LB', regular_files_dict, outdata_suffix, dfbStart-1, dfbEnd-1, himawariSlotStart, himawariSlotEnd, subseg_bbox, file_time_segmentation=regular_file_time_segmentation)
+#        SatDataDict_seg['LB'] = LB_previous
+#
+#        #load secondary atmosphere weight
+#        if verbose: logger.info( "Init AOD")
+#        atmosph.load_secondary_weight_from_file_for_segment(seg_longit, seg_latit)
+#        #read aod for segment and dfbs
+#        result = atmosphere_param.init_dfb_aod_nc_segment(atmosph.aod_ncfiles, atmosph.wv_ncfiles, seg_longit, seg_latit, seg_dem, dfbStart, dfbEnd, do_smoothing=atmosph.do_smoothing, do_extreme_correction=atmosph.do_extreme_correction, extreme_correction_params=atmosph.extreme_correction_params, hourly_data_persistence=atmosph.hourly_data_persistence, aod_data_path=atmosph.aod_path)
+#        if (result is None):
+#            print "cannot read dfb aod or wv param from NC, skipping segment"
+#            return False
+#        seg_dfb_aod, seg_dfb_wv = result
+#
+#
+#        outDataDict_seg = {}
+#        jobs = {}
+#
+#        
+#        # core processing - each pixel separately
+#        for seg_x_px in range(0, subseg_bbox.width):
+#            for seg_y_px in range(0, subseg_bbox.height):
+#                job_key = seg_x_px + (1000 * seg_y_px)
+#                jobs[job_key] = [seg_x_px, seg_y_px]
+#                
+#                lon, lat = subseg_bbox.lonlat_of_px(seg_x_px, seg_y_px)
+#                alt = seg_dem[seg_y_px, seg_x_px]
+##                if verbose: print "segment point c%d r%d at lon %f, lat %f alt %d" % (seg_x_px, seg_y_px, lon, lat, alt)
+#
+#                if seg_UB is not None:
+#                    UB_monthly = seg_UB[:, seg_y_px, seg_x_px]
+#                else:
+#                    UB_monthly = None
+#                    
+#
+#                atmosph.set_secondary_weight_for_segment_px(seg_x_px, seg_y_px)
+#
+#                dfb_aod = seg_dfb_aod[:,seg_y_px, seg_x_px]
+#                dfb_wv = seg_dfb_wv[:,seg_y_px, seg_x_px]
+#                
+#                # reduce segment dictionaries to pixel dictionary
+#                satData_keystoprocess =  ['CLI', 'NORPIX', 'NDSI', 'IR124_2000', 'VIS064_2000', 'LB']
+#                SatDataDict = reduce_segDict_to_pixDict(SatDataDict_seg, satData_keystoprocess, seg_y_px, seg_x_px)
+#                
+#                solarGeom_keystoprocess = ['Hsat', 'Asat', 'sun_sat_mirror', 'UTC', 'UTC_slotcenter','h0', 'h0_ref', 'A0', 'sinh0', 'sinh0_slotcenter', 'sun_sat_angle']
+#                solarGeom_TimesDict = reduce_segDict_to_pixDict(solarGeom_TimesDict_seg, solarGeom_keystoprocess, seg_y_px, seg_x_px)
+#                
+#                
+#                #CORE CALCULATION
+#                if do_parallel:
+#                    inputs = [SatDataDict, solarGeom_TimesDict, dfbStart, dfbEnd , lon, lat, alt, dfb_eps, dfb_aod, dfb_wv, atmosph, dfb2doy_arr, dfb2year_arr, dfb_pert, UB_monthly, verbose]
+#                    request_queue.put((job_key, inputs))
+#                else:
+#                    SatDataDict_px = model_core_pnt_nolb(SatDataDict, solarGeom_TimesDict, dfbStart, dfbEnd , lon, lat, alt, dfb_eps, dfb_aod, dfb_wv, atmosph, dfb2doy_arr, dfb2year_arr, dfb_pert, UB_monthly, verbose)
+##                    continue
+#                    # put output data for current pixel to resulting arrays         
+#                    output_keystoprocess =  ['LB', 'LBland', 'LBclass', 'CI', 'CI_flag', 'CLI', 'KTM', 'DNI', 'DNIc', 'GHI', 'GHIc']
+#                    outDataDict_seg = insert_pixDict_to_segDict(SatDataDict_px, outDataDict_seg, output_keystoprocess, subseg_bbox, seg_y_px, seg_x_px )
+#                
+#                
+#
+#        # get data form output queue and put it to resulting arrays            
+#        if do_parallel:
+#            request_queue.join()
+#            
+#            while out_queue.qsize()>0:
+#                job = out_queue.get()
+#                job_key=job[0]
+#                data=job[1]
+#                seg_x_px, seg_y_px = jobs[job_key]
+#                
+#                if data is  None:
+#                    if verbose: print "job results empty", job_key,seg_x_px, seg_y_px 
+#                else:
+#                    #put point data to whole egment dictionary
+#                    SatDataDict_px = data
+#                    output_keystoprocess =  ['LB', 'LBland', 'LBclass', 'CI', 'CI_flag', 'CLI', 'KTM', 'DNI', 'DNIc', 'GHI', 'GHIc']
+#                    outDataDict_seg = insert_pixDict_to_segDict(SatDataDict_px, outDataDict_seg, output_keystoprocess, subseg_bbox, seg_y_px, seg_x_px )
+#
+#                    jobs.__delitem__(job_key)
+#                out_queue.task_done() #remove job outputs form queue
+#
+#
+#
+#        #write output to NC files
+#        if verbose: print 'Write output', datetime.datetime.now()
+#        for ochan in realtime_channels:
+#            if not(ochan in outDataDict_seg.keys()):
+#                print 'Missing %s to write to NC' % (ochan)
+#                continue
+#            #this is to wrtite only slots that had to be calculated
+#            for dfb in range(dfbStart, dfbEnd+1):
+#                dfb_idx = dfb -  dfbStart
+#                slotStart_write = himawariSlotStart
+#                slotEnd_write = himawariSlotEnd
+#                if dfb==dfbStart:
+#                    slotStart_write = max(slotStart_calc,himawariSlotStart)
+#                if dfb==dfbEnd:
+#                    slotEnd_write = min(slotEnd_calc,himawariSlotEnd)
+#                slotStart_write_idx=slotStart_write-himawariSlotStart
+#                slotEnd_write_idx=slotEnd_write-himawariSlotStart
+#                out_array = outDataDict_seg[ochan][dfb_idx:dfb_idx+1,slotStart_write_idx:slotEnd_write_idx+1 ,:,:]
+#                himawari_nc_latlontools.write_output_nc(ochan, out_array, realtime_files_dict, outdata_suffix, dfb, dfb, slotStart_write, slotEnd_write, subseg_bbox, verbose=verbose, file_time_segmentation = realtime_file_time_segmentation)
+#
+#        
+#        seg_end_time = datetime.datetime.now()
+#        if verbose: 
+#            print 'Segment finished:', datetime.datetime.now()
+#            print "Segment processing time:" + str(seg_end_time - seg_start_time)
+#
+#
+##        print 'DONE'
+##        return True
+#            
+#        del(solarGeom_TimesDict_seg,SatDataDict)
+#            
+#
+#    if do_parallel:
+#        #kill the workers
+#        for t in workers:
+##            print t.name
+#            t.terminate()
+#            t.join()
+#    
+#    print "TODO: PROCESS UPFRONT CLEARSKY"
+#    
+#    
+#    return True
+
+def model_core_pnt_noktm(OutDataDict, solarGeom_TimesDict, dfbStart, dfbEnd , lon, lat, alt, dfb_eps, dfb_aod, dfb_wv, atmosph, dfb2doy_arr, dfb2year_arr, dfb_pert, verbose):
+     
+#    #remove trail window from data
+#    SatDataDict2, solarGeom_TimesDict2 = remove_trial_window(SatDataDict, solarGeom_TimesDict, trail_window_size)
+#    if  False: #Classified data plot
+#        class_data_plot(SatDataDict2, solarGeom_TimesDict2, dfbStart_ext, dfbEnd, UB_monthly, dfb_alt_snow_probab)
+#    
+    
+    #calculate GHI & DNI    
+    calculate_GHI(OutDataDict, solarGeom_TimesDict, dfb_eps, dfb_aod, dfb_wv, alt, lon, atmosph, verbose=verbose)
+    calculate_DNI(OutDataDict, solarGeom_TimesDict, dfb_eps, dfb_aod, dfb_wv, alt, lon, atmosph, verbose=verbose)
+    
+    
+    return OutDataDict, solarGeom_TimesDict
+
+
+
+def model_core_pnt(SatDataDict, solarGeom_TimesDict, dfbStart_ext, dfbStart, dfbEnd , trail_window_size, lon, lat, alt, dfb_eps, dfb_aod, dfb_wv, atmosph, dfbext2doy_arr, dfbext2year_arr, dfbext_pert, UB_monthly, LB_loaded, LBland_loaded, LB_QR_weights, verbose):
+    
+    #data used in classification
+#    replaced by faster version 2016/08/17 - for low number of dfbs it is calculated directly for dfb, not through doys
+#    doy_alt_snow_probab = corrections.alt_snow_probab_for_doys(alt, lat)
+#    dfb_alt_snow_probab = doy_alt_snow_probab[dfbext2doy_arr]
+    if (dfbEnd -dfbStart)  > 40:
+        doy_alt_snow_probab = corrections.alt_snow_probab_for_doys(alt, lat)
+        dfb_alt_snow_probab = doy_alt_snow_probab[dfbext2doy_arr]
+    else:
+        dfb_alt_snow_probab = corrections.alt_snow_probab_for_dfbs(alt, lat,dfbStart_ext, dfbEnd)
+        
+    #calculate variability for vis_ref and ir4_bt
+    calculateSatelliteIndexes(SatDataDict, solarGeom_TimesDict, verbose=verbose)
+    
+    
+    #calculate UB
+    if (UB_monthly is None) or (UB_monthly.sum() ==0):
+        UB_monthly=calculate_UB(SatDataDict,solarGeom_TimesDict, dfbStart_ext, dfbEnd, verbose=verbose)
+        UB_monthly = numpy.round(UB_monthly, 4)
+        if False: #UB 
+            UB_analysis_plot(SatDataDict,solarGeom_TimesDict,UB_monthly,dfbStart_ext,dfbEnd)
+    
+    #specatral classification
+    sat_data_classif2(SatDataDict,solarGeom_TimesDict, dfb_alt_snow_probab, lon, verbose=verbose)
+    if False: #Classified data plot
+        class_data_plot(SatDataDict, solarGeom_TimesDict, dfbStart_ext, dfbEnd, UB_monthly,dfb_alt_snow_probab)
+        
+ 
+    #calculate LB
+    calculate_LB(SatDataDict,solarGeom_TimesDict,LB_loaded, LBland_loaded, trail_window_size, lon, lat, dfbStart_ext, dfbEnd, LB_QR_weights=LB_QR_weights, verbose=verbose)
+    if  False: #Classified data plot
+        class_data_plot(SatDataDict, solarGeom_TimesDict, dfbStart_ext, dfbEnd, UB_monthly, dfb_alt_snow_probab)
+
+
+    
+    
+    #remove trail window from data
+    SatDataDict2, solarGeom_TimesDict2 = remove_trial_window(SatDataDict, solarGeom_TimesDict, trail_window_size)
+    if  False: #Classified data plot
+        class_data_plot(SatDataDict2, solarGeom_TimesDict2, dfbStart_ext, dfbEnd, UB_monthly, dfb_alt_snow_probab)
+    
+    #calculate CI and KTM
+    calculate_CI(SatDataDict2, solarGeom_TimesDict2, UB_monthly, dfbStart, dfbEnd, verbose=verbose)
+    postprocess_CI(SatDataDict2, solarGeom_TimesDict2, lon, lat, dfbStart, dfbEnd, verbose=verbose)
+    calculate_ktm(SatDataDict2, solarGeom_TimesDict2, lat, verbose=verbose)
+    
+    #calculate GHI & DNI    
+    calculate_GHI(SatDataDict2, solarGeom_TimesDict2, dfb_eps, dfb_aod, dfb_wv, alt, lon, atmosph, verbose=verbose)
+    calculate_DNI(SatDataDict2, solarGeom_TimesDict2, dfb_eps, dfb_aod, dfb_wv, alt, lon, atmosph, verbose=verbose)
+    
+    SatDataDict2['LBclass'] = SatDataDict2['class']
+    
+    return SatDataDict2, solarGeom_TimesDict2, UB_monthly
+
+
+def model_core_pnt_nolb(SatDataDict, solarGeom_TimesDict, dfbStart, dfbEnd, lon, lat, alt, dfb_eps, dfb_aod, dfb_wv, atmosph, dfb2doy_arr, dfb2year_arr, dfb_pert, UB_monthly, verbose, do_sat_classification=True):
+    
+    if do_sat_classification:
+        #0:25
+        #data used in classification
+        if (dfbEnd -dfbStart)  > 40:
+            doy_alt_snow_probab = corrections.alt_snow_probab_for_doys(alt, lat)
+            dfb_alt_snow_probab = doy_alt_snow_probab[dfb2doy_arr]
+            #3:32
+        else:
+            dfb_alt_snow_probab = corrections.alt_snow_probab_for_dfbs(alt, lat,dfbStart, dfbEnd)
+            #0:33        
+        #3:32, 0:27, 0:28
+    
+        #calculate variability for vis_ref and ir4_bt
+        calculateSatelliteIndexes(SatDataDict, solarGeom_TimesDict, verbose=verbose)
+        #3:43, 0:43, 0:39
+        
+        #specatral classification
+        sat_data_classif2(SatDataDict,solarGeom_TimesDict, dfb_alt_snow_probab, lon, verbose=verbose, use_roll_slots=False)
+        #4:34, 1:27, 1:11
+    else: 
+        SatDataDict['class'] = numpy.empty_like(SatDataDict['NORPIX'])
+        SatDataDict['class'][...] = numpy.nan
+        
+    #calculate CI and KTM
+    calculate_CI(SatDataDict, solarGeom_TimesDict, UB_monthly, dfbStart, dfbEnd, verbose=verbose)
+    #5:18, 2:12, 1:50
+    postprocess_CI(SatDataDict, solarGeom_TimesDict, lon, lat, dfbStart, dfbEnd, verbose=verbose, use_roll_slots=False, empty_tail_rolled_slots=False)
+    #6:06, 2:46, 2:15
+    calculate_ktm(SatDataDict, solarGeom_TimesDict, lat, verbose=verbose)
+    #5:47, 2:47, 2:18
+    
+    #calculate GHI & DNI    
+    calculate_GHI(SatDataDict, solarGeom_TimesDict, dfb_eps, dfb_aod, dfb_wv, alt, lon, atmosph, verbose=verbose)
+    calculate_DNI(SatDataDict, solarGeom_TimesDict, dfb_eps, dfb_aod, dfb_wv, alt, lon, atmosph, verbose=verbose)
+    #6:12, 3:13, 2:34
+    
+    SatDataDict['LBclass'] = SatDataDict['class']  
+    SatDataDict['LBland'] = SatDataDict['LB']
+    
+    return SatDataDict

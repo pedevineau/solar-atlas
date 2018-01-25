@@ -1,0 +1,128 @@
+__author__ = 'jano'
+
+
+
+import os
+import sys
+import logging
+from himawari8.utils import get_nc_info, read_himawari8_nc
+from nclib.core.const_defs import ST_TIME_MONTH
+from himawari8.converters.nc2nc import h08chn2geosnc
+from himawari8.data_classes import get_table
+import datetime
+logger = logging.getLogger()
+logging.basicConfig()   
+
+
+def h082geos(out_folder=None, incoming_folder=None,   conn_dict=None, channels_to_process=None, nc_chunksizes=None,  min_nc_age_secs=None, nc_prefix=None, nc_time_segtype=None,  log_level=None, disk_label=None):
+
+    #set logger
+    logger.setLevel(log_level)
+
+    nc_files = get_nc_info(folder=incoming_folder, min_nc_age_seconds=min_nc_age_secs, channel_numbers=channels_to_process)
+
+    #setup DB stuff
+    table_name = 'processed'
+    processed_table = get_table(table_name=table_name, **conn_dict)
+    db_data = [] #this list will hold the records
+    if nc_files.size > 0:
+        logger.info('Starting to process %s NetCDF files from %s ' % (nc_files.size, incoming_folder ))
+        for i, r in enumerate(nc_files):
+            try:
+                fn, chn, dfb, slot, sz = r
+                dt = datetime.datetime.strptime(fn[9:21], '%Y%m%d%H%M')
+                to_process_ncfile = os.path.join(incoming_folder, fn)
+                logger.debug('CONVERTING ABOM NetCDF %s TO GEOSTATIONARY NetCDF...' % to_process_ncfile)
+
+                gt, ssp, prj_str, channel_var_def, channel_data = read_himawari8_nc(ncfile_path=to_process_ncfile)
+                channel_var_def['chunksizes']=nc_chunksizes
+                h08chn2geosnc(nc_out_folder=out_folder, channel_array=channel_data, dfb=dfb, slot=slot, prefix=nc_prefix, time_seg_type=nc_time_segtype, proj4_str=prj_str, var_def=channel_var_def, geo_transform=gt, ssp=ssp)
+                db_data.append({'file_name': fn, 'dfb': dfb, 'slot':slot, 'datetime': dt, 'file_size': sz, 'disk':disk_label, 'channel_name': channel_var_def['name'], 'ssp':ssp, 'gt':str(gt)})
+                # push the data to database, assuming nothing weird is happening with DNS and the db server is reachable
+
+                if i % 100 == 0 or i == nc_files.size - 1: #every 100 files or so
+                    processed_table.bulk_upsert(data=db_data)
+                    db_data = []
+            except Exception as e:
+                logger.error('%s occurred while converting original NC %s to NetCDF. ' % (e, to_process_ncfile))
+                sys.exit(1)
+
+            except KeyboardInterrupt as ke:
+
+                raise ke
+            finally:
+                if 'db_data' in locals():
+                    if len(db_data) > 0:
+                        processed_table.bulk_upsert(data=db_data)
+        return nc_files
+    else:
+        logger.info('No NetCDF files to process in folder {0}'.format(incoming_folder))
+
+          
+if __name__ == '__main__':
+    ##################################################
+    # IO FOLDERS
+    ###################################################
+
+    incoming_nc_folder  = '/home/jano/Desktop/himawari/OPERATIONAL/INCOMING/'
+    geos_nc_folder = '/home/jano/Desktop/himawari/OPERATIONAL/OUTNC/GEOS/'
+
+
+    ##################################################
+    # GENERAL PROCESSING
+    ###################################################
+    loglevel = 'DEBUG'
+    #currently we receive 20 channels where teh first four are the downsampled version of the last four
+    channels_to_process = [3,7,8,13,15]
+    disk_label='HM001'
+
+    ##################################################
+    # COMPUTATINAL PROCESSING
+    ###################################################
+
+    min_nc_age_secs = 1
+
+    ##################################################
+    # NC PROPERTIES
+    ###################################################
+    nc_time_segtype = ST_TIME_MONTH
+    max_nc_age_days = 60
+    nc_prefix = 'H08GEOS'
+    nc_chunksizes = [4,8,32,32]
+
+
+
+    ##################################################
+    # DATABASE
+    ###################################################
+    dbengine = 'postgresql'
+    host = 'dbsatarchive'
+    database = 'himawari_archive'
+    password = 'itNov6'
+    user = 'sat_oper'
+    port = 5432
+    conn_dict = {'dbengine': dbengine, 'host': host, 'port': port, 'database': database, 'user': user, 'password': password}
+
+
+
+    ##################################################
+    # EMAIL
+    ###################################################
+
+    # email_receivers = ['tomas.cebecauer@geomodel.eu', 'ioan.ferencik@geomodel.eu']
+    email_receivers = ['ioan.ferencik@geomodel.eu']
+
+
+
+    h082geos(out_folder=geos_nc_folder,
+            incoming_folder=incoming_nc_folder,
+            conn_dict=conn_dict,
+            channels_to_process=channels_to_process,
+            nc_chunksizes=nc_chunksizes,
+            min_nc_age_secs=min_nc_age_secs,
+            nc_time_segtype=nc_time_segtype,
+            nc_prefix=nc_prefix,
+            log_level=loglevel,
+            disk_label=disk_label
+    )
+    

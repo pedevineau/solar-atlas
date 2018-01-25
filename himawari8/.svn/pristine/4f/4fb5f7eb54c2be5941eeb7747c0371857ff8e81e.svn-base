@@ -1,0 +1,426 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""Himawari8 downloader
+@author: Milos Korenciak"""
+
+from __future__ import print_function
+
+import datetime as DT
+import itertools
+from threading import Thread
+
+from himawari8 import data_classes as DC
+from himawari8 import slotmapping
+from himawari8.utils import *
+from general_utils.basic_ftp import FTPConnection, GeneratorDrivenThread, FileNotFoundError, GeneralFtpError, \
+    file_exists, DownloadedFileParts
+from general_utils.basic_lock import *
+from general_utils.daytimeconv import date2dfb
+
+# H08_CHANNEL_NUMBERS = ('01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13', '14', '15', '16', '18', '19', '20', '21')
+# __H08_CHANNEL_NAMES_TUP = ('VIS047_2000', 'VIS051_2000', 'VIS064_2000', 'VIS086_2000', 'VIS160_2000', 'VIS229_2000', 'IR390_2000', 'IR620_2000', 'IR690_2000', 'IR730_2000', 'IR860_2000', 'IR960_2000', 'IR104_2000', 'IR112_2000', 'IR124_2000', 'IR133_2000', 'VIS047_1000', 'VIS051_1000', 'VIS064_0500', 'VIS086_1000')
+# H08_CHANNEL_NAMES = dict(zip(H08_CHANNEL_NUMBERS,__H08_CHANNEL_NAMES_TUP))
+
+
+logger = make_logger(__name__)
+logger.setLevel(11)
+
+# default config ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#
+# Search these local directories. If the file is there, it is in processing = do not download again!
+LOCAL_CHECK_EXISTENCE_DIRS = ["/data/HIMAWARI8_OPERATIONAL/BACKUP", "/data/HIMAWARI8_OPERATIONAL/CORRUPTED",
+                              "/data/HIMAWARI8_OPERATIONAL/PROCESSED", "/data/HIMAWARI8_OPERATIONAL/TO_PROCESS", ]
+for dirpath, dirnames, filenames in os.walk("/mnt/bay_hdd/"):
+    LOCAL_CHECK_EXISTENCE_DIRS.append(dirpath)
+# 'Local' mirror directories. Will be searched before the core download from FTP. If the correct file(name) found,
+# the mirror will be used
+MIRRORS = []
+MIRRORS += ["/net/mab/data/HIMAWARI8_OPERATIONAL/INCOMING",
+
+            "/net/himalia/data/HIMAWARI8_OPERATIONAL/BACKUP", "/net/himalia/data/HIMAWARI8_OPERATIONAL/PROCESSED",
+            "/net/himalia/data/HIMAWARI8_OPERATIONAL/TO_PROCESS", "/net/himalia/data/HIMAWARI8_OPERATIONAL/INCOMING",
+
+            "/net/cupid/data/HIMAWARI8_OPERATIONAL/BACKUP", "/net/cupid/data/HIMAWARI8_OPERATIONAL/PROCESSED",
+            "/net/cupid/data/HIMAWARI8_OPERATIONAL/TO_PROCESS", "/net/cupid/data/HIMAWARI8_OPERATIONAL/INCOMING", ]
+for dirpath, dirnames, filenames in os.walk("/net/cupid/mnt/bay_hdd/"):
+    MIRRORS.append(dirpath)
+MIRRORS += ["/net/surtur/data/HIMAWARI8_OPERATIONAL/BACKUP", "/net/surtur/data/HIMAWARI8_OPERATIONAL/PROCESSED",
+            "/net/surtur/data/HIMAWARI8_OPERATIONAL/TO_PROCESS", "/net/surtur/data/HIMAWARI8_OPERATIONAL/INCOMING", ]
+
+CONSTANTS = {
+    "MIRRORS": MIRRORS, "LOCAL_CHECK_EXISTENCE_DIRS": LOCAL_CHECK_EXISTENCE_DIRS,
+    # COMMENT channels you do not want to download. They will be selected through listing
+    "CHANNELS_TO_DOWNLOAD": [
+        '01',  # VIS047_2000
+        '02',  # VIS051_2000
+        '03',  # VIS064_2000
+        '04',  # VIS086_2000
+        '05',  # VIS160_2000
+        '06',  # VIS229_2000
+        '07',  # IR390_2000
+        '08',  # IR620_2000
+        '09',  # IR690_2000
+        '10',  # IR730_2000
+        '11',  # IR860_2000
+        '12',  # IR960_2000
+        '13',  # IR104_2000
+        '14',  # IR112_2000
+        '15',  # IR124_2000
+        '16',  # IR133_2000
+        '18',  # VIS047_1000
+        '19',  # VIS051_1000
+        '20',  # VIS064_0500
+        '21',  # VIS086_1000
+    ],
+    # Mail the error stacktrace to this people if the downloader crashes
+    "EMAIL_RECEIVERS": ['milos.korenciak@solargis.com', 'ioan.ferencik@solargis.com', 'tomas.cebecauer@solargis.com'],
+    # Credentials to connect to given FTP
+    "HOST": "ftp.bom.gov.au",
+    "USER": 'bom560',
+    "PASSWORD": 'S3frD1Ad',
+    "FTP_DIRS": ["/register/bom560/gms/"],
+    # Where to download the files
+    "LOCAL_DESTINATION_DIR": "/data/HIMAWARI8_OPERATIONAL/INCOMING",
+
+    # For downloading, use this count of connections - each in its own thread
+    "OVERRIDE_CONNECTIONS_COUNT": None,  # not to override
+    # DB connection credentials
+    "DB_NAME": "himawari_archive",
+    "DB_USER": "sat_oper",
+    "DB_PASSWORD": "itNov6",
+    "DB_HOST": "localhost",
+    # Override the table name for downloaded records (None =default = 'downloaded')
+    "DB_TABLE_NAME": None,
+    # Latency = download the files old at least this timespan
+    "LATENCY": DT.timedelta(0, 20 * 60),
+    # Max age = maximum age of file to download; 2016-08-09 was published 2016-04-21 data
+    "MAX_AGE": DT.timedelta(10, 0),  # 10 days is maximum age of file to be downloaded from FTP
+}
+#
+# end of config ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# if you want to tweak the downloader, you probably want to change the last section if __name__ == "__main__":
+
+
+
+#
+# ### The app logic = working classes
+class JustDownloadedElsewhereException(Exception):
+    """Exception when another machine is jut downloading tha same file"""
+    pass
+
+
+class GeneratorDrivenThread(Thread):
+    """The thread for implementing USER_LIMIT for multiThreaded download"""
+
+    def __init__(self, task_list, fail_list=None):
+        """Creates Thread running functions from queue
+        :param task_list: list of task in form: [[callable, arg_1_for_callable, ...], ...]
+        :param fail_list: list containing args for callable which failed
+        :return: None"""
+        fail_list = fail_list or []  # mutables cannot be in method call
+        assert type(task_list) == list, "Constructor takes LIST only as list.pop is thread safe!"
+        self.list_initial = task_list
+        self.list_postponed = []
+        self.fail_list = fail_list
+        super(GeneratorDrivenThread, self).__init__()
+
+    def run(self):
+        """Runs the functions from list_ until it is empty"""
+        chained_tasks = itertools.chain(self.list_initial, self.list_postponed)
+        while chained_tasks:
+            try:
+                execution_data = self.list_initial.pop()  # this is thread safe  # take the last element
+                function_ = execution_data["function"]
+                logger.debug("going to call callback")
+                function_(**execution_data)
+            except JustDownloadedElsewhereException as e:
+                # append once more at the end (= beginning of the list)
+                execution_data["postponable_count"] -= 1
+                self.list_initial.insert(0, execution_data)
+            except IndexError:
+                self.fail_list.append(execution_data)
+            except (SystemError, SystemExit, KeyboardInterrupt) as e:
+                self.fail_list.append(execution_data)
+                raise e  # Provides Ctrl-C responsive processing
+            except Exception as e:
+                self.fail_list.append(execution_data)
+                logger.error(str(self) + " thread had error: " + str(type(e)) + " : " + str(e))
+
+
+class Downloader:
+    """Class to download the data
+    To manipulate this class you need to understand THREADING, as process_one_file method is called in another thread.
+    The idea is: __init__() the object + kick-off by download().
+    download() perform this: get_file_list() and for each generate"""
+
+    def __init__(self, host, user, password, ftp_dir, local_dir, mirrors, local_check_exisence_dirs=None,
+                 connection_limit=None, patterns=None, latency=DT.timedelta(0), chunk_size=2 ** 20):
+        """Constructor method for the Downloader"""
+        patterns = patterns or ["*.nc"]  # mutables cannot be in method call
+        local_check_exisence_dirs = local_check_exisence_dirs or []
+        logger.info('Going to silently create the table')
+        DC.downloaded.create_table(fail_silently=True)
+        DC.database.close()
+        logger.debug('Table existence ensured')
+        self.f = FTPConnection(host=host, user=user, password=password, connection_limit=connection_limit)
+        self.ftp_dir = ftp_dir
+        self.local_dir = local_dir
+        self.mirrors = mirrors
+        self.patterns = patterns
+        self.local_check_exisence_dirs = local_check_exisence_dirs
+        self.latency = latency
+        self.chunk_size = chunk_size
+
+    def process_one_file(self, file_, anticipated_file_size, postponable_count=0, latency=DT.timedelta(0), **kwargs):
+        """Processing of one file: download it and write it to the DB
+        :param file_: name of file to download
+        :param anticipated_file_size: the presumed size of the file - if the file have the same name and size,
+          it is treated as correctly downloaded
+        :param postponable_count: the number of times the download of this file can be postponed to the end of task list
+          because another thread downloads the same file = now we see {file_}.tmp file
+        :param latency: download the files old at least this time
+        :return: None"""
+        # at 1st - download the file
+        logger.debug("1 running process one file for file: " + file_)
+
+        full_filename = os.path.join(self.local_dir, file_)
+        # IDE00221.201510090850.nc
+        # AAAAAACC.YYYYMMDDHHmm.nc
+        channel = file_[6:8]
+        channel_name = H08_CHANNEL_NAMES[channel]
+        year = int(file_[9:13])
+        month = int(file_[13:15])
+        day = int(file_[15:17])
+        hour = file_[17:19]  # we will need this formatted in string
+        minute = file_[19:21]  # we will need this formatted in string
+        date_time = datetime.datetime(year, month, day, int(hour), int(minute))
+        slot = slotmapping.hm2slot(hour, minute)
+        dfb = date2dfb(date_time.date())
+
+        # check age - if the file is too old enough, probably BOM published bad data
+        if date_time < DT.datetime.utcnow() - CONSTANTS["MAX_AGE"]:
+            return
+
+        # check latency - if the file is not old enough, skip it
+        if date_time > DT.datetime.utcnow() - latency:
+            return
+
+        for mirror in self.mirrors:
+            tmp_filename = os.path.join(mirror, file_, ".tmp")
+            if file_exists(tmp_filename) and postponable_count > 0:
+                raise JustDownloadedElsewhereException("The file " + file_ + " is just downloaded on mirror " + mirror)
+
+        f_downloader = self.f.clone()  # create ftp object (for now no connection is opened)
+        f_downloader.get(file_=file_, ftp_dir=self.ftp_dir, local_dir=self.local_dir, mirrors=self.mirrors,
+                         anticipated_file_size=anticipated_file_size)  # download the file - if needed, use FTP
+        f_downloader.quit_no_exception()  # disconnect
+
+        # process the downloaded file!
+        try:
+            file_size = os.path.getsize(full_filename)
+            logger.debug("2 size get successfully: " + str(file_size))
+            ddict = {'file_name': file_, 'datetime': date_time, 'slot': slot, 'dfb': dfb, 'file_size': file_size,
+                     'channel_name': channel_name}
+
+            # write to the DB and immediately close!
+            try:
+                DC.downloaded.bulk_upsert(data=[ddict])
+                DC.database.close()
+            except DC.pw.PeeweeException as e:
+                hostname = os.uname()[1]
+                estr = 'Exception "{0}" occurred when writing to database one data file of Himawari 8 ftp download. Other info: {1}'.format(
+                    traceback.print_exc(e), str(e))
+                logger.error(estr)
+                basic_mail.mail_process_message_ssl(sender_from=hostname + "@solargis.com",
+                                                    reciever_to=CONSTANTS["EMAIL_RECEIVERS"],
+                                                    subject='Himawari8 ftp download error on ' + hostname,
+                                                    message=estr)
+            logger.info("3 File {} was downloaded and recorded into DB".format(os.path.join(self.ftp_dir, file_)))
+        except (SystemError, SystemExit, KeyboardInterrupt) as e:
+            raise e  # Provides Ctrl-C responsive processing
+        except DC.IntegrityError as e:
+            logger.warning(
+                "Problem: the record for file " + os.path.join(self.ftp_dir, file_) + " exists yet.\nError " + str(e))
+        except (OSError, FileNotFoundError) as e:
+            logger.error("File " + os.path.join(self.ftp_dir, file_) + " not get successfully?\nError " + str(e))
+        except Exception as e:
+            logger.error("Unspecific error occured: " + str(type(e)) + str(e) + "when downloading file " + os.path.join(
+                self.ftp_dir, file_))
+            raise e
+
+    def generate_file_list(self):
+        """Generator. Iterates over the files in the FTP directory with required pattern.
+        Yields {"file": file_name, "size": ftp_file_size} dicts"""
+        # Iterate over ftp directory at second
+        for pattern in self.patterns:
+            try:  # add to chain
+                generator = self.f.list_files(ftp_dir=self.ftp_dir, pattern=pattern)
+                for entry in generator:
+                    # logger.debug("The file processing: " + entry)
+                    if not entry.startswith("-"):  # download files only
+                        continue
+                    file_name = entry.split()[-1]  # get entry name only
+                    ftp_file_size = int(entry.split()[4])
+                    yield {"file": file_name, "size": ftp_file_size}
+            except GeneralFtpError as e:
+                logger.error("*********\nProblem - it was even not possible to list the files!\nError: " + str(type(e)) + str(e))
+                # raise e  # silenced - we just do the best effort, we informed FTP is not responsible
+
+    def generator_check_local_existence(self, file_name_size_iterable):
+        """Generator (filter). Takes another generator of (file_,size_) tuples, Filter out tuples of files, which exist
+        in any of self.local_check_exisence_dirs"""
+        for dct in file_name_size_iterable:
+            for check_dir in self.local_check_exisence_dirs:
+                if file_exists(os.path.join(check_dir, dct["file"])):
+                    break
+            else:  # this is for..else; is run only if the break is not used
+                yield dct
+
+    def always_true(self, **kwargs):
+        """Method to return always True, accepting any **kwargs"""
+        return True
+
+    def generate_tasks4downloading(self, file_name_size_iterable):
+        """Generator. Iterates over (file_,size_) tuples from file_name_size_iterable and creates the tasks to download
+        the files rom the FTP. The tasks are {} with "function" key representing the callback to be called.
+        If the callback running finishes should return True if the file is successfully downloaded
+        :return generator with elements: {"function": callback returning True if file download finished successfully,
+                                          ["key":value <-- other **kwargs of the previous callback]}"""
+        for file_, size_ in file_name_size_iterable:
+            if self.f.get_from_mirrors_only(file_=file_, ftp_dir=self.ftp_dir, local_dir=self.local_dir,
+                                         mirrors=self.mirrors, anticipated_file_size=size_):
+                yield {"function": self.always_true, "file": file_, "size": size_}
+                continue
+            # the file was not found on any mirror - lets create the download object for it
+            dpf = DownloadedFileParts(file_n=file_, size=size_, ftp_dir=self.ftp_dir, local_dir=self.local_dir,
+                                      chunk_size=self.chunk_size)
+            for i in range(dpf.parts_count()):
+                yield {"function": dpf.get_file_part, "file": file_, "size": size_}
+
+    def generate
+
+    def download(self):
+        """Method to download the data and write info about them to the DB"""
+        # files = ['IDE00201.201511040410.nc', 'IDE00201.201511040420.nc',]
+
+        # ## This is inspired by the FTPConnection.get_in_threads_multiple
+        task_list = self.generate_tasks4downloading()
+        task_list = []  # TODO:
+        for file_name, ftp_file_size in self.get_file_list():
+            dfp = DownloadedFileParts(file_n=file_name, size=ftp_file_size, ftp_dir=self.ftp_dir,
+                                      local_dir=self.local_dir)
+            for i in range(dfp.parts_count()):
+                 task_list.append({"function": dfp.get_file_part, "ftp_o": ftp, "n_th": i})
+        # optimize the download order; oldest first!
+        task_list = sorted(task_list, key=lambda x: x["file_"].split(".")[1], reverse=True)
+
+        fail_list = []
+        worker_list = []
+        self.f.quit_no_exception()  # we can now close the initial listing connection
+
+        for _ in range(self.f.get_connection_limit()):
+            worker = GeneratorDrivenThread(task_list=task_list, fail_list=fail_list)
+            logger.debug("starting " + str(worker))
+            worker_list.append(worker)
+            worker.start()
+
+        for worker in worker_list:
+            try:
+                while worker.isAlive(): # Waiting for the thread to finish
+                    worker.join(2)
+            except (SystemError, SystemExit, KeyboardInterrupt) as e:
+                while task_list:
+                    task_list.pop()
+                raise e  # Provides Ctrl-C responsive processing
+
+        if fail_list:
+            logger.error("This files were not downloaded (see logs above): " + str(fail_list))
+        else:
+            logger.info("All files were downloaded correctly!")
+
+
+def is_running(name=None, ipid=os.getpid()):
+    """Checks is the python  script "name" is running. Basically this functions should be used
+    from within the same script
+    If the script is running:
+        returns True, pid, string representing the running time in format [[dd-]hh:]mm:ss
+    else
+        If is not running returns False, None, None
+
+    @args:
+        @name, str, the name of program|script
+        @ipid, int, the rocess id of the"""
+    if not os.path.isabs(name):
+        raise ValueError, 'The script name "%s" is not an absolute path' % name
+    py_processes = os.popen("ps aux |grep python").read()
+    exists, pid, start_time_string = False, None, None
+    for pline in py_processes.splitlines():
+        if name in pline:
+            pid = int(pline.rsplit()[1])
+            if pid != ipid:
+                start_time_string = os.popen('ps -p %s -o etime=' % pid).read().strip()
+                exists = True
+                break
+        if exists:
+            break
+    return exists, pid, start_time_string
+
+
+def main(main_file_path):
+    """If run from the console"""
+    # ## Process locking - The process must be SINGLETON = max 1 instance in any time!
+    hostname = os.uname()[1]
+    try:
+        # set the custom table name in the database
+        DC.downloaded._meta.db_table = CONSTANTS["DB_TABLE_NAME"] \
+            if CONSTANTS["DB_TABLE_NAME"] is not None else "downloaded"
+        DC.database.initialize(DC.PostgresqlDatabase(CONSTANTS["DB_NAME"], user=CONSTANTS["DB_USER"],
+                                                     password=CONSTANTS["DB_PASSWORD"], host=CONSTANTS["DB_HOST"]))
+        # DC.database.initialize(DC.SqliteDatabase("small_db.sqlite"))
+
+        if not CONSTANTS["FTP_DIRS"]:
+            raise Exception("""You are going to download no channels! This is not supported! Uncoment some of them!""")
+
+        logger.debug('Checking if %s is running already...' % main_file_path)
+        ipid = os.getpid()
+        isrunning, pid, start_s_time = is_running(main_file_path, ipid)
+        if isrunning:
+            if '-' in start_s_time:  # script is running for more than one day, send message
+                sday, stime = start_s_time.split('-')
+                basic_mail.mail_process_message_ssl(sender_from=hostname + "@solargis.com",
+                                                    reciever_to=CONSTANTS["EMAIL_RECEIVERS"],
+                                                    subject='Himawari ftp download warning on ' + hostname,
+                                                    message='The script {} is running for {} day(s) and {} on {}' % (
+                                                        __file__, sday, stime, hostname))
+            logger.error('The script is already running... bailing out!')
+            sys.exit(1)
+        # set files to be downloaded
+        if not CONSTANTS["CHANNELS_TO_DOWNLOAD"]:
+            raise Exception("""You are going to download no channels! This is not supported! Uncoment some of them!""")
+        patterns = []
+        for channel_no in CONSTANTS["CHANNELS_TO_DOWNLOAD"]:
+            patterns.append("IDE002" + channel_no + "*.nc")
+        logger.debug("Downloader - go go go!")
+        for ftp_dir in CONSTANTS["FTP_DIRS"]:
+            d = Downloader(host=CONSTANTS["HOST"], user=CONSTANTS["USER"], password=CONSTANTS["PASSWORD"],
+                           ftp_dir=ftp_dir, local_dir=CONSTANTS["LOCAL_DESTINATION_DIR"], mirrors=CONSTANTS["MIRRORS"],
+                           local_check_exisence_dirs=CONSTANTS["LOCAL_CHECK_EXISTENCE_DIRS"],
+                           latency=CONSTANTS["LATENCY"], connection_limit=CONSTANTS["OVERRIDE_CONNECTIONS_COUNT"],
+                           patterns=patterns)
+            d.download()
+        logger.debug("Downloader - finished without exceptions")
+
+    except Exception as e:
+        estr = '''Exception "{}" occurred on Himawari 8 ftp download
+                    Host: {}.
+                    Exception: {}'''.format(traceback.print_exc(e), hostname, str(e))
+        logger.error(estr)
+        basic_mail.mail_process_message_ssl(sender_from=hostname + "@solargis.com",
+                                            reciever_to=CONSTANTS["EMAIL_RECEIVERS"],
+                                            subject='Himawari8 ftp download error on ' + hostname,
+                                            message=estr)
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main(os.path.abspath(__file__))

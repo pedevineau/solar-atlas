@@ -150,31 +150,25 @@ if __name__ == '__main__':
     channel_number = 1
     display_curves = False
     type_channels = types_channel[channel_number]
-    dfb_beginning = 13517
+    dfb_beginning = 13525
     nb_days = 5
     dfb_ending = dfb_beginning + nb_days - 1
-    latitude_beginning = 40.
-    latitude_end = 45.
-    longitude_beginning = 125.
-    longitude_end = 130.
-
-    from utils import get_times
-    times = get_times(dfb_beginning, dfb_ending, 10, 1)
-    from angle_zenith import get_cos_zen, get_zenith_angle
+    latitude_beginning = -5.
+    latitude_end = 0.
+    longitude_beginning = 100.  # 125.
+    longitude_end = 105.  # 130.
 
     date_begin, date_end = print_date_from_dfb(dfb_beginning, dfb_ending)
     lat, lon = get_latitudes_longitudes(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
 
-    cos_zen = get_cos_zen(times, lat, lon)
     bbox = get_bbox(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
-
-    visualize_map_time(cos_zen, bbox)
 
     features = get_features(type_channels, lat, lon, dfb_beginning, dfb_ending, compute_indexes_, slot_step=1,
                             normalize=False)
 
 
-
+    # from bias_checking import medians_index
+    # medians_index(features[:, 20:-20, 20:-20, 1], (features[:, 20:-20, 20:-20, 1] < 0.05))
 
     # gra = True
     # if gra:
@@ -213,10 +207,11 @@ if __name__ == '__main__':
 
     if type_channels == 'infrared' and not compute_indexes_:
         visualize_map_time(features[:, :, :, 0:4], bbox, title=type_channels, vmin=240, vmax=300, color='gray')
+        # visualize_map_time(features[:, :, :, 1]-features[:, :, :, 0], bbox, title=type_channels, vmin=-10, vmax=10, color='gray')
     elif not compute_indexes_:
-        visualize_map_time((features[:, :, :, :]), bbox, title=type_channels, vmin=-1, vmax=1, color='gray')
+        visualize_map_time((features[:, :, :, :]), bbox, title=type_channels, vmin=0, vmax=1, color='gray')
     else:
         visualize_map_time(features[:, :, :, :], bbox, title=type_channels, vmin=-2
-                           , vmax=2, color='gray')
+                           , vmax=1, color='gray')
     # visualize_map_time(4*features[:, :, :, 1:3], bbox, title='INFRARED', vmin=0, vmax=1, color='gray')
     raise Exception('stop here for now')

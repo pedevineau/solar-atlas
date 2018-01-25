@@ -1,0 +1,135 @@
+#! /usr/bin/env python
+# msg_model_out_merge_segments
+#
+# last revision: 08/11/2009
+#
+
+
+import os
+import numpy
+
+from general_utils import latlon_nctools
+from general_utils import daytimeconv
+#logger section
+from general_utils import basic_logger
+logger = basic_logger.basic_logger_make(basic_logger.get_run_module_name()+'.main', 'info')
+
+
+
+def percentiles_weights_dict(percentiles):
+	if len(percentiles)==0:
+		return {}
+	if len(percentiles)==1:
+		return {percentiles[0]:1.0}
+	
+	#make sorted percentiles
+	spercentiles=list(percentiles)
+	spercentiles.sort()
+
+	if spercentiles[0] < 0:
+		return None
+	if spercentiles[-1] > 100:
+		return None
+
+	percentile_wghts={}
+	for indx in range(0,len(spercentiles)):
+		if indx==0:
+			first_half=spercentiles[indx]-0
+		else:
+			first_half=(spercentiles[indx]-spercentiles[indx-1])/2.
+			
+		if indx==(len(spercentiles)-1):
+			second_half=100-spercentiles[indx]
+		else:
+			second_half=(spercentiles[indx+1]-spercentiles[indx])/2.
+		
+		weight=(first_half+second_half)/100.
+		percentile_wghts[spercentiles[indx]]=weight
+	
+	return percentile_wghts
+
+def percentiles_names_list(percentiles, prefix='P', suffix=''):
+	perc_names=[]
+	for perc in percentiles:
+		perc_names.append(prefix+str(perc)+suffix)
+	return perc_names
+
+
+#------------------------------------------------------------
+# main
+#------------------------------------------------------------
+
+if __name__ == "__main__":
+	
+	lon, lat = 115.+(1/60.), 55.-(1/60.)
+
+	param = 'DNI'
+
+	#HIMAWARI
+	in_dir = '/data/model_data_himawari/data_output_wgs84/v20/'
+	in_dir = '/home1/model_data_himawari/data_output_wgs84/v20/'
+	first_year=2016
+	time_step_min=10
+
+	#HIMAWARI_MTSAT combined
+	in_dir = '/net/kale/data/model_data_himawari/data_output_wgs84/v20_combined_2007_2016/'
+#	in_dir = '/home1/model_data_himawari/data_output_wgs84/v20_combined_2007_2016/'
+	first_year=2007
+	time_step_min=15
+
+	
+
+	region_suffix='_pan'
+	
+	percentiles = [1, 10, 25, 50, 75, 90, 99]
+	percentiles_weights_d=percentiles_weights_dict(percentiles)
+	percentiles_names_l=percentiles_names_list(percentiles)
+	
+	
+
+	ncfile, variab =param+'_d_m'+region_suffix+'.nc', param+'_d_m'
+	data=latlon_nctools.read_projected_data_for_lonlat_point(os.path.join(in_dir,ncfile), variab, lon, lat)
+	print ncfile, variab
+	years=data.shape[0]
+	ssum=0
+	for year in range(0,years):
+		sum=0
+		for month in range(0,12):
+			sum+=data[year,month]*daytimeconv.month_days[daytimeconv.leapyear(year+first_year)][month+1]
+		print year+first_year, sum/1000.
+		ssum+=sum
+	print 'average ',ssum/1000./years
+
+	ncfile, variab =param+'_d_m_stats'+region_suffix+'.nc', 'mean'
+	data=latlon_nctools.read_projected_data_for_lonlat_point(os.path.join(in_dir,ncfile), variab, lon, lat)
+	print ncfile, variab
+	print data,  data.mean()*0.36525
+
+	out=numpy.zeros((12),numpy.float32)
+	for i in range(0,len(percentiles)):
+		pname=percentiles_names_l[i]
+		pweight=percentiles_weights_d[percentiles[i]]
+		data=latlon_nctools.read_projected_data_for_lonlat_point(os.path.join(in_dir,ncfile), pname, lon, lat)
+		out=out+data*pweight
+	print ncfile, "P derived mean"
+	print out,  out.mean()*0.36525
+
+
+	ncfile, variab =param+'_'+str(time_step_min)+'min_m_stats'+region_suffix+'.nc', 'mean'
+	data=latlon_nctools.read_projected_data_for_lonlat_point(os.path.join(in_dir,ncfile), variab, lon, lat)
+	print ncfile, variab+'.sum(axis=1)*time_step_min/60.'
+	out=data.sum(axis=1)*time_step_min/60.
+	print out,  out.mean()*0.36525
+	
+	out=numpy.zeros((12),numpy.float32)
+	for i in range(0,len(percentiles)):
+		pname=percentiles_names_l[i]
+		pweight=percentiles_weights_d[percentiles[i]]
+		data=latlon_nctools.read_projected_data_for_lonlat_point(os.path.join(in_dir,ncfile), pname, lon, lat)
+		for m in range(0,12):
+			aux=data[m]
+			out[m]=out[m]+aux[aux==aux].sum(axis=0)*pweight*time_step_min/60.
+	print ncfile, "P derived mean .sum(axis=1)*time_step_min/60."
+	print out, out.mean()*0.36525
+	
+	

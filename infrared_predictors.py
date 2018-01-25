@@ -17,7 +17,7 @@ def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_
     :return: a matrix with all infrared predictors (shape: slots, latitudes, longitudes, predictors)
     '''
     from get_data import mask_channels
-    from angle_zenith import get_zenith_angle
+    from angles_geom import get_zenith_angle
     # from filter import median_filter_3d
 
     array_data, mask = mask_channels(array_data, False)
@@ -45,7 +45,7 @@ def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_
     cold = get_cold(fir=array_data[:, :, :, 0], mask=mask_cli, threshold=240)
 
     # cold==1 for cold things: snow, icy clouds, or cold water clouds like altocumulus
-    high_cli_mask = (cli > (30 - m) / s)
+    high_cli_mask = (cli > (60 - m) / s)
     del cli
 
     difference = get_cloud_index(mir=array_data[:, :, :, nb_channels-1], fir=array_data[:, :, :, nb_channels-2],
@@ -60,6 +60,7 @@ def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_
                                                     slot_step=slot_step)
         array_indexes[:, :, :, 0][high_cli_mask] = 1  # "hot" water clouds
         array_indexes[:, :, :, 0][mask_cli] = -10
+        # array_indexes[:, :, :, 0] = cli * s + m
 
     else:  # if on-image
         array_indexes = np.empty(shape=(nb_slots, nb_latitudes, nb_longitudes, nb_features), dtype=np.uint8)
@@ -271,7 +272,7 @@ def get_warm_array_on_point(mir_point, mu_point, satellite_step, slot_step, clou
     width_window_in_minutes = 240
     width_window_in_slots = width_window_in_minutes/(slot_step*satellite_step)
 
-    from angle_zenith import get_next_midday
+    from angles_geom import get_next_midday
     noon = get_next_midday(
         mu_point,
         nb_slots_per_day

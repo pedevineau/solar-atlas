@@ -1,0 +1,164 @@
+#! /usr/bin/env python
+
+from general_utils import daytimeconv
+from aerosols.model import atmosphere_param
+from himawari8.sat_model import himawari_mdl_core
+
+
+def init_aod_nc_files_v20_adapt():
+
+#    def corr_aod_funct(x): return (x)
+    aod_monthly_correction_file='macc_aod_correction_monthly_v16.nc' 
+    aod_monthly_scaleoffset_correction_file_2013='aod670_nrt_anomaly_correction_2013.nc' 
+    aod_monthly_scaleoffset_correction_file_2014='aod670_nrt_anomaly_correction_2014.nc' 
+    aod_monthly_scaleoffset_correction_file_2015='aod670_nrt_anomaly_correction_2015.nc' 
+    aod_monthly_scaleoffset_correction_file_2016='aod670_nrt_anomaly_correction_2016.nc' 
+
+    #test
+    aod_corr_list=[\
+                   {'type':'picewise_nc_p05p50', 'parameters':{'ncfile':aod_monthly_correction_file}},\
+                   {'type':'scaleoffset', 'parameters':{'scale':[0.95,0.95,0.95,0.85,0.8,0.8,0.8,0.8,0.85,0.85,0.95,0.95], 'offset':[-0.005,-0.005,-0.015, -0.035,-0.045,-0.05, -0.05,-0.05,-0.04,-0.025,-0.02,-0.005]}},\
+                   ]
+    aod_corr_list2013=[\
+                   {'type':'scaleoffset_nc', 'parameters':{'ncfile':aod_monthly_scaleoffset_correction_file_2013}},\
+                   {'type':'picewise_nc_p05p50', 'parameters':{'ncfile':aod_monthly_correction_file}},\
+                   {'type':'scaleoffset', 'parameters':{'scale':[0.95,0.95,0.95,0.85,0.8,0.8,0.8,0.8,0.85,0.85,0.95,0.95], 'offset':[-0.005,-0.005,-0.015, -0.035,-0.045,-0.05, -0.05,-0.05,-0.04,-0.025,-0.02,-0.005]}},\
+                   ]
+    aod_corr_list2014=[\
+                   {'type':'scaleoffset_nc', 'parameters':{'ncfile':aod_monthly_scaleoffset_correction_file_2014}},\
+                   {'type':'picewise_nc_p05p50', 'parameters':{'ncfile':aod_monthly_correction_file}},\
+                   {'type':'scaleoffset', 'parameters':{'scale':[0.95,0.95,0.95,0.85,0.8,0.8,0.8,0.8,0.85,0.85,0.95,0.95], 'offset':[-0.005,-0.005,-0.015, -0.035,-0.045,-0.05, -0.05,-0.05,-0.04,-0.025,-0.02,-0.005]}},\
+                   ]
+    aod_corr_list2015=[\
+                   {'type':'scaleoffset_nc', 'parameters':{'ncfile':aod_monthly_scaleoffset_correction_file_2015}},\
+                   {'type':'picewise_nc_p05p50', 'parameters':{'ncfile':aod_monthly_correction_file}},\
+                   {'type':'scaleoffset', 'parameters':{'scale':[0.95,0.95,0.95,0.85,0.8,0.8,0.8,0.8,0.85,0.85,0.95,0.95], 'offset':[-0.005,-0.005,-0.015, -0.035,-0.045,-0.05, -0.05,-0.05,-0.04,-0.025,-0.02,-0.005]}},\
+                   ]
+    aod_corr_list2016=[\
+                   {'type':'scaleoffset_nc', 'parameters':{'ncfile':aod_monthly_scaleoffset_correction_file_2016}},\
+                   {'type':'picewise_nc_p05p50', 'parameters':{'ncfile':aod_monthly_correction_file}},\
+                   {'type':'scaleoffset', 'parameters':{'scale':[0.95,0.95,0.95,0.85,0.8,0.8,0.8,0.8,0.85,0.85,0.95,0.95], 'offset':[-0.005,-0.005,-0.015, -0.035,-0.045,-0.05, -0.05,-0.05,-0.04,-0.025,-0.02,-0.005]}},\
+                   ]
+
+    aod_ncfiles = [\
+                ['macc_reanal2003_2009_aod670_monthly_longterm_v3_mean.nc', 'aod670', None, 'monthly','macc_reanal_geopot.nc', 'z', aod_corr_list], \
+                ['macc_reanal_aod670_2003.nc','214.210', None, 'hourly','macc_reanal_geopot.nc', 'z', aod_corr_list], \
+                ['macc_reanal_aod670_2004.nc','214.210', None, 'hourly','macc_reanal_geopot.nc', 'z', aod_corr_list], \
+                ['macc_reanal_aod670_2005.nc','214.210', None, 'hourly','macc_reanal_geopot.nc', 'z', aod_corr_list], \
+                ['macc_reanal_aod670_2006.nc','214.210', None, 'hourly','macc_reanal_geopot.nc', 'z', aod_corr_list], \
+                ['macc_reanal_aod670_2007.nc','214.210', None, 'hourly','macc_reanal_geopot.nc', 'z', aod_corr_list], \
+                ['macc_reanal_aod670_2008.nc','214.210', None, 'hourly','macc_reanal_geopot.nc', 'z', aod_corr_list], \
+                ['macc_reanal_aod670_2009.nc','214.210', None, 'hourly','macc_reanal_geopot.nc', 'z', aod_corr_list], \
+                ['macc_reanal_aod670_2010.nc','214.210', None, 'hourly','macc_reanal_geopot.nc', 'z', aod_corr_list], \
+                ['macc_reanal_aod670_2011.nc','aod670', None, 'hourly','macc_reanal_geopot.nc', 'z', aod_corr_list], \
+                ['macc_reanal_aod670_2012.nc','aod670', None, 'hourly','macc_reanal_geopot.nc', 'z', aod_corr_list], \
+                ['aod670_2013.nc', 'aod670', None, 'hourly','macc_reanal_geopot.nc', 'z', aod_corr_list2013],\
+                ['aod670_2014.nc', 'aod670', None, 'hourly','macc_reanal_geopot.nc', 'z', aod_corr_list2014],\
+                ['aod670_2015.nc', 'aod670', None, 'hourly','macc_reanal_geopot.nc', 'z', aod_corr_list2015],\
+                ['cams_nrt_aod670_075deg_2015.nc', 'aod670', None, 'hourly','cams_nrt_geopot_075deg.nc', 'z', aod_corr_list2015],\
+                ['cams_nrt_aod670_075deg_2016.nc', 'aod670', None, 'hourly','cams_nrt_geopot_075deg.nc', 'z', aod_corr_list2016],\
+                ]
+    wv_ncfiles = [\
+                ['era_interim_reanal2003_2007_wv_monthly_longterm.nc', 'tcwv', 0.1, 'monthly','era_interim_geopot.nc', 'z', None],\
+                ['CFSR_pwat_1994.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+                ['CFSR_pwat_1995.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+                ['CFSR_pwat_1996.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+                ['CFSR_pwat_1997.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+                ['CFSR_pwat_1998.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+                ['CFSR_pwat_1999.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+                ['CFSR_pwat_2000.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+                ['CFSR_pwat_2001.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+                ['CFSR_pwat_2002.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+                ['CFSR_pwat_2003.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+                ['CFSR_pwat_2004.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+                ['CFSR_pwat_2005.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+                ['CFSR_pwat_2006.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+                ['CFSR_pwat_2007.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+                ['CFSR_pwat_2008.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+                ['CFSR_pwat_2009.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+                ['GFS4_pwat_2010.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+                ['GFS4_pwat_2011.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+                ['GFS4_pwat_2012.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+                ['GFS4_pwat_2013.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+                ['GFS4_pwat_2014.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+                ['GFS4_pwat_2015.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+                ['GFSprod_hires_pwat_2015.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+                ['GFSprod_hires_pwat_2016.nc', 'pwat', 0.1, 'hourly',None, 'z', None],\
+                ]
+
+    return aod_ncfiles, wv_ncfiles
+
+
+
+
+
+if __name__ == "__main__":
+    dfbStart = daytimeconv.yyyymmdd2dfb('20150731')
+    dfbEnd = daytimeconv.yyyymmdd2dfb('20160514')
+    
+    #1009277
+    sites = [2007123,2007126]
+    
+    output_table_suffix = "v20c_royaltech_a"
+    output_table_descr = "himawari model"
+
+
+    slotStart = 1
+    slotEnd = 144
+
+    dsnSiteDict={'db':'site_coordinates', 'host':'dbdata', 'user':'gm_user', 'password':'ibVal4'}
+    dsnDataDict={'db':'himawari_sites', 'host': 'dbdata', 'user': 'gm_user', 'password': 'ibVal4'}
+    
+
+    trail_window_size=30
+    
+    satInfoDict={\
+            'satList' : ["H08"],\
+            'chanNameList' : ['VIS064_2000', 'VIS160_2000', 'IR124_2000', 'IR390_2000'],\
+                 }
+
+    #atmosphere section
+#    aod_path = '/net/sponde/data/model_data/data_aod/'
+    aod_path = '/home0/model_data/data_aod/'
+    aod_ncfiles, wv_ncfiles = init_aod_nc_files_v20_adapt()
+#    aod_ncfiles, wv_ncfiles = goes_mdl_core.init_aod_nc_files_v20a()
+    # ATMOSPHERE TYPES
+    # primary_type : 1-rural (water and dust-like), 4-maritime (rural and sea salt), 5-urban (rural and soot-like), 6-tropospheric (rural mixture)
+    # secondary_type : -9 for None or atmosphere type code
+    # secondary_weight_file : number <0.0,1.0> or NC file with weight data
+    atmosph=atmosphere_param.atmosphere_param(primary_type = 6, secondary_type = 5, secondary_weight_file = aod_path+'aod_urban_type_weight_v1.nc')
+    atmosph.hourly_data_persistence = 0
+    atmosph.aod_path = aod_path
+    atmosph.aod_ncfiles = aod_ncfiles
+    atmosph.wv_ncfiles = wv_ncfiles
+    atmosph.do_smoothing=True
+    atmosph.do_extreme_correction=True
+#    atmosph.extreme_correction_params=[0.1,0.25,0.85,0.75]
+    atmosph.extreme_correction_params=[0.0,0.6,1.0,0.85]
+    
+#    aux data used in sat data classification %s auto replaced by region suffix
+    geom_data_path = "/net/himalia/model_data_himawari/data_geom/" 
+#    snow_data_path = '/net/europa/home1/model_data/data_snow/'
+    auxdata_file_dict = {\
+#                        "era_temp":[loc_path + "/data_era/era_interim_monthly_mean.nc", "t2_06_mean", "t2_06_std"],\
+#                        "era_dem":[loc_path + "/data_era/era_interim_ancillary_data.nc", "dem"], \
+#                        "SDWE":[snow_data_path+"/*_sdwe_%s.nc","sdwe"],\
+                        "UB":[geom_data_path+"/mfg_UB%s.nc","UB"]}
+    
+    
+    output_fields=["ghi", "ghi_c", "dni", "dni_c", "ktm", "ci", "ci_flag", "lbclass", "lb", "lbland"]
+    
+    ############################################
+   
+
+
+    for site in sites:
+        output_table="res_model_%d_%s" % (site,output_table_suffix)
+        himawari_mdl_core.output_table_init(dsnDataDict, output_table, output_table_descr, output_fields)
+
+        himawari_mdl_core.sat_model_point_db(dsnSiteDict, dsnDataDict, site, dfbStart, dfbEnd, slotStart, slotEnd, satInfoDict, atmosph, output_table, output_fields, auxdata_file_dict, trail_window_size=trail_window_size, init_by_previousday=False, verbose=True)
+
+        himawari_mdl_core.output_table_indexes(dsnDataDict, output_table)
+
+    print 'DONE ALL'
+

@@ -1,0 +1,81 @@
+import datetime
+
+NHRS=24
+NMINS_IN_HOUR = 60
+SLOT_MINUTES_INTERVAL = 10
+
+def get_himawari8_slots():
+    """
+    Computes a dictionary of HIMAWARI 8 slots.
+    Used for slot mapping. Himawari 8 data is pretty regular, we get a a full disk image every 10 minutes.
+    :return: dict, ex {1: '00:00} for all himawari slots that is every 10 minutes in 24 hrs
+
+    """
+    d = {}
+    i=0
+    for h in range(0,NHRS):
+        for m in range(0, NMINS_IN_HOUR, SLOT_MINUTES_INTERVAL):
+            i+=1
+            t = datetime.time(hour=h, minute=m)
+            d[i] = t.strftime('%H:%M')
+    return d
+
+HIMAWARI_SLOTS = get_himawari8_slots()
+
+def hm2slot(h=None, m=None):
+    """
+    Converts a time represented as hour and minute into it's corresponding Himawari 8 slot
+    :param h: number, int, hour
+    :param m: number, int, minute
+    :return: number, int, slot
+    """
+
+    times = [v.split(':') for v in HIMAWARI_SLOTS.values()]
+    slots = HIMAWARI_SLOTS.keys()
+    ih = int(h)
+    im = int(m)
+    str_hm_list = ['{:02d}'.format(ih), '{:02d}'.format(im)]
+    try:
+        return slots[times.index(str_hm_list)]
+    except IndexError:
+        raise ValueError('Failed to map hour {0} and minute {1} to a Himawari8. Valid slot  times are {2} slot'.format(h, m, str(times)) )
+    '''
+    all_slots = HIMAWARI_SLOTS.keys()
+    valid_rec =
+    '''
+
+def slot2time(slot=None):
+    """
+        Converts a Himawari 8 slot into its corresponding datetime object. Optionally converts the slot into an a time interval
+        consisting of the minimum and maximum value of time
+        @args:
+            @slot, int, the slot
+
+        @returns:
+            @the datetime.time object for a specific input slot or a tuple (min max) depending on the time_range flag
+            in case the slot is invalid returns None
+
+        """
+    try:
+        timestr = HIMAWARI_SLOTS[slot]
+        h, m = map(int, timestr.split(':'))
+
+        return datetime.time(hour=h, minute=m)
+    except IndexError:
+        raise ValueError('Failed to map slot {0} to a time object. Valid Himawari8 slots are {1}'.format(slot, str(HIMAWARI_SLOTS.values())))
+    
+    
+def slot2dh(slot=None):
+    """
+        Converts a Himawari 8 slot into its corresponding decimal hour
+        @args:
+            @slot, int, the slot
+
+        @returns:
+            @the decimal hour 
+            in case the slot is invalid returns None
+    """
+    dh = (slot-1)*SLOT_MINUTES_INTERVAL/60.
+    return dh
+
+    

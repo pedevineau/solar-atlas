@@ -113,7 +113,7 @@ if __name__ == '__main__':
         normalize,
         return_angle=True
     )
-    from  angle_zenith import get
+    from  angles_geom import get
     mu = np.cos(angles)
 
     from quick_visualization import visualize_map_time, get_bbox, visualize_input

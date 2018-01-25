@@ -1,0 +1,460 @@
+#! /usr/bin/env python
+'''
+The main module for site values retrieval.
+'''
+
+import numpy
+import glob, os
+import StringIO
+
+from general_utils import db_sites, db_utils
+from general_utils import daytimeconv_num
+from general_utils import daytimeconv
+from general_utils import latlon
+from general_utils import latlon_nctools
+from general_utils import solar_geom_v5
+from general_utils import basic_mail
+from goes.functions import goes_geom_west
+
+from satellites.GOES.db import get_table as get_navigation_table
+from satellites.GOES.db import navigation_table_usage
+
+from general_utils.basic_logger import make_logger
+logger = make_logger(__name__)
+
+
+
+#--------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+#def retrieveSiteValues(dataType, ncReadDirsList, satList, channelsList, suffix, dfbInterval, slotInterval, DBConnSites, DBConnGeom, SitesList, RegardCaliforniaDist, RegardArgentinaDist, FineShiftsOff, NewShifts):
+def retrieveSiteValues():
+
+    SitesList               = [1009231,1009232,1009233,1009234,1009235,1009230,2003510,2004475,2004476,2004477,2004478,2004479,2004480,2002560,1009271,1009272,1009275] #2004455 west US;  1009272 N Zeland [1009231,1009232,1009233,1009234,1009235,1009230,2003510,2004475,2004476,2004477,2004478,2004479,2004480,2002560,1009271,1009272,1009275]
+    SitesList               = [1009231, 2004480]
+    SitesList               = [2005897]
+
+    DateStart               = "20111201"  # "19981201"
+    DateEnd                 = "20111231"  # "20141231"
+
+    ncReadDirsList          = ["/data/goes_west_nc/"]
+    ncReadDirsList          = ["/home1/goes_west_nc_arch"]
+
+    suffix                  = 'west'
+    satList                 = ['goes10', 'goes11', 'goes15']
+
+    dbInfoSitesMeta         = {"DbName":"site_coordinates", "DbHost":"dbdata", "DbUser":"gm_user", "DbPassword":"ibVal4"}
+    dbInfoRawData           = {"DbName":"goes_sites_west", "DbHost":"dbdata", "DbUser":"gm_user", "DbPassword":"ibVal4"}
+    dbInfoGOESArchive       = {"DbName":"goes_west_archive", "DbHost":"dbsatarchive", "DbUser":"sat_oper", "DbPassword":"itNov6"}
+
+
+    mail_notification       =['tomas.cebecauer@geomodel.eu']
+
+    #------------------------------------------------------------------------
+    #not recommended to edit
+    ncReadFileNamePattern   = "%s_%d_%d_%s_%s.nc"    # goes15_2014_5_VIS_west.nc
+    SlotStart               = 1
+    SlotEnd                 = 128
+    chanNameList = ["VIS", "IR2", "IR4"]
+    sitesMetaTableName      = 'site_coordinates'
+
+    navigationTableName = 'navigation'
+
+    interpolate  =  'nearest'  # nearest | bilinear #bilinear not recommended (not tested and validated)
+    #------------------------------------------------------------------------
+    dfb_start= daytimeconv.yyyymmdd2dfb(DateStart)
+    dfb_end= daytimeconv.yyyymmdd2dfb(DateEnd)
+
+
+    DSN_SitesData_str = db_utils.DSNDictToDSNString(dbInfoRawData)
+    DSN_SitesMeta_str = db_utils.DSNDictToDSNString(dbInfoSitesMeta)
+
+    #read from SQL DB dictionary with sites details
+    sitesInfoDict={}
+    for siteID in SitesList:
+        #for site get from DB dictionary with 'latitude', 'longitude', 'altitude', 'short_name', 'name', 'country' and other keys
+        one_site_info_dict = db_sites.db_get_site_site_info_dict(siteID, DSN_SitesMeta_str, sitesMetaTableName)
+        if one_site_info_dict == None:
+            logger.warning('Unable to get details for siteID %s', str(siteID) )
+        else:
+            sitesInfoDict[siteID] = one_site_info_dict
+    if len(sitesInfoDict.keys()) <1:
+        logger.info('No valid sites found for processing. Exit.')
+        exit()
+
+    #create bounding box around the point - artificially created so the code with raster reader can be reused
+    for siteID in sitesInfoDict.keys():
+        one_site_info_dict = sitesInfoDict[siteID]
+        lon=one_site_info_dict['longitude']
+        lat=one_site_info_dict['latitude']
+        if lon > 0:
+            logger.info('Adapting longitude of %d from %f to %f to be consistent with NC coordinate system (extending over -180 to the west)', siteID, lon, lon-360)
+            lon = lon - 360
+        one_site_info_dict['bbox'] = latlon.bounding_box(xmin=lon-0.005, xmax=lon+0.005, ymin=lat-0.005, ymax=lat+0.005, width=1, height=1, resolution=0.01)
+        sitesInfoDict[siteID] = one_site_info_dict
+
+    #check/create data tables for individual sites
+    for siteID in sitesInfoDict.keys():
+        tableName ="goes_raw_data_"+str(siteID)
+        if not db_utils.db_dtable_exist(DSN_SitesData_str, tableName):
+            rawDataTable_create(DSN_SitesData_str,tableName)
+        sitesInfoDict[siteID]['tableName'] = tableName
+
+
+
+    #get pixel coordinates in the whole GOES pixelspace px_x:1-30676 px_y:1-15769
+    for siteID in sitesInfoDict.keys():
+        one_site_info_dict = sitesInfoDict[siteID]
+        lon=one_site_info_dict['longitude']
+        lat=one_site_info_dict['latitude']
+        #approximation of pixel coordinates
+        goes_west_px_x, goes_west_px_y  = goes_geom_west.lonlat2goesxy_point_d(lon,lat, PxCropSize=30676, PyCropSize=15769, lon0=-135.)
+        one_site_info_dict['goes_west_px_x'] = goes_west_px_x
+        one_site_info_dict['goes_west_px_y'] = goes_west_px_y
+        sitesInfoDict[siteID] = one_site_info_dict
+
+    #get navigation info from SQL DB and store needed info to numpy arrays
+    navigation_table_class = get_navigation_table(table_name=navigationTableName, dbengine='postgresql', host=dbInfoGOESArchive['DbHost'], port=5432, database=dbInfoGOESArchive['DbName'], user=dbInfoGOESArchive['DbUser'], password=dbInfoGOESArchive['DbPassword'])
+    sat_naviginfoarrays_dict = navigation_table_usage.prepare_navigation_arrays_from_DB(navigation_table_class,dfb_start,dfb_end,SlotStart,SlotEnd, satList)
+
+    #make list of years archsegs to read data for
+    year_archseg_list = daytimeconv.dfb_minmax2yea_archseg_list(dfb_start, dfb_end)
+    #loop years, archsegs and process data
+    for year, archseg in year_archseg_list:
+        logger.info('Processing year %d, archseg %d', year, archseg)
+
+        #get dict of input NC files for given year, archseg in paths listed in ncReadDirsList
+        # sat_chan_NCFileDict['goes11']['IR4']={'fullName':'/home1/goes11_2011_1_IR4_west.nc'}
+        sat_chan_NCFileDict = search_for_NC_files(year, archseg, ncReadDirsList, ncReadFileNamePattern, suffix, satList, chanNameList)
+        if len(sat_chan_NCFileDict.keys()) ==0:
+            logger.warning('No input NC files found')
+            continue
+        else:
+            logger.info('Found NC files for: %s'," ".join(sat_chan_NCFileDict.keys()))
+
+        #calculate dfbs to read
+        dfb_archseg_start, dfb_archseg_end = daytimeconv.archsegy2dfbminmax(archseg, year)
+        read_dfb_min = max(dfb_start,dfb_archseg_start)
+        read_dfb_max = min(dfb_end,dfb_archseg_end)
+
+        dfb_idx_min = read_dfb_min - dfb_start
+        dfb_idx_max = read_dfb_max - dfb_start+1
+
+
+        #reduce for year_archseg dfb range
+        sat_naviginfoarrays_dict_archseg_reduced={}
+        for sat in sat_naviginfoarrays_dict.keys():
+            sat_naviginfoarrays_dict_archseg_reduced[sat]={}
+            sat_naviginfoarrays_dict_archseg_reduced[sat]["scan_start_time"] = sat_naviginfoarrays_dict[sat]["scan_start_time"][dfb_idx_min:dfb_idx_max,:].copy()
+            sat_naviginfoarrays_dict_archseg_reduced[sat]["swath_scan_time"] = sat_naviginfoarrays_dict[sat]["swath_scan_time"][dfb_idx_min:dfb_idx_max,:].copy()
+            sat_naviginfoarrays_dict_archseg_reduced[sat]["scene_start_line"] = sat_naviginfoarrays_dict[sat]["scene_start_line"][dfb_idx_min:dfb_idx_max,:].copy()
+            sat_naviginfoarrays_dict_archseg_reduced[sat]["scene_end_line"] = sat_naviginfoarrays_dict[sat]["scene_end_line"][dfb_idx_min:dfb_idx_max,:].copy()
+            sat_naviginfoarrays_dict_archseg_reduced[sat]["scene_start_pixel"] = sat_naviginfoarrays_dict[sat]["scene_start_pixel"][dfb_idx_min:dfb_idx_max,:].copy()
+            sat_naviginfoarrays_dict_archseg_reduced[sat]["scene_end_pixel"] = sat_naviginfoarrays_dict[sat]["scene_end_pixel"][dfb_idx_min:dfb_idx_max,:].copy()
+
+        #remove existing data
+        logger.debug('drop data from DB')
+        for siteID in sitesInfoDict.keys():
+            one_site_info_dict = sitesInfoDict[siteID]
+            tableName = one_site_info_dict['tableName']
+            minD = daytimeconv.dfb2yyyymmdd(read_dfb_min)
+            maxD = daytimeconv.dfb2yyyymmdd(read_dfb_max)
+            rawDataTable_dropData(DSN_SitesData_str, tableName, minD, maxD)
+
+
+
+        #create site dict with empty arrays for data from individual satellites
+        sitesDataDict = {}
+        num_channels = len(chanNameList)
+        num_dfbs = read_dfb_max-read_dfb_min+1
+        num_slots = SlotEnd-SlotStart+1
+        empty_data_arr = numpy.empty((num_channels,num_dfbs,num_slots) )
+        empty_data_arr[:,:,:] = numpy.nan
+        for siteID in sitesInfoDict.keys():
+            sitesDataDict[siteID] = {}
+            for sat in sat_chan_NCFileDict.keys():
+                sitesDataDict[siteID][sat] = empty_data_arr.copy()
+
+
+        #read data - now iterate but in different order - it is better performance if more sites are read from one file at once (use of buffers and so)
+        for sat in sat_chan_NCFileDict.keys():
+
+            chan_NCFileDict = sat_chan_NCFileDict[sat]
+            for chan in chan_NCFileDict.keys():
+                ncfile = chan_NCFileDict[chan]['fullName']
+                for siteID in sitesInfoDict.keys():
+                    data_arr = sitesDataDict[siteID][sat]
+                    one_site_info_dict = sitesInfoDict[siteID]
+                    bbox = one_site_info_dict['bbox']
+                    res=latlon_nctools.latlon_read_dfb_slot_lat_lon_nc(ncfile, chan, (read_dfb_min, read_dfb_max), (SlotStart,SlotEnd), bbox, interpolate=interpolate)
+                    if res is None:
+                        logger.warning( 'problem reading %s' %(ncfile))
+                        continue
+                    else:
+                        chan_idx = chanNameList.index(chan)
+                        data_arr[chan_idx,:,:] = res[:,:,0,0].copy()
+                        # replace 'empty/invalid' data by NANs
+                        if  (data_arr==data_arr).sum() > 0:  # if any valid data are present
+                            data_arr[data_arr>35000] = numpy.nan
+                        data_arr[data_arr==0] = numpy.nan
+                    sitesDataDict[siteID][sat] = data_arr
+
+
+        for siteID in sitesInfoDict.keys():
+            logger.debug(siteID)
+            one_site_info_dict = sitesInfoDict[siteID]
+            longitude = one_site_info_dict['longitude']
+            latitude = one_site_info_dict['latitude']
+            bbox = one_site_info_dict['bbox']
+            goes_west_px_x = one_site_info_dict['goes_west_px_x']
+            goes_west_px_y = one_site_info_dict['goes_west_px_y']
+
+            logger.debug('calculate scan time')
+            for sat in sitesDataDict[siteID].keys():
+                #navigation arrays for whole dfbs
+                if sat not in sat_naviginfoarrays_dict.keys():
+                    logger.debug('no navigation info for sat %s, probably no data exist for this dates range', sat)
+                    continue
+
+                # nominal and realt scan time
+                nomin_scan_start_time_arr, real_scan_aDTn_arr = goes_geom_west.calculate_scantime_point(sat,sat_naviginfoarrays_dict_archseg_reduced, goes_west_px_x, goes_west_px_y)
+
+
+                #create dfb and slot arrays
+                slot_arr = numpy.empty(nomin_scan_start_time_arr.shape, dtype=numpy.int32)
+                dfb_arr = numpy.empty(nomin_scan_start_time_arr.shape, dtype=numpy.int32)
+                slot_arr[:,:] = -9999
+                dfb_arr[:,:] = -9999
+                for dfb in range(read_dfb_min, read_dfb_max+1):
+                    dfb_idx = dfb - read_dfb_min
+                    dfb_arr[dfb_idx,:] = dfb
+                    for slot in range(SlotStart,SlotEnd+1):
+                        slot_idx =  slot - SlotStart
+                        slot_arr[dfb_idx,slot_idx] = slot
+
+
+
+                #flatten arrays to vectors and reduce for slots where we have data real time data (not nans)
+                real_scan_aDTn_vect = real_scan_aDTn_arr.flatten()
+                nomin_scan_start_time_vect = nomin_scan_start_time_arr.flatten()
+                dfb_vect = dfb_arr.flatten()
+                slot_vect = slot_arr.flatten()
+
+                #valid times
+                wh = (real_scan_aDTn_vect==real_scan_aDTn_vect) & (nomin_scan_start_time_vect==nomin_scan_start_time_vect)
+
+                valid_real_scan_aDTn_vect = real_scan_aDTn_vect[wh]
+                valid_nomin_scan_start_time_vect = nomin_scan_start_time_vect[wh]
+                valid_dfb_vect = dfb_vect[wh]
+                valid_slot_vect = slot_vect[wh]
+
+                data_arr = sitesDataDict[siteID][sat]
+                valid_data_arr = numpy.empty((data_arr.shape[0],valid_slot_vect.shape[0]),dtype=data_arr.dtype)
+                for i in range(data_arr.shape[0]):
+                    valid_data_arr[i,:] = data_arr[i,:,:].flatten()[wh]
+
+
+                logger.debug('calculate solar geometry')
+                aDTn_LAT_vect, a0_vect, h0_vect, h0_refr_vect = calculateSunGeometry(valid_real_scan_aDTn_vect,longitude,latitude)
+
+
+                logger.debug('write to DB')
+                #insert data to DB
+                tableName = one_site_info_dict['tableName']
+                rawDataTable_writeData(DSN_SitesData_str, tableName, sat, valid_slot_vect, valid_dfb_vect, valid_nomin_scan_start_time_vect, aDTn_LAT_vect, a0_vect, h0_vect, h0_refr_vect, valid_data_arr, chanNameList)
+
+
+
+
+    logger.info( 'DONE')
+    if mail_notification is not None:
+        basic_mail.mail_process_message_ssl(reciever_to=mail_notification, message='GOES West site reader finnished.' )
+
+    exit()
+
+
+
+
+
+
+def calculateSunGeometry(aDTn_vect,SiteLongitude,SiteLatitude):
+
+    aDTn_LAT_vect = numpy.empty_like(aDTn_vect)
+    a0_vect = numpy.empty_like(aDTn_vect)
+    h0_vect = numpy.empty_like(aDTn_vect)
+    h0_refr_vect = numpy.empty_like(aDTn_vect)
+
+    for i in range(0,len(aDTn_vect)):
+        aDT = daytimeconv_num.num2date(aDTn_vect[i])
+
+        LocalDT = solar_geom_v5.utcDT2LocalApparentDT(aDT, SiteLongitude)
+        Declination = solar_geom_v5.declin_r(LocalDT.year, daytimeconv.date2doy(LocalDT) , numpy.radians(SiteLongitude))
+        Time_LAT = daytimeconv.hms2dh(LocalDT.hour, LocalDT.minute, LocalDT.second)
+        a0, h0 = solar_geom_v5.sunposition_r(Declination,numpy.radians(SiteLatitude),Time_LAT)
+        h0_refr = h0+solar_geom_v5.delta_h0refr(h0)
+
+        aDTn_LAT_vect[i] = daytimeconv_num.date2num(LocalDT)
+        a0_vect[i] = a0
+        h0_vect[i] = h0
+        h0_refr_vect[i] = h0_refr
+
+    return aDTn_LAT_vect, a0_vect, h0_vect, h0_refr_vect
+
+
+
+
+def search_for_NC_files(year, archseg, ncReadDirsList, ncReadFileNamePattern, suffix, satList, chanNameList):
+    #get dict of files for given year, archseg in paths listed in ncReadDirsList
+    sat_chan_NCFileDict = {}
+    for sat in satList:
+        for chan in chanNameList:
+            NCFileDict = {}
+            ncNamePattern_aux = ncReadFileNamePattern % (sat,year,archseg,chan,suffix)
+            for aPath in ncReadDirsList:
+                for fullName in glob.glob(os.path.join(aPath,ncNamePattern_aux)):
+                    baseName = os.path.basename(fullName)
+                    if baseName not in NCFileDict.keys():
+                        NCFileDict[baseName] = fullName
+
+            if len(NCFileDict) > 0:
+                if not sat_chan_NCFileDict.has_key(sat):
+                    sat_chan_NCFileDict[sat] = {}
+                sat_chan_NCFileDict[sat][chan] = {'fullName':fullName}
+    return sat_chan_NCFileDict
+
+
+
+
+
+def rawDataTable_create(DSN_string,TableName):
+    '''Static method creates empty table for site raw data'''
+    conn = db_utils.getConnectionDSNString(DSN_string)
+    curs = conn.cursor()
+
+    query='CREATE TABLE '+TableName+' (sat text, date date NOT NULL, time time NOT NULL, slot integer, datetime timestamp, date_lat date, time_lat time, a0 real, h0 real, h0_refr real, vis real, ir2 real, ir4 real)'
+    curs.execute(query)
+
+    query="ALTER TABLE "+ TableName +" ADD PRIMARY KEY (sat, date, time);"
+    curs.execute(query)
+    query="COMMENT ON COLUMN "+ TableName +".sat IS 'Satellite identifier';"
+    curs.execute(query)
+    query="COMMENT ON COLUMN "+ TableName +".date IS 'Date identifier of data';"
+    curs.execute(query)
+    query="COMMENT ON COLUMN "+ TableName +".time IS 'Start time of slot acquisition';"
+    curs.execute(query)
+    query="COMMENT ON COLUMN "+ TableName +".slot IS 'Slot number';"
+    curs.execute(query)
+    query="COMMENT ON COLUMN "+ TableName +".datetime IS 'Real date and start time of slot acquisition';"
+    curs.execute(query)
+    query="COMMENT ON COLUMN "+ TableName +".date_lat IS 'Solar apparent local date';"
+    curs.execute(query)
+    query="COMMENT ON COLUMN "+ TableName +".time_lat IS 'Solar apparent local date-time';"
+    curs.execute(query)
+    query="COMMENT ON COLUMN "+ TableName +".a0 IS 'Solar azimuth measured from South [rad]';"
+    curs.execute(query)
+    query="COMMENT ON COLUMN "+ TableName +".h0 IS 'Solar altitude (incidence angle)';"
+    curs.execute(query)
+    query="COMMENT ON COLUMN "+ TableName +".h0_refr IS 'h0, when refraction considered [rad]';"
+    curs.execute(query)
+    query="COMMENT ON COLUMN "+ TableName +".vis IS 'Digital count in VIS(1) channel';"
+    curs.execute(query)
+    query="COMMENT ON COLUMN "+ TableName +".ir2 IS 'Digital count in IR2 channel';"
+    curs.execute(query)
+    query="COMMENT ON COLUMN "+ TableName +".ir4 IS 'Digital count in IR4 channel';"
+    curs.execute(query)
+
+    conn.commit()
+    conn.close()
+    return True
+
+
+
+
+#drop existing data from output table
+def rawDataTable_dropData(DSN_string, out_table, minD, maxD):
+    conn = db_utils.getConnectionDSNString(DSN_string)
+    curs = conn.cursor()
+    query = "DELETE FROM " + out_table + " WHERE date>='" + str(minD) + "' AND date<='" + str(maxD) + "'"
+    try:
+        curs.execute(query)
+    except:
+        print "Unable to execute the query, skipping."
+        print query
+
+    conn.commit()
+    conn.close()
+    return True
+
+
+
+def rawDataTable_writeData(DSN_string, tableName, sat, slot_vect, dfb_vect, aDTn_vect, aDTn_LAT_vect, a0_vect, h0_vect, h0_refr_vect, data_arr, chanNameList):
+
+#          sat   |    date    |   time   | slot |      datetime       |  date_lat  |    time_lat    |    a0    |    h0     |  h0_refr  | vis | ir2 | ir4
+#        --------+------------+----------+------+---------------------+------------+----------------+----------+-----------+-----------+-----+-----+-----
+#         goes08 | 1999-01-01 | 00:15:00 |    1 | 1999-01-01 00:15:00 | 1998-12-31 | 19:45:28.06432 |   1.0228 | -0.262921 | -0.263562 |   0 |   0 |   0
+#         goes08 | 1999-01-01 | 00:39:00 |    2 | 1999-01-01 00:39:00 | 1998-12-31 | 20:09:28.06432 | 0.972017 | -0.346189 |  -0.34675 |   0 |   0 |   0
+
+
+    chan_VIS_idx = chanNameList.index('VIS')
+    chan_IR2_idx = chanNameList.index('IR2')
+    chan_IR4_idx = chanNameList.index('IR4')
+    data_arr_VIS = data_arr[chan_VIS_idx,:]
+    data_arr_IR2 = data_arr[chan_IR2_idx,:]
+    data_arr_IR4 = data_arr[chan_IR4_idx,:]
+
+
+
+    _buffer = StringIO.StringIO()
+    counter=0
+    for i in range(0, slot_vect.shape[0]):
+        #Getting values from dictionaries
+        aDT = daytimeconv_num.num2date(aDTn_vect[i])
+        aDT_LAT = daytimeconv_num.num2date(aDTn_LAT_vect[i])
+        W_sat =sat
+        W_date = aDT.date()
+        W_time = aDT.time()
+        W_slot = int(slot_vect[i])
+        W_datetime = aDT
+        W_LAT_date = aDT_LAT.date()
+        W_LAT_time = aDT_LAT.time()
+        W_a0 = a0_vect[i]
+        W_h0 = h0_vect[i]
+        W_h0_refr = h0_refr_vect[i]
+
+        #from satellite data
+
+        W_VIS = data_arr_VIS[i]
+        if numpy.isnan(W_VIS): W_VIS = '\N' #If there are no data for the channel
+        W_IR2 = data_arr_IR2[i]
+        if numpy.isnan(W_IR2): W_IR2 = '\N' #If there are no data for the channel
+        W_IR4 = data_arr_IR4[i]
+        if numpy.isnan(W_IR4): W_IR4 = '\N' #If there are no data for the channel
+
+
+        record = W_sat+"\t"+ "'"+str(W_date)+"'"+"\t"+"'"+str(W_time)+"'"+"\t"+str(W_slot)+"\t"+"'"+str(W_datetime)+"'"+"\t"\
+        +"'"+str(W_LAT_date)+"'"+"\t"+"'"+str(W_LAT_time)+"'"+"\t"\
+        + str(W_a0)+"\t" +str(W_h0)+"\t" +str(W_h0_refr)+"\t" +str(W_VIS)+"\t" +str(W_IR2)+"\t"\
+        +str(W_IR4)
+
+        counter+=1
+        _buffer.write(record+"\n")
+
+    logger.debug('writing %d records', counter)
+    #copy data to DB
+    _buffer.seek(0,0)
+    conn = db_utils.getConnectionDSNString(DSN_string)
+    curs = conn.cursor()
+    columns = ('sat', 'date', 'time', 'slot', 'datetime', 'date_lat', 'time_lat', 'a0', 'h0', 'h0_refr', 'vis', 'ir2', 'ir4')
+    curs.copy_from(_buffer, tableName, columns=columns)
+    conn.commit()
+    conn.close()
+
+    return True
+
+
+
+
+if __name__ == "__main__":
+    import logging
+    logging.getLogger().setLevel(logging.DEBUG)
+    retrieveSiteValues()
+

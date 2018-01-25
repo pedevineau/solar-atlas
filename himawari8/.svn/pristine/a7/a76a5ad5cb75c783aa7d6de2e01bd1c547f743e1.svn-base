@@ -1,0 +1,328 @@
+#! /usr/bin/env python
+'''
+Created on Aug 24, 2009
+
+@author: tomas
+optimum angle calculator
+'''
+
+import os, sys
+import math
+
+import numpy
+import netCDF4
+
+from general_utils import latlon_nctools
+from general_utils import latlon
+from general_utils import mounting_geom
+from general_utils import daytimeconv
+from general_utils import basic_mail
+from rast_model_postprocess import disaggregate_common
+
+
+#logger section
+from general_utils.basic_logger import make_logger
+logger = make_logger(__name__)
+import logging
+logging.getLogger().setLevel(logging.DEBUG)
+
+
+
+
+
+def make_model_output_opta_latlon(file_name, latlon_bbox, overwrite = False, logger=None, version=None):
+    if (file_name is None) or (file_name==''):
+        logger.error( "No NC filename set")
+        return False
+    
+    #[month,slot,row,col] - long term monthly stats of 15 min value mean
+    description='solargis optimum angle (without shading)'
+    metadata=[['description',description],['projection',"geographic coordinates"]]
+    if version is not None:
+        metadata.append(['version', version])
+    img_channels = [['opta', "NC_FLOAT", 'optimum angle', 'deg', -9., ['latitude', 'longitude'],[128,128]]]
+    result=latlon_nctools.latlon_make_lat_lon_nc(nc_file_name=file_name, metadata=metadata, force_overwrite=overwrite, img_channels=img_channels, nc_extent=latlon_bbox ,compression=True, dims_name_colrow=False)
+    
+    logger.info('Create opta output grid NetCDF: '+str(result))
+    
+    if result==False:
+        logger.error('Failed to create opta output grid NetCDF')
+        return False
+        
+    return True
+
+
+
+
+#adapt subset_bbox to the pixels of latlon_bbox (then exact subset can be clipped)
+def adapt_subset_bbox(subset_bbox, latlon_bbox):
+    if subset_bbox is None:
+        return None
+    else:
+        subset_bbox2 = latlon_bbox.intersect(subset_bbox)
+        if not(subset_bbox.equals(subset_bbox2)):
+            logger.debug("Subset bbox adapted to output bbox")
+    return subset_bbox2
+
+#calculate pixel coordinates range of subset in row and col dimension
+#whole range if subset_bbox is None
+def out_rowcol_px_ranges(subset_bbox, latlon_bbox):
+    if not(subset_bbox is None):
+        result = latlon_bbox.pixel_coords_of_bbox(subset_bbox)
+        if result is None:
+            logger.error('cannot create subset_bbox pixel limits of output grids')
+            return None
+        col_min, col_max, row_min, row_max = result
+        row_range=[row_min,row_max]
+        col_range=[col_min,col_max]
+    
+    else: #whole dataset
+        row_range=[0,latlon_bbox.height]
+        col_range=[0,latlon_bbox.width]
+        
+    return row_range, col_range
+
+
+
+#write merged msg model output data (2D data version)
+def write_proj_model_output_2dim(nc_msg_mdl_file, in_variab_name, dimr_range, dimc_range, data, logger):
+
+    rootgrp = netCDF4.Dataset(os.path.join(nc_msg_mdl_file), 'r+')
+    varDict=rootgrp.variables
+    
+    
+    if not(in_variab_name in varDict.keys()):
+        logger.error('Variable %s not found in NetCDF %s ' % (in_variab_name, nc_msg_mdl_file))
+        rootgrp.close()
+        return False
+    
+    in_var=varDict[in_variab_name]
+
+    if (in_var.ndim != 2):
+        logger.error('Variable %s has more than %d dimensions' % (in_variab_name, 2))
+        rootgrp.close()
+        return False
+
+    #finally write the data
+    
+    in_var[dimr_range[0]:dimr_range[1]+1, dimc_range[0]:dimc_range[1]+1] = data
+    rootgrp.close()
+
+    return True
+
+
+
+#------------------------------------------------------------
+# main
+#------------------------------------------------------------
+
+if __name__ == "__main__":
+    
+    version='v20_combined_2007_2016'
+    
+    lowres_data_path='/net/kale/data/model_data_himawari/data_output_wgs84/v20_combined_2007_2016/'
+    
+    res=2./60.  #final value 2/60. == 00:02:00
+    buff=3.*res
+
+#    FOR MTSAT - HIMAWARI (15min merge)
+    w, e, s, n = 90-buff, 180, 0.-buff, 65.+buff  #pan
+    region_suffix='_pan'
+#    w, e, s, n = 90-buff, 180, -60.-buff, 0.+buff  #pas
+#    region_suffix='_pas'
+
+    time_step_min = 15
+    slot_min, slot_max = 1, 96
+#    time_step_min = 30
+#    slot_min, slot_max = 1, 48
+
+    
+    latlon_bbox=latlon.bounding_box(w, e, s, n, int(math.floor(((e-w)/res)+0.5)), int(math.floor(((n-s)/res)+0.5)), res)
+
+
+    suffix='' # _wgs84
+
+    azimuth=180 #module azimuth  180 - South
+    mounting=1 
+
+
+    
+    aoi_xmin, aoi_xmax, aoi_ymin, aoi_ymax, sub_res = 95, 180, 0-buff, 60, res
+#    aoi_xmin, aoi_xmax, aoi_ymin, aoi_ymax, sub_res = 95, 180, -15, 0+buff, res
+#    aoi_xmin, aoi_xmax, aoi_ymin, aoi_ymax, sub_res = 110, 180, -40, -15, res
+#    aoi_xmin, aoi_xmax, aoi_ymin, aoi_ymax, sub_res = 140, 180, -45, -40, res
+#    aoi_xmin, aoi_xmax, aoi_ymin, aoi_ymax, sub_res = 155, 180, -55, -45, res
+    
+    aoi_xmin, aoi_xmax, aoi_ymin, aoi_ymax, sub_res =  120, 125, 45, 46, res
+    aoi_bbox=latlon.bounding_box(xmin=aoi_xmin, xmax=aoi_xmax, ymin=aoi_ymin, ymax=aoi_ymax, width=(aoi_xmax-aoi_xmin)/sub_res, height=(aoi_ymax-aoi_ymin)/sub_res, resolution=sub_res)
+
+    #the size of subsegments for calculation 
+    subseg_height = 2.
+    subseg_width = 5.
+
+    
+    percentiles = [1, 10, 25, 50, 75, 90, 99] #MUST be same as those within ...merge_segments.py
+
+    #the opta is calcualted for range of angles around abs(latitude)
+    search_lower_range=-25
+    search_upper_range=25
+    
+    #clear aoi in output file before calculation
+    clear_aoi = True  
+    
+    
+#-------------------------------------------------
+    if time_step_min not in (15,30):
+        print 'Time step %d not supported. It has to be 30 or 15 minutes, time centered slots'
+        exit()
+    
+    
+    
+    #inputs
+    NC_in_GHI_name=lowres_data_path+'GHI_%dmin_m_stats%s%s.nc' % (time_step_min, suffix, region_suffix)
+    NC_in_DNI_name=lowres_data_path+'DNI_%dmin_m_stats%s%s.nc' % (time_step_min, suffix, region_suffix)
+
+    modul_asp_r = math.radians(180-azimuth)
+
+    #output file name    
+    out_OPTA_name =lowres_data_path+'OPTA%s.nc' % (region_suffix) # 
+#    temp_data_path='/home/tomas/'
+#    print 'DEBUG - SAVE into local test path',temp_data_path
+#    out_OPTA_name =temp_data_path+'OPTA%s.nc' % (region_suffix) # 
+
+    
+    #adapt subset box to latlongrid
+    aoi_bbox = adapt_subset_bbox(aoi_bbox, latlon_bbox)
+
+    if clear_aoi:
+        null_opt_inc = numpy.empty((aoi_bbox.height, aoi_bbox.width))
+        null_opt_inc[:,:] = -9.
+        dimr_range, dimc_range = out_rowcol_px_ranges(aoi_bbox, latlon_bbox)
+        try:
+            write_proj_model_output_2dim(out_OPTA_name, 'opta', dimr_range, dimc_range, null_opt_inc, logger)
+        except:
+            print 'unable to write empty data to output file', out_OPTA_name
+            print sys.exc_info()
+
+
+    #create output NC files
+    result = make_model_output_opta_latlon(out_OPTA_name, latlon_bbox, overwrite = False, logger=logger, version=version)
+    if result==False: sys.exit()
+
+
+    subsegments = aoi_bbox.subsegments_xy(subseg_width, subseg_height)
+    for subset_bbox in subsegments:
+ 
+        print 'Calculating '+str(subset_bbox)
+        dimr_range, dimc_range = out_rowcol_px_ranges(subset_bbox, latlon_bbox)
+        
+            
+        #read lowres data
+        logger.info('Reading lowres GHI data')
+        var_name='mean'
+        result =  disaggregate_common.read_lowres_data_for_highres_bbox(NC_in_GHI_name, var_name, subset_bbox, slot_min, slot_max,logger,enalarge_buffer=0)
+        if result is None: sys.exit()
+        GHI_lowres_mean, lowres_bbox = result
+        
+        var_names=disaggregate_common.percentiles_names_list(percentiles)
+        result = disaggregate_common.read_lowres_multi_data_for_highres_bbox(NC_in_GHI_name, var_names, subset_bbox, slot_min, slot_max,logger,enalarge_buffer=0)
+        if result is None: sys.exit()
+        GHI_lowres, lowres_bbox = result
+
+
+        logger.info('Reading lowres DNI data')
+        var_names=disaggregate_common.percentiles_names_list(percentiles)
+        result = disaggregate_common.read_lowres_multi_data_for_highres_bbox(NC_in_DNI_name, var_names, subset_bbox, slot_min, slot_max,logger,enalarge_buffer=0)
+        if result is None: sys.exit()
+        DNI_lowres, lowres_bbox = result
+
+
+        
+        logger.info('Calculating solar geometry')
+        if time_step_min == 15:
+            a0_grid, h0_grid = disaggregate_common.make_sunposit_grids_min15(subset_bbox, slot_min, slot_max)
+        elif time_step_min == 30:
+            a0_grid, h0_grid = disaggregate_common.make_sunposit_grids_min30(subset_bbox, slot_min, slot_max)
+        
+    
+        logger.info('Calculating module geometry')
+        geom_module_dict={}
+        
+        latitude_2d = lowres_bbox.latitudes(px_order=True, array2d=True, degrees=True)
+        
+        sina0_grid = numpy.sin(a0_grid)
+        cosa0_grid = numpy.cos(a0_grid)
+        sinh0_grid = numpy.sin(h0_grid)
+        cosh0_grid = numpy.cos(h0_grid)
+        rotation_limit = [None, None]
+        rotation_limit2 = [None, None]
+        backtrack = False
+        relative_spacing_rows = 0
+        relative_spacing_columns = 0
+
+        
+        lat=int(abs(subset_bbox.center()[1]))
+        optim_range=range(max(-15,lat+search_lower_range), min(90.,lat+search_upper_range))
+        
+        for modul_incl in optim_range:
+            modul_incl_r = math.radians(modul_incl)
+            dummy, inc_angle_cos_grid, GammaNV ,dummy, dummy, dummy, dummy, dummy, dummy, dummy, dummy = mounting_geom.mounting_geom_angles(mounting, sina0_grid, cosa0_grid, a0_grid, sinh0_grid, cosh0_grid, h0_grid, GN=modul_incl_r, AN=modul_asp_r, latitude=latitude_2d, rotation_limit=rotation_limit, rotation_limit2=rotation_limit2, backtrack=backtrack, relative_spacing_rows=relative_spacing_rows, relative_spacing_columns=relative_spacing_columns)
+#            dummy, GammaNV, dummy, inc_angle_cos_grid, dummy,dummy, dummy, dummy = mounting_geom.mounting_geom_angles(mounting, a0_grid, h0_grid, GN=modul_incl_r, AN=modul_asp_r, latitude=latitude_2d)
+#            inc_angle_cos_grid, GammaNV = mounting_geom.mounting_incidencecos_gamma(mounting, a0_grid, h0_grid, modul_incl_r, modul_asp_r, latitude_2d)
+            geom_module_dict[modul_incl] = (inc_angle_cos_grid, GammaNV)
+        
+
+        
+        #iterative calculation 
+        logger.info('Calculating optimal tilt')
+        Albedo = 0.125
+        opt_inc=numpy.empty(GHI_lowres[0,0,0,:,:].shape, dtype=numpy.float32)
+        GHI_max=numpy.empty(GHI_lowres[0,0,0,:,:].shape, dtype=numpy.float32)
+        GHI_max[:,:]=-999
+    
+
+    
+        for modul_incl in optim_range:
+            inc_angle_cos_grid, GammaNV = geom_module_dict[modul_incl]
+
+            cDIF_iso_skydome_dissag, cDIF_iso_refl_dissag, cDIF_horiz_dissag, cDIF_circ_dissag, cREFL_incl_dissag, cDNI_incl_dissag = disaggregate_common.diffinc_PerezFast_shadingGcomponents_percentiles_GHInormalized(GHI_lowres, GHI_lowres_mean, DNI_lowres, h0_grid, GammaNV, Albedo, inc_angle_cos_grid, percentiles, doPVAngularCorr=False)
+
+            
+            #dissagregate (apply shading)
+            isotropic_shading_factor = 1.0
+            shading_direct = 0.0
+            DIF_incl_dissag_sh = (cDIF_iso_skydome_dissag*isotropic_shading_factor) + (cDIF_iso_refl_dissag*(1.-isotropic_shading_factor)) + cDIF_horiz_dissag + (cDIF_circ_dissag*(1.-shading_direct))
+            DNI_incl_dissag_sh = cDNI_incl_dissag*(1.-shading_direct) #DNI in inlined plane
+            GHI_incl_dissag_sh = DIF_incl_dissag_sh + cREFL_incl_dissag + DNI_incl_dissag_sh 
+
+
+            GHI_ma=numpy.ma.masked_where(numpy.isnan(GHI_incl_dissag_sh),GHI_incl_dissag_sh)
+            GHI_ma_sum=GHI_ma.sum(axis=1)*0.5 #monthly sums
+            GHI_ma_sum_yearly=numpy.empty_like(GHI_ma_sum[0,:,:])
+            GHI_ma_sum_yearly[:,:]=0
+            for m in range(1,12+1):
+                GHI_ma_sum_yearly+=GHI_ma_sum[m-1,:,:]*(daytimeconv.month_days_avg[m])/365.25 #yearly sum
+                
+            wh = GHI_ma_sum_yearly>GHI_max
+            opt_inc[wh]=modul_incl
+            GHI_max[wh]=GHI_ma_sum_yearly[wh]
+            
+            if wh.sum() < 1:
+                break
+            
+            del(GHI_ma,GHI_ma_sum,  GHI_ma_sum_yearly)
+        
+        del (geom_module_dict)
+    
+    
+        write_proj_model_output_2dim(out_OPTA_name, 'opta', dimr_range, dimc_range, opt_inc, logger)
+
+    print 'DONE'
+        
+
+    logger.info("finished")
+    mail_notification='tomas.cebecauer@geomodel.eu' #email addres to send finish notification to, Use '' to avoid mail notification
+    basic_mail.mail_process_message_ssl(reciever_to=mail_notification, message='optangle finished.' )
+    
+    sys.exit()
+        

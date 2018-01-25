@@ -4,7 +4,7 @@ from utils import *
 def get_visible_predictors(array_data, ocean_mask, times, latitudes, longitudes, satellite_step, slot_step,
                            compute_indexes, normalize, return_m_s=False):
     from get_data import mask_channels
-    from angle_zenith import get_zenith_angle
+    from angles_geom import get_zenith_angle
 
     array_data, mask = mask_channels(array_data, False)
     nb_channels = np.shape(array_data)[-1]
@@ -22,18 +22,17 @@ def get_visible_predictors(array_data, ocean_mask, times, latitudes, longitudes,
     nb_features = 4  # snow index, negative variability, positive variability, cloudy sea
 
     me, std = np.zeros(nb_features), np.full(nb_features, 1.)
-
+    zen = get_zenith_angle(times, latitudes, longitudes)
     ndsi, m, s, mask_ndsi = get_snow_index(vis=array_data[:, :, :, 1], nir=array_data[:, :, :, 0], threshold_denominator=0.02,
-                                           mask=mask, zen=get_zenith_angle(times, latitudes, longitudes), ocean_mask=ocean_mask,
+                                           mask=mask, zen=zen, ocean_mask=ocean_mask,
                                            return_m_s_mask=True, index='ndsi-zenith')
 
     me[0] = m
     std[0] = s
-
     if not normalize:
         array_indexes = np.empty(shape=(nb_slots, nb_latitudes, nb_longitudes, nb_features))
         array_indexes[:, :, :, 3] = get_cloudy_sea(vis=array_data[:, :, :, 1], ocean_mask=ocean_mask,
-                                                   threshold_cloudy_sea=0.2)
+                                                   thresholds=thresholds_cloudy_sea(zen))
         array_indexes[:, :, :, 1] = get_bright_negative_variability_5d(ndsi, mask_ndsi, satellite_step, slot_step)
         array_indexes[:, :, :, 2] = get_bright_positive_variability_5d(ndsi, mask_ndsi, satellite_step, slot_step)
         ndsi[array_data[:, :, :, 1] < 0.35] = -10  # mask 'bright' pixels with low visibility
@@ -41,7 +40,8 @@ def get_visible_predictors(array_data, ocean_mask, times, latitudes, longitudes,
     else:
         array_indexes = np.empty(shape=(nb_slots, nb_latitudes, nb_longitudes, nb_features), dtype=np.uint8)
         array_indexes[:, :, :, 3] = get_cloudy_sea(vis=array_data[:, :, :, 1], ocean_mask=ocean_mask,
-                                                   threshold_cloudy_sea=0.2)
+                                                   thresholds=thresholds_cloudy_sea(zen))
+
         array_indexes[:, :, :, 2] = normalize_array(
                 get_bright_negative_variability_5d(ndsi, mask_ndsi, satellite_step, slot_step),
                 mask_ndsi, normalization='gray-scale')
@@ -56,6 +56,13 @@ def get_visible_predictors(array_data, ocean_mask, times, latitudes, longitudes,
         return array_indexes, me, std
     else:
         return array_indexes
+
+
+def thresholds_cloudy_sea(zen):
+    cos_zen = np.cos(zen)
+    cos_zen[cos_zen < 0.03] = 0.03
+    cos_zen = np.power(cos_zen, 0.3)
+    return 0.2/cos_zen
 
 
 def get_bright_negative_variability_5d(index, definition_mask, satellite_step, slot_step):
@@ -238,7 +245,7 @@ def get_flat_nir(variable, cos_zen, mask, nb_slots_per_day, slices_per_day, tole
                  mask_not_proper_weather=None):
     if mask_not_proper_weather is not None:
         mask = mask | mask_not_proper_weather
-    from angle_zenith import get_likelihood_variable_cos_zen
+    from angles_geom import get_likelihood_variable_cos_zen
     return get_likelihood_variable_cos_zen(
         variable=variable,
         cos_zen=cos_zen,
@@ -258,8 +265,8 @@ def get_tricky_transformed_ndsi(snow_index, summit, gamma=4):
     return normalize_array(np.exp(-gamma*recentered) - np.exp(-gamma*summit))
 
 
-def get_cloudy_sea(vis, ocean_mask, threshold_cloudy_sea=0.1):
+def get_cloudy_sea(vis, ocean_mask, thresholds):
     to_return = np.zeros_like(vis)
     for slot in range(len(to_return)):
-        to_return[slot, :, :][ocean_mask & (vis[slot, :, :] > threshold_cloudy_sea)] = 1
+        to_return[slot, :, :][ocean_mask & (vis[slot, :, :] > thresholds[slot])] = 1
     return to_return

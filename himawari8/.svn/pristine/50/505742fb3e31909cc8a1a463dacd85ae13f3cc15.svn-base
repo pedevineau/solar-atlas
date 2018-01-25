@@ -1,0 +1,62 @@
+#! /usr/bin/env python
+#
+#
+#
+import numpy
+import netCDF4
+import os
+
+from general_utils import latlon
+from general_utils import latlon_nctools
+
+
+
+if __name__ == "__main__":
+    
+
+    out_dir = '/data/model_data_himawari/data_output_wgs84/v20/'
+    out_dir = '/home1/model_data_himawari/data_output_wgs84/v20/'
+#    out_dir = '/home1/model_data_himawari/data_output_wgs84/v20_combined_2007_2016/'
+    region_suffix_out='_pan'
+
+    file_name = os.path.join(out_dir,'GHI_d_m'+region_suffix_out+'.nc')
+    varname='GHI_d_m'
+
+#    file_name = os.path.join(out_dir,'DNI_d_m'+region_suffix_out+'.nc')
+#    varname='DNI_d_m'
+
+#    file_name = os.path.join(out_dir,'DNI_d_m_stats'+region_suffix_out+'.nc')
+#    varname='mean'
+
+#    file_name = os.path.join(out_dir,'DNIc_10min_m_stats'+region_suffix_out+'.nc')
+#    img_channels=['mean']
+#    varname='mean'
+
+
+    res = latlon_nctools.latlon_read_lat_lon_nc_whole(file_name, varname, return_bbox=True)
+    if res is None: exit()
+    
+    data, bbox = res
+    
+    print 'plot'
+
+    print data.ndim, data.shape
+    print bbox
+    data=data.astype(numpy.float32)
+    data[data<-90]=numpy.nan
+
+    
+    if data.ndim ==4:
+        map_data_2d= data.reshape((data.shape[0]*data.shape[1],data.shape[2],data.shape[3]))
+    else:
+        map_data_2d = data[:,:,:]
+    
+    print map_data_2d.shape
+    aux= data[data==data]
+    print aux.min(), aux.max()
+    del(data)
+    
+    latlon.visualize_map_3d(map_data_2d, bbox, vmin=None, vmax=8000, show_grid=False, interpolation='nearest')
+    
+
+

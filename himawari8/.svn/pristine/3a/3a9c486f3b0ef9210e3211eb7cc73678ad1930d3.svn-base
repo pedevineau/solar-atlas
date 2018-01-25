@@ -1,0 +1,386 @@
+#! /usr/bin/env python
+
+import datetime
+import os
+import sys
+import numpy
+import time
+
+from general_utils import daytimeconv
+from general_utils import basic_mail
+from general_utils import latlon
+from aerosols.model import atmosphere_param
+from himawari8.sat_model import himawari_mdl_core
+from himawari8.sat_model.utils import himawari_nc_latlontools
+from himawari8.sat_model.utils import realtime_processing_utils
+
+from general_utils import multiprocess
+
+
+if __name__ == "__main__":
+    mail_notification='tomas.cebecauer@solargis.com' #email address to send finish notification to, Use '' to avoid mail notification
+    
+
+    dfbStart = daytimeconv.yyyymmdd2dfb('20160818')
+    dfbEnd = daytimeconv.yyyymmdd2dfb('20160818')
+    slotStart_calc = 14
+    slotEnd_calc = 18
+
+    
+##    #for daily operational processing
+#    dfbToday = daytimeconv.date2dfb(datetime.datetime.now().date())
+#    dfbStart = dfbToday
+#    dfbEnd = dfbToday
+#
+#    slotStart_calc = 'autodetect'   # slot number or 'autodetect' (checks last calculated slot)
+#    autodetect_adapt_DfbSlotStart = True
+#    slotEnd_calc = 'autodetect'     # slot number or 'autodetect' (checks most recent available raw satellite data)
+#    autodetect_adapt_DfbSlotEnd = True
+
+    num_slots_upfront_clearsky = 38 #needed for forecast to have precalculated clearsky
+
+
+    slotStart_himawari = 1
+    slotEnd_himawari = 144
+
+    resolution =  2./60.
+    segments_to_calculate = latlon.expand_segments([[64, 64, 10, 10]]) 
+    
+    
+    
+    dsnRawDict={'db':'himawari_archive', 'host':'himalia', 'user':'sat_oper', 'password':'itNov6'}
+
+    
+    #use previous results (if available) to init lower bound calculation (uses LB and LBland parameters)
+    
+    segment_multiprocessing=True  #parallelization by segments - for operational short periods
+    delay_sec=5 # segment run delay of segment parallelization 
+    do_parallel=False
+    ncpus='autodetect'# minimum one worker on local machine if no servers
+    
+    do_sat_classification = False
+    
+    segment_sizex=32; segment_sizey=32
+    
+    verbose = False
+    
+    #local path where all data are stored
+    model_version = 'v20'
+    geom_data_path = '/data/model_data_himawari/data_geom/' 
+    dem_data_path = '/data/model_data/data_dem/' 
+    satelliteDataDirs = ['/data/HIMAWARI8_OPERATIONAL/OUTNC/LATLON']
+    aod_path = '/data/model_data/data_aod/'
+    regular_data_path_pool = ['/net/carme/data/model_data_himawari/data_output/'+model_version, '/net/miranda/data/model_data_himawari/data_output/'+model_version]
+    realtime_data_path = '/data/model_data_himawari/data_output/realtime_'+model_version
+
+    geom_data_path = "/home1/model_data_himawari/data_geom/" 
+    dem_data_path = "/home0/model_data_goes/data_geom/" 
+    satelliteDataDirs = ["/home1/model_data_himawari/sat_data_procseg/"]
+    aod_path = '/home0/model_data/data_aod/'
+    regular_data_path_pool = ['/home1/model_data_himawari/data_output/'+model_version]
+    realtime_data_path = '/home1/model_data_himawari/data_output/realtime_'+model_version+'_test'
+    
+    regular_file_time_segmentation='month' # archseg month day
+    realtime_file_time_segmentation='day' # archseg month day
+    
+    #atmosphere section
+    aod_ncfiles, wv_ncfiles = himawari_mdl_core.init_aod_nc_files_v21u()
+    # ATMOSPHERE TYPES
+    # primary_type : 1-rural (water and dust-like), 4-maritime (rural and sea salt), 5-urban (rural and soot-like), 6-tropospheric (rural mixture)
+    # secondary_type : -9 for None or atmosphere type code
+    # secondary_weight_file : number <0.0,1.0> or NC file with weight data
+    atmosph=atmosphere_param.atmosphere_param(primary_type = 6, secondary_type = 5, secondary_weight_file = aod_path+'aod_urban_type_weight_v1.nc')
+    atmosph.hourly_data_persistence = 0
+    atmosph.aod_ncfiles = aod_ncfiles
+    atmosph.wv_ncfiles = wv_ncfiles
+    atmosph.aod_path = aod_path
+    atmosph.do_smoothing=True
+    atmosph.do_extreme_correction=True
+#    atmosph.extreme_correction_params=[0.1,0.25,0.85,0.75]
+    atmosph.extreme_correction_params=[0.0,0.6,1.0,0.85]
+    
+    
+    #write progres and result of processing to onitoring database
+    datasources_monitor_use = False
+    datasources_monitor_params={}
+    datasources_monitor_params['datasrc_name'] = 'HIMAWARI'
+    datasources_monitor_params['proc_group'] = "production"
+    datasources_monitor_params['proc_host'] = "moon"
+    datasources_monitor_params['storage_host'] = "moon"
+    datasources_monitor_params['version'] = model_version
+    datasources_monitor_params['description'] = 'realtime model'
+
+    
+    
+    ########################
+    #end of inputs
+    ########################
+    satInfoDict={\
+            'satList' : ["H08"],\
+            'chanNameList' : ['VIS064_2000', 'VIS160_2000', 'IR124_2000', 'IR390_2000'],\
+            'satelliteDataDirs' : satelliteDataDirs,\
+                 }
+
+    #input data from regular model
+#    regular_path_dict={"default": regular_data_path}
+    regular_channels=["LB"] # channels to read from prevoius day
+
+    #output data
+    realtime_path_dict={"default": realtime_data_path}
+    realtime_channels=["GHI","GHIc", "DNI", "DNIc", "KTM", "CLI", "CI", "LB", "LBclass","LBland","CI_flag"] # channels to write to output NC files
+
+   
+   
+   
+    #check paths
+    if ((not os.path.exists(dem_data_path)) or (os.path.isfile(dem_data_path))):
+        print "Dem data path %s not found" % dem_data_path
+        sys.exit()
+        
+    if ((not os.path.exists(geom_data_path)) or (os.path.isfile(geom_data_path))):
+        print "Geom (UB) data path %s not found" % geom_data_path
+        sys.exit()
+        
+        
+    res=False
+    for sat_data_path in satelliteDataDirs:
+        res = res or ((os.path.exists(sat_data_path)) and (not os.path.isfile(sat_data_path)))
+    if not res:
+        print "Satellite data path %s not found" % ' '.join(satelliteDataDirs)
+        sys.exit()
+    
+    if ((not os.path.exists(aod_path)) or (os.path.isfile(aod_path))):
+        print "AOD data path %s not found" % aod_path
+        sys.exit()
+    
+    res=False
+    for regular_data_path in regular_data_path_pool:
+        if ((os.path.exists(regular_data_path)) and (not os.path.isfile(regular_data_path))):
+            res = True
+            break
+    if not res:
+        print "Any of regular model data paths not found %s" % (' '.join(regular_data_path_pool))
+        sys.exit()
+        
+    if ((not os.path.exists(realtime_data_path)) or (os.path.isfile(realtime_data_path))):
+        print "Output data path %s not found" % realtime_data_path
+        sys.exit()
+
+
+
+
+   
+    #AUTODETECT slots to calculate
+
+    # START    
+    # handle DFBs and time SLOTs if autodetect
+    # based on most recent data calculated by regular daily model written to NC files 
+    if slotStart_calc == 'autodetect':
+        aux =  realtime_processing_utils.get_max_processed_data_slot_from_nc(dfbStart, segments_to_calculate, realtime_path_dict, realtime_file_time_segmentation)
+        slotStart_calc = aux
+        if (aux is None) and autodetect_adapt_DfbSlotStart:
+            aux =  realtime_processing_utils.get_max_processed_data_slot_from_nc(dfbStart-1, segments_to_calculate, realtime_path_dict, realtime_file_time_segmentation)
+            dfbStart -= 1
+            if (aux is None):
+                print 'Unable to identify end of previous run for slot inicalization. Using min %d' % slotStart_himawari
+                slotStart_calc=slotStart_himawari
+            else:
+                slotStart_calc = aux
+            print 'Autodetect Adapted dfb %s>%s slotStart %d' % (daytimeconv.dfb2yyyymmdd(dfbStart+1),daytimeconv.dfb2yyyymmdd(dfbStart), slotStart_calc)
+#        print 'Autodetection of the start time slot for realtime processing %d' %(slotStart_calc)
+
+    # END
+    # handle DFBs and time SLOTs if autodetect
+    # based on most recent available satellite data as written to SQL DB
+    if slotEnd_calc == 'autodetect':
+        autodetect_adapt_DfbSlotEnd_max_hour=15
+        slotEnd_calc =  realtime_processing_utils.get_max_rawsat_data_slot_from_db(dsnRawDict, dfbEnd, data_table='processed')
+        if (slotEnd_calc is None) and autodetect_adapt_DfbSlotEnd:
+            UTC_hour_now = datetime.datetime.utcnow().hour
+            UTC_hour_now = datetime.datetime.now().hour
+            if  UTC_hour_now > autodetect_adapt_DfbSlotEnd_max_hour: 
+                print 'Autodetect Backward Slot Adaptation not allowed after %d h UTC (it is already start of new day at himawari longitude). Current UTC time is %s' % (autodetect_adapt_DfbSlotEnd_max_hour,str(datetime.datetime.utcnow()))
+            else:
+                slotEnd_calc =  realtime_processing_utils.get_max_rawsat_data_slot_from_db(dsnRawDict, dfbEnd-1, data_table='processed')
+                if (slotEnd_calc is not None):
+                    dfbEnd -= 1
+                    print 'Autodetect Adapted dfb %s>%s slotEnd %d' % (daytimeconv.dfb2yyyymmdd(dfbEnd+1),daytimeconv.dfb2yyyymmdd(dfbEnd), slotEnd_calc)
+        if (slotEnd_calc is None):
+            print 'Unable autodetect most recent time slot with available raw satellite data for %s' % (daytimeconv.dfb2yyyymmdd(dfbEnd))
+            exit()
+        slotEnd_calc = min(slotEnd_calc,slotEnd_himawari)
+#        print 'Autodetection of the most recent available time slot with raw data %d' %(slotEnd_calc)
+
+
+    #clearsky extended into future (it don't need to be calculate by nowcasting model)
+    #clearsky dfb slot End
+    dfbEnd_clearsky = dfbEnd
+    slotEnd_calc_clearsky = slotEnd_calc + num_slots_upfront_clearsky
+    if  slotEnd_calc_clearsky > slotEnd_himawari:
+        slotEnd_calc_clearsky -= slotEnd_himawari
+        dfbEnd_clearsky += 1
+    
+
+
+
+    #DFB SLOT tests 
+    if (slotEnd_calc<slotStart_calc) and (dfbStart==dfbEnd):
+        print 'Processing not started - no new raw satellite data available. \n'
+        if mail_notification != '':
+            message='Processing not started - no new raw satellite data available. \n'
+            message+='Processing dates:slots: %s:%d-%s:%d\n' % (daytimeconv.dfb2yyyymmdd(dfbStart),slotStart_calc, daytimeconv.dfb2yyyymmdd(dfbEnd),slotEnd_calc)
+            message+='Processing clearsky: %s:%d-%s:%d\n' % (daytimeconv.dfb2yyyymmdd(dfbStart),slotStart_calc, daytimeconv.dfb2yyyymmdd(dfbEnd_clearsky), slotEnd_calc_clearsky)
+            basic_mail.mail_process_message_ssl(reciever_to=mail_notification, message=message)
+        exit()
+
+    if dfbStart>dfbEnd:
+        print "Requested dates for calculation not coherent. Exit."
+        exit()
+    
+
+
+   
+    list_succ=[]
+    list_fail=[]
+    aTotalStartTime = datetime.datetime.now()
+    
+    if segment_multiprocessing:
+        #create workers and queues
+        my_multiproc_funct = multiprocess.multiprocess(ncpus=ncpus, funct=himawari_mdl_core.sat_model_rast_realtime_pp)
+        print 'Multiprocessing init', my_multiproc_funct.init()
+        request_queue = my_multiproc_funct.request_queue
+        output_queue = my_multiproc_funct.output_queue
+
+    
+    
+    for seg_c, seg_r in segments_to_calculate:
+        print 'seg(c,r): %d %d' %( seg_c, seg_r)
+        process_bbox_current=latlon.get_5x5_seg_bbox(seg_r, seg_c, resolution, seg_size=5.)
+
+        seg_bbox=latlon.get_5x5_seg_bbox(seg_r, seg_c, resolution, seg_size=5.)
+
+
+        #sat data
+        # note that order of r,c is different from output files (c,r)
+        satdata_suffix="_r%02d_c%02d" % (seg_r, seg_c)
+    
+        #suffix added to output NETCDF file names
+        outdata_suffix="_c%d_r%d" % (seg_c, seg_r)
+        
+    #    aux data used in sat data classification %s auto replaced by region suffix
+        auxdata_file_dict = {"altitude": [dem_data_path+"/dem_strm120.nc", "dem"], \
+#                            "SDWE":[snow_data_path+"/*_sdwe_%s.nc","sdwe"],\
+                            "UB":[geom_data_path+"/himawari_UB"+outdata_suffix+".nc","UB"]}
+    
+        
+        out_channels=("GHI", "GHIc", "DNI", "DNIc", "KTM", "CI", "CLI", "LB", "LBclass", "LBland", "CI_flag") # channels to write to output NC files
+    
+    
+        print "Using settings from", sys.argv[0]
+        print "Model version", model_version
+        print "AOI %s within 5x5 deg. data segment %d %d" % (str(process_bbox_current), seg_c, seg_r)
+        print "Calculation dates:slots - allsky: %s:%d  %s:%d" % (daytimeconv.dfb2yyyymmdd(dfbStart), slotStart_calc, daytimeconv.dfb2yyyymmdd(dfbEnd), slotEnd_calc)
+        print "Calculation dates:slots - clearsky: %s:%d  %s:%d" % (daytimeconv.dfb2yyyymmdd(dfbStart),slotStart_calc, daytimeconv.dfb2yyyymmdd(dfbEnd_clearsky), slotEnd_calc_clearsky) 
+        print "Segment multiprocessing:",segment_multiprocessing," number of CPUs:",ncpus
+        print "Parallel processing:",do_parallel," number of CPUs:",ncpus
+        print "Path - geom data (UB):", geom_data_path
+        print "Path - dem data:", dem_data_path
+        print "Path - raw sat data:", ' '.join(satelliteDataDirs)
+        print "Path - AOD:",aod_path 
+        print "Path - input regular model data:", ' '.join(regular_data_path_pool)
+        print "Path - output realtime data:", realtime_data_path
+        print "Output data suffix:",outdata_suffix
+        print '---end of inputs---'
+
+        #start segment processing
+        # input data from regular (daily) processing
+        try:
+            regular_files_dict = himawari_nc_latlontools.outdata_existingncfile_dict_pathpool(dfbStart-1, dfbEnd, regular_channels, regular_data_path_pool, outdata_suffix, file_time_segmentation=regular_file_time_segmentation)
+        except:
+            list_fail.append("c%d_r%d" % (seg_c, seg_r))
+        if len(regular_files_dict)<1:
+            list_fail.append("c%d_r%d" % (seg_c, seg_r))
+            print 'No output file. Skipping segment.',seg_c, seg_r
+            continue
+
+
+        try:
+            realtime_files_dict = himawari_nc_latlontools.check_output_nc_files(dfbStart, dfbEnd_clearsky, 1, 144, seg_bbox, realtime_path_dict, realtime_channels, outdata_suffix, model_version=model_version, file_time_segmentation=realtime_file_time_segmentation)
+        except:
+            list_fail.append("c%d_r%d" % (seg_c, seg_r))
+            continue
+        if len(realtime_files_dict)<1:
+            list_fail.append("c%d_r%d" % (seg_c, seg_r))
+            print 'No output file. Skipping segment.',seg_c, seg_r
+            continue
+    
+    
+#        if mail_notification != '':
+#            basic_mail.mail_process_message_ssl(reciever_to=mail_notification, message='processing segment started %d, %d.' % (seg_c, seg_r))
+        ##################################
+        #PROCESSING
+        ##################################    
+        aStartTime = datetime.datetime.now()
+        print 'Start', aStartTime
+        id="c%d_r%d" % (seg_c, seg_r)
+        
+        
+        args=[ dfbStart, dfbEnd, slotStart_himawari, slotEnd_himawari, slotStart_calc, slotEnd_calc, dfbEnd_clearsky, slotEnd_calc_clearsky, satInfoDict, atmosph, auxdata_file_dict, satdata_suffix, realtime_channels, regular_files_dict, realtime_files_dict, outdata_suffix, process_bbox_current, seg_bbox] 
+        kwargs={'do_parallel':do_parallel, 'ncpus':ncpus, 'segment_sizex':segment_sizex, 'segment_sizey':segment_sizey,'regular_file_time_segmentation':regular_file_time_segmentation, 'realtime_file_time_segmentation':realtime_file_time_segmentation,'verbose':verbose, 'do_sat_classification':do_sat_classification}
+        
+        if segment_multiprocessing:
+            do_parallel=False
+            request_queue.put([id,args,kwargs])
+            time.sleep(delay_sec)
+        else:
+            print 'Serial processing'
+            result = himawari_mdl_core.sat_model_rast_realtime_pp(*args,**kwargs)
+            
+            if not(result):
+                list_fail.append(id)
+            else:
+                list_succ.append(id)
+            segment_processing_time = datetime.datetime.now() - aStartTime
+            if verbose: 
+                print 'End', datetime.datetime.now(), "Segment processing time:", segment_processing_time
+
+
+        
+    if segment_multiprocessing:
+        #wait for jobs to finish        
+        print "Waiting for %d processes to finish." % (request_queue.qsize())
+        request_queue.join()
+    
+    
+        print "Processing %d outputs" % (output_queue.qsize())
+        while output_queue.qsize()>0:
+            #get job
+            job = output_queue.get()
+            job_key = job[0]
+            job_output = job[1]
+            #process output        
+            if job_output is  None:
+                print "job results empty", job_key
+                list_fail.append(job_key)
+                basic_mail.mail_process_message_ssl(reciever_to=mail_notification, message='Processing segment %s failed.' % (job_key) ) 
+            else:
+                print "job results OK", job_key, job_output
+                list_succ.append(job_key)
+            #remove job from output queue
+            output_queue.task_done() #remove job outputs form queue
+    
+        #destroy workers
+        my_multiproc_funct.destroy()
+
+            
+
+    total_processing_time = datetime.datetime.now() - aTotalStartTime
+    message='Processing all segments finished. \n'
+    message+='Time: %s\n'%(str(total_processing_time))
+    message+='Successfully processed:%d/%d\n'%(len(list_succ),len(list_succ)+len(list_fail))
+    message+='Success segments: %s\n'%(', '.join(list_succ))
+    message+='Failure segments: %s\n'%(', '.join(list_fail))
+    if mail_notification != '':
+        basic_mail.mail_process_message_ssl(reciever_to=mail_notification, message=message)
+    print message
+    exit()

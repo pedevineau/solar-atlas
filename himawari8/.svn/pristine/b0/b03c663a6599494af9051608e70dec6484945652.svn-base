@@ -1,0 +1,382 @@
+#! /usr/bin/env python
+# combine merged data (aggregated statistics) from two and more satellites
+#
+# last revision: 01/04/2017
+#
+
+
+import os
+import math
+
+import numpy
+
+from general_utils import daytimeconv
+from general_utils import basic_mail
+from general_utils import latlon
+from general_utils import latlon_nctools
+from general_utils import multiprocess
+from himawari8.himawari_postprocess import himawari_merge_common
+
+#logger section
+from general_utils.basic_logger import make_logger
+logger = make_logger(__name__)
+import logging
+logging.getLogger().setLevel(logging.DEBUG)
+
+
+def calculate_sources_weights(sources_dict):
+	keys=sources_dict.keys()
+	total_years=0
+	for key in keys:
+		total_years+=sources_dict[key]['year_end']-sources_dict[key]['year_begin']+1
+	for key in keys:
+		sources_dict[key]['weight']=(sources_dict[key]['year_end']-sources_dict[key]['year_begin']+1)/float(total_years)
+#	for key in keys:
+#		print key, 'weight', sources_dict[key]['weight']
+	return sources_dict
+
+
+#adapt subset_bbox to the pixels of latlon_bbox (then exact subset can be clipped)
+def adapt_subset_bbox(process_bbox, latlon_bbox):
+	if process_bbox is None:
+		return None
+	else:
+		process_bbox2 = latlon_bbox.intersect(process_bbox)
+		if not(process_bbox.equals(process_bbox2)):
+			logger.debug("process_bbox adapted to output bbox")
+	return process_bbox2
+
+
+
+def _interp_2d(out_time_arr,in_time_arr,in_data):
+	
+	rr = in_data.shape[1]        
+	cc = in_data.shape[2]
+
+	out_time_step_min = out_time_arr[1]-out_time_arr[0]
+	in_time_step_min = in_time_arr[1]-in_time_arr[0]
+
+	time_change_ratio = in_time_step_min/out_time_step_min
+	
+	#extend the in_time_arr and in_data to allow correct interpolation at the tails
+	in_time_arr_ext=numpy.hstack([in_time_arr[0]-(in_time_arr[1]-in_time_arr[0]), in_time_arr, in_time_arr[-1]+(in_time_arr[1]-in_time_arr[0])])
+	in_data_ext=numpy.vstack([in_data[-1,:,:].reshape((1,rr,cc)),in_data,in_data[0,:,:].reshape((1,rr,cc))]).astype(numpy.float64)
+	
+	
+	#output data matrix
+	out_data = numpy.empty((out_time_arr.shape[0],rr,cc))
+
+	#process by pixel	    
+	for r in range(0,rr):
+	    for c in range(0,cc):
+	        in_data_ext_px = in_data_ext[:,r,c]
+	        out_data_px = numpy.interp(out_time_arr, in_time_arr_ext, in_data_ext_px)
+	        #normalize to get same value as from input 
+	        aux=in_data_ext_px[1:-1]
+	        wh_in=(aux==aux)
+	        wh_out=(out_data_px==out_data_px)
+	        if (wh_in.sum() >0) and (wh_out.sum() >0) and ((out_data_px[wh_out]).sum()>0):
+	            out_data_px*=aux[wh_in].sum()/((out_data_px[wh_out]).sum()/time_change_ratio)
+	        out_data[:,r,c]=out_data_px
+	return out_data
+
+
+def time_interpolate_mtrc_30min(bbox, in_data, multiproc_interp_2d=None):
+	# time interpolation arrays
+	in_time_arr=numpy.arange(0.25,24.0,0.5) # goes output 30 min slot mapping - slot is centered for each 30 min segment 
+	out_time_arr=numpy.arange(0.125,24.0,0.25) # output 15 min slot mapping - slot is centered for each 30 min segment 
+
+	#output (interpolated) array
+	mm,dummy,rr,cc = in_data.shape
+	out_data = numpy.empty((mm,96,rr,cc), dtype=in_data.dtype)
+
+	if multiproc_interp_2d is None:
+		#single processing
+		for m in range(0,mm):
+			out_data[m,:,:,:]=_interp_2d(out_time_arr,in_time_arr, in_data[m,:,:,:])
+	else:
+		#multiprocessing
+		request_queue = multiproc_interp_2d.request_queue
+		output_queue = multiproc_interp_2d.output_queue
+		for m in range(0,mm):
+			job_id = m
+			args = [out_time_arr,in_time_arr, in_data[m,:,:,:]]
+			kwargs = {}
+			request_queue.put((job_id,args,kwargs) )
+ 		
+ 		#wait for jobs to finish		
+		request_queue.join()
+
+		#process outputs from 
+		while output_queue.qsize()>0:
+			#get job
+			job = output_queue.get()
+			job_key, job_output = job[0],job[1]
+			if job_output is  None:
+				print "job results empty", job_key 
+			else:
+				m = job_key
+				out_data[m,:,:,:]=job_output
+			#remove job from output queue
+			output_queue.task_done() #remove job outputs form queue
+		
+	return out_data
+
+def time_interpolate_mtrc_10min(bbox, in_data, multiproc_interp_2d=None):
+	# time interpolation arrays
+	in_time_step_dh = 10./60.
+	in_time_arr=numpy.arange(in_time_step_dh/2.,24.0,in_time_step_dh) # goes output 30 min slot mapping - slot is centered for each 10 min segment
+	out_time_arr=numpy.arange(0.125,24.0,0.25) # output 15 min slot mapping - slot is centered for each 30 min segment 
+	#output (interpolated) array
+	mm,dummy,rr,cc = in_data.shape
+	out_data = numpy.empty((mm,96,rr,cc), dtype=in_data.dtype)
+
+#	for m in range(0,mm):
+#		out_data[m,:,:,:]=_interp_2d(out_time_arr,in_time_arr, in_data[m,:,:,:])
+	if multiproc_interp_2d is None:
+		#single processing
+		for m in range(0,mm):
+			out_data[m,:,:,:]=_interp_2d(out_time_arr,in_time_arr, in_data[m,:,:,:])
+	else:
+		#multiprocessing
+		request_queue = multiproc_interp_2d.request_queue
+		output_queue = multiproc_interp_2d.output_queue
+		for m in range(0,mm):
+			job_id = m
+			args = [out_time_arr,in_time_arr, in_data[m,:,:,:]]
+			kwargs = {}
+			request_queue.put((job_id,args,kwargs) )
+ 		
+ 		#wait for jobs to finish		
+		request_queue.join()
+
+		#process outputs from 
+		while output_queue.qsize()>0:
+			#get job
+			job = output_queue.get()
+			job_key, job_output = job[0],job[1]
+			if job_output is  None:
+				print "job results empty", job_key 
+			else:
+				m = job_key
+				out_data[m,:,:,:]=job_output
+			#remove job from output queue
+			output_queue.task_done() #remove job outputs form queue
+	
+	return out_data
+
+
+
+#------------------------------------------------------------
+# main
+#------------------------------------------------------------
+
+if __name__ == "__main__":
+	mail_notification='tomas.cebecauer@solargis.com' #email addres to send finish notification to, Use '' to avoid mail notification
+	
+	dfb_begin = daytimeconv.yyyymmdd2dfb('20160101')
+	dfb_end = daytimeconv.yyyymmdd2dfb('20161231')	   
+	
+	in_dir = '/net/kale/data/model_data_himawari/data_output_wgs84/v20/'
+	out_dir = '/net/kale/data/model_data_himawari/data_output_wgs84/v20b/'
+
+	version="v20b"
+	in_suff = ""
+	
+	#region by 5x5 degree latlon tiles  
+	segments_to_calculate=latlon.expand_segments([[70, 70, 20, 20]])
+	
+	#projected NC file params
+	res=2./60.  #final value 2/60. == 00:02:00
+	buff=3.*res
+
+#	w, e, s, n = 90-buff, 180+buff, 0.-buff, 65.+buff  #pan
+#	region_suffix_out='_pan'
+	w, e, s, n = 85-buff, 180+buff, -60.-buff, 0.+buff  #pas
+	region_suffix_out='_pas'
+
+	slot_begin, slot_end = 1,144
+	slot_time_step_min=10
+
+
+	#model summary NC files
+	overwrite=False
+
+#	out_dir = '/home1/model_data_himawari/data_output_wgs84/v20b/'
+	
+	do_GHI, do_GHIc, do_DNI, do_DNIc = True, True, True, True
+	
+	
+	
+	#parallel processing - parallel each month for XX min stats 
+	ncpus = 12
+	
+	#do not edit!!!
+	percentiles = [1, 10, 25, 50, 75, 90, 99]
+	
+
+	latlon_bbox=latlon.bounding_box(w, e, s, n, int(math.floor(((e-w)/res)+0.5)), int(math.floor(((n-s)/res)+0.5)), res)
+	
+	#######################################################
+
+	file_suffix=region_suffix_out+'.nc'
+	
+	#percentiles_names
+	percentiles_name=[]
+	for p in percentiles:
+		percentiles_name.append("P"+str(p))
+	logger.info('processing percentiles:' + str(percentiles_name))
+
+
+	#make model summary NC files
+	result=himawari_merge_common.make_model_output_summary_files(out_dir, do_GHI, do_GHIc, do_DNI, do_DNIc, dfb_min=dfb_begin, dfb_max=dfb_end, slot_min=slot_begin, slot_max=slot_end, slot_time_step_min=slot_time_step_min , bbox=latlon_bbox, overwrite=overwrite, percentiles_name=percentiles_name, version=version, region_suffix=region_suffix_out)
+	logger.info('Creation of output files: '+ str(result))
+
+
+	year_min=daytimeconv.dfb2ymd(dfb_begin)[0]
+	year_max=daytimeconv.dfb2ymd(dfb_end)[0]
+	years=year_max-year_min+1
+	month_min=1
+	month_max=12
+	months=month_max-month_min+1
+	slots=slot_end-slot_begin+1
+
+
+	#segmented processing
+	for x_seg, y_seg in segments_to_calculate:
+		seg_bbox = latlon.get_5x5_seg_bbox(y_seg, x_seg, res)
+		#adapt segment box to latlongrid
+			
+		roll=0
+		if (seg_bbox.center()[0] < 0) and (latlon_bbox.center()[0] > 0):
+			roll=+360
+			logger.info( 'Western hemisphere segment, will try to roll the longitudes by 360 deg.')
+		if (seg_bbox.center()[0] > 0) and (latlon_bbox.center()[0] < 0):
+			roll=-360
+			logger.info( 'Eastern hemisphere segment, will try to roll the longitudes by 360 deg.')
+			
+		if roll!=0:				
+			seg_bbox=seg_bbox.move(lon_shift=roll, lat_shift=0)
+		
+		
+		subset_bbox = adapt_subset_bbox(seg_bbox, latlon_bbox)
+		if subset_bbox is None:
+			logger.warning("Skipping segment r%d c%d out of output bbox %s" % (y_seg, x_seg, str(latlon_bbox)))
+			continue
+		logger.info("Combining segment r%d c%d" % (y_seg, x_seg))
+
+		
+		if do_GHI:
+			dim0_range=[year_min,year_max]
+			dim1_range=[1,12]
+			logger.info('Processing GHI_d_m' )
+			nc_in_mdl_file = 'GHI_d_m'+file_suffix
+			nc_out_mdl_file = 'GHI_d_m'+file_suffix
+			in_variab_names = ['GHI_d_m']
+			for var_name in in_variab_names:
+				aData = latlon_nctools.latlon_read_lat_lon_nc_bbox(os.path.join(in_dir, nc_in_mdl_file), var_name, seg_bbox=subset_bbox, interpolate='nearest')
+				if aData is None:
+					logger.error('Problem reading variable %s from %s' % (var_name, nc_in_mdl_file ))
+					continue
+				result &= latlon_nctools.latlon_write_whole_lat_lon_nc_bbox(os.path.join(out_dir,nc_out_mdl_file), var_name, subset_bbox,aData)
+	
+			nc_in_mdl_file = 'GHI_d_m_stats'+file_suffix 
+			nc_out_mdl_file = 'GHI_d_m_stats'+file_suffix
+			in_variab_names = percentiles_name+[ 'mean', 'std_d', 'std_m']
+			logger.info('Processing GHI_d_m_stats' )
+			for var_name in in_variab_names:
+				aData = latlon_nctools.latlon_read_lat_lon_nc_bbox(os.path.join(in_dir, nc_in_mdl_file), var_name, seg_bbox=subset_bbox, interpolate='nearest')
+				if aData is None:
+					logger.error('Problem reading variable %s from %s' % (var_name, nc_in_mdl_file ))
+					continue
+				result &= latlon_nctools.latlon_write_whole_lat_lon_nc_bbox(os.path.join(out_dir,nc_out_mdl_file), var_name, subset_bbox,aData)
+	
+			dim0_range=[1,12]
+			dim1_range=[slot_begin, slot_end]
+			nc_in_mdl_file = 'GHI_%dmin_m_stats%s'%(slot_time_step_min,file_suffix)
+			nc_out_mdl_file = 'GHI_%dmin_m_stats%s'%(slot_time_step_min,file_suffix)
+			in_variab_names = percentiles_name+[ 'mean']
+			logger.info('Processing GHI_%dmin_m_stats'%(slot_time_step_min))
+			for var_name in in_variab_names:
+				aData = latlon_nctools.latlon_read_lat_lon_nc_bbox(os.path.join(in_dir, nc_in_mdl_file), var_name, seg_bbox=subset_bbox, interpolate='nearest')
+				if aData is None:
+					logger.error('Problem reading variable %s from %s' % (var_name, nc_in_mdl_file ))
+					continue
+				result &= latlon_nctools.latlon_write_whole_lat_lon_nc_bbox(os.path.join(out_dir,nc_out_mdl_file), var_name, subset_bbox,aData)
+
+		if do_GHIc:
+			dim0_range=[1,12]
+			dim1_range=[slot_begin, slot_end]
+			nc_in_mdl_file = 'GHIc_%dmin_m_stats%s'%(slot_time_step_min,file_suffix)
+			nc_out_mdl_file = 'GHIc_%dmin_m_stats%s'%(slot_time_step_min,file_suffix)
+			in_variab_names = [ 'mean']
+			logger.info('Processing GHIc_%dmin_m_stats'%(slot_time_step_min))
+			for var_name in in_variab_names:
+				aData = latlon_nctools.latlon_read_lat_lon_nc_bbox(os.path.join(in_dir, nc_in_mdl_file), var_name, seg_bbox=subset_bbox, interpolate='nearest')
+				if aData is None:
+					logger.error('Problem reading variable %s from %s' % (var_name, nc_in_mdl_file ))
+					continue
+				result &= latlon_nctools.latlon_write_whole_lat_lon_nc_bbox(os.path.join(out_dir,nc_out_mdl_file), var_name, subset_bbox,aData)
+			
+
+		
+
+		if do_DNI:
+			dim0_range=[year_min,year_max]
+			dim1_range=[1,12]
+			logger.info('Processing DNI_d_m' )
+			nc_in_mdl_file = 'DNI_d_m'+file_suffix
+			nc_out_mdl_file = 'DNI_d_m'+file_suffix
+			in_variab_names = ['DNI_d_m']
+			for var_name in in_variab_names:
+				aData = latlon_nctools.latlon_read_lat_lon_nc_bbox(os.path.join(in_dir, nc_in_mdl_file), var_name, seg_bbox=subset_bbox, interpolate='nearest')
+				if aData is None:
+					logger.error('Problem reading variable %s from %s' % (var_name, nc_in_mdl_file ))
+					continue
+				result &= latlon_nctools.latlon_write_whole_lat_lon_nc_bbox(os.path.join(out_dir,nc_out_mdl_file), var_name, subset_bbox,aData)
+	
+			nc_in_mdl_file = 'DNI_d_m_stats'+file_suffix 
+			nc_out_mdl_file = 'DNI_d_m_stats'+file_suffix
+			in_variab_names = percentiles_name+[ 'mean', 'std_d', 'std_m']
+			logger.info('Processing DNI_d_m_stats' )
+			for var_name in in_variab_names:
+				aData = latlon_nctools.latlon_read_lat_lon_nc_bbox(os.path.join(in_dir, nc_in_mdl_file), var_name, seg_bbox=subset_bbox, interpolate='nearest')
+				if aData is None:
+					logger.error('Problem reading variable %s from %s' % (var_name, nc_in_mdl_file ))
+					continue
+				result &= latlon_nctools.latlon_write_whole_lat_lon_nc_bbox(os.path.join(out_dir,nc_out_mdl_file), var_name, subset_bbox,aData)
+	
+			dim0_range=[1,12]
+			dim1_range=[slot_begin, slot_end]
+			nc_in_mdl_file = 'DNI_%dmin_m_stats%s'%(slot_time_step_min,file_suffix)
+			nc_out_mdl_file = 'DNI_%dmin_m_stats%s'%(slot_time_step_min,file_suffix)
+			in_variab_names = percentiles_name+[ 'mean']
+			logger.info('Processing DNI_%dmin_m_stats'%(slot_time_step_min))
+			for var_name in in_variab_names:
+				aData = latlon_nctools.latlon_read_lat_lon_nc_bbox(os.path.join(in_dir, nc_in_mdl_file), var_name, seg_bbox=subset_bbox, interpolate='nearest')
+				if aData is None:
+					logger.error('Problem reading variable %s from %s' % (var_name, nc_in_mdl_file ))
+					continue
+				result &= latlon_nctools.latlon_write_whole_lat_lon_nc_bbox(os.path.join(out_dir,nc_out_mdl_file), var_name, subset_bbox,aData)
+
+		if do_DNIc:
+			dim0_range=[1,12]
+			dim1_range=[slot_begin, slot_end]
+			nc_in_mdl_file = 'DNIc_%dmin_m_stats%s'%(slot_time_step_min,file_suffix)
+			nc_out_mdl_file = 'DNIc_%dmin_m_stats%s'%(slot_time_step_min,file_suffix)
+			in_variab_names = [ 'mean']
+			logger.info('Processing DNIc_%dmin_m_stats'%(slot_time_step_min))
+			for var_name in in_variab_names:
+				aData = latlon_nctools.latlon_read_lat_lon_nc_bbox(os.path.join(in_dir, nc_in_mdl_file), var_name, seg_bbox=subset_bbox, interpolate='nearest')
+				if aData is None:
+					logger.error('Problem reading variable %s from %s' % (var_name, nc_in_mdl_file ))
+					continue
+				result &= latlon_nctools.latlon_write_whole_lat_lon_nc_bbox(os.path.join(out_dir,nc_out_mdl_file), var_name, subset_bbox,aData)
+
+
+
+			
+	logger.info("Finished merged combine "+str(result))
+	basic_mail.mail_process_message_ssl(reciever_to=mail_notification, message='Finished merged combine ' + str(result) )
+
+

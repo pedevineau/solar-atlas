@@ -1,0 +1,344 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""Himawari8 downloaded + processed data visualizer
+@author: milos.korenciak@geomodel.eu"""
+
+from __future__ import print_function
+from bottle import run, request, route, debug
+from collections import namedtuple
+import data_classes as DC
+from datetime import datetime, timedelta
+from jinja2 import Template
+
+from general_utils.basic_logger import make_logger
+logger = make_logger(__name__)
+logger.setLevel(1)
+
+
+def main():
+    """Main method stub - to be run ALWAYS to configure it all"""
+
+    ### definition of module constants
+    # definition of DB to use / write into
+    DB_NAME = "himawari_archive"  # "hiawari8"
+    DB_USER = "sat_oper"
+    DB_PASSWORD = "itNov6"
+    DB_HOST = "dbsatarchive"
+
+    # DC.database.initialize(DC.SqliteDatabase("/tmp/my_database.db"))
+    DC.database.initialize(DC.PostgresqlDatabase(DB_NAME, user=DB_USER, password=DB_PASSWORD, host=DB_HOST))
+    # if nonexistent tables, create them silently
+    DC.downloaded.create_table(fail_silently=True)
+    DC.processed.create_table(fail_silently=True)
+    DC.database.close()
+
+    if __name__ == '__main__':  # from commandline
+        debug(True)  # be verbose if run from console
+        run(host="0.0.0.0",port=8080, reloader=True)  # run the webserver from commandline - no matter of hostname
+    else:  # run under the server
+        import sys
+        import os
+        sys.path.append(os.path.dirname(__file__))
+        def application(environ, start_response):
+            start_response('200 OK', [('Content-Type', 'text/html')])
+            content = str(bottle)
+            return [content]
+
+
+# ### The WORKING METHODS
+
+def get_downloaded(start_date, end_date, file_type=None, channel_name=None):
+    """Static method returning downloaded table rows according to request filter"""
+    D = DC.downloaded
+    expression = (D.datetime.between(start_date, end_date))
+    if file_type:
+        expression = (expression & (D.file_type == file_type))
+    if channel_name:
+        expression = (expression & (D.channel_name == channel_name))
+    return D.select(D.file_size,D.datetime
+        ).where(expression
+        ).order_by(D.datetime)
+
+
+def get_processed(start_date, end_date, file_type=None, channel_name=None):
+    """Static method returning processed (Processed) table rows according to request filter"""
+    P = DC.processed
+    expression = (P.datetime.between(start_date, end_date))
+    if file_type:
+        expression = (expression & (P.file_type == file_type))
+    if channel_name:
+        expression = (expression & (P.channel_name == channel_name))
+    return P.select(P.datetime, P.file_size
+        ).where(expression
+        ).order_by(P.datetime)
+
+
+def get_channels_downloaded():
+    """Gets the available channel names """
+    query = DC.downloaded.select(DC.downloaded.channel_name).distinct()
+    return list(query)
+
+
+def get_channels_processed():
+    """Gets the available channel names """
+    query = DC.processed.select(DC.processed.channel_name).distinct()
+    return list(query)
+
+
+def numberToColor(value, max_value, min_value):
+    """Transforms value into the color. The min_value and max_value are
+    used to determine the the range of values."""
+    if value is None:
+        return "#DDDDDD"
+    if value > max_value:
+        return "#C00000"
+    if value < min_value:
+        return "#A0A0A0"
+    r_min,g_min,b_min = (0,64,0)
+    r_max,g_max,b_max = (255,117,0)
+    r = r_min + float(r_max - r_min) * (value - min_value) / (max_value - min_value)
+    g = g_min + float(g_max - g_min) * (value - min_value) / (max_value - min_value)
+    b = b_min + float(b_max - b_min) * (value - min_value) / (max_value - min_value)
+    return "#%02X%02X%02X"%(r,g,b)
+
+
+def create_svg_slots(rows, start_datetime, end_datetime, nameChart="slots plot",
+                     slots_per_day=144, nameX="Slots", nameY="Days"):
+    """Create the svg as text
+    rows needs to be sorted yet by start_datetime ascending"""
+    rows = list(rows)
+    #print("data ", [str(row) for row in rows])
+    OneDay = namedtuple("OneDay", ["slots","date",])
+    data, slots_of_day, slots_of_previous_day = [], [], None
+    actDT, actD = start_datetime, start_datetime.date()
+    step = timedelta(1)/slots_per_day
+    global template
+    min_val, max_val = "", None  # any string is more than any number; any number is more than None
+    for row in rows:  # compute min and max values for coloring the data
+        min_val = min(min_val,row.file_size)
+        max_val = max(max_val,row.file_size)
+
+    # prepare the data to be rendered
+    for row in rows:
+        # check next day
+        if actDT.date() != actD:
+            # empty actual data buffer
+            data.append(OneDay(slots_of_day, actD))
+            actD += timedelta(1)
+            slots_of_day = []  # create new data buffer for next day
+        # check multiple rows per slot --> accumulate them into one!
+        if row.datetime < actDT:
+            # print("WARNING!! multiple rows acumulating into one slot:" + str(row.datetime) + " DateTime actually processed: " + str(actDT))
+            if slots_of_day:
+                a = slots_of_day.pop()
+                a = (numberToColor(row.file_size+a[1], max_val, min_val), row.file_size+a[1])
+                slots_of_day.append(a)
+            elif slots_of_previous_day:
+                a = slots_of_previous_day.pop()
+                a = (numberToColor(row.file_size+a[1], max_val, min_val), row.file_size+a[1])
+                slots_of_previous_day.append(a)
+            else:
+                print("ERROR!! Underrun before we start?", slots_of_previous_day, slots_of_day)
+            continue
+        # check empty slot
+        while row.datetime >= actDT + step:
+            # add empty slot for no data
+            slots_of_day.append((numberToColor(None, max_val, min_val), 0))
+            actDT += step
+            if actDT.date() != actD:
+                data.append(OneDay(slots_of_day, actD))
+                # create new data buffer for next day
+                actD += timedelta(1)
+                slots_of_previous_day, slots_of_day = slots_of_day, []
+
+        # treat actual slot
+        slots_of_day.append((numberToColor(row.file_size, max_val, min_val), row.file_size))
+        actDT += step
+    # add empty slots data after the last valid slot if needed
+    while actDT < end_datetime:  # add empty slots for no data until end_datetime
+        slots_of_day.append((numberToColor(None, max_val, min_val), 0))
+        actDT += step
+        if actDT.date() != actD:
+            data.append(OneDay(slots_of_day, actD))
+            # create new data buffer for next day
+            actD += timedelta(1)
+            slots_of_previous_day, slots_of_day = slots_of_day, []
+    # write last chunk of data into data list
+    data.append(OneDay(slots_of_day, actD))
+
+    # back to rendering....
+    # constants for creating svg + labels in it
+    width = 3
+    height = 3
+    slots_numbers = ["" if i%10 else i for i in range(1,145)]
+    # print("data: ", data)
+
+    return template.render(data=data, width=width, height=height, nameChart=nameChart, nameX=nameX, nameY=nameY, x_labels=slots_numbers)
+
+
+def create_svg_days(rows, start_datetime, end_datetime, nameChart="days plot", nameX="Days", nameY="Months"):
+    """Create the svg as text
+    rows needs to be sorted yet by datetime ascending"""
+    rows = list(rows)
+    OneMonth = namedtuple("OneMonth", ["days","month",])
+    data, actD = [], start_datetime.date()
+    month_days, actM = [], start_datetime.date().month
+    day_acumulator = 0
+    min_val, max_val = "", None  # any string is more than any number; any number is more than None
+
+    for row in rows:
+        # check empty day
+        if actD.month != actM:
+            print("next month addition", month_days, "actD", actD)
+            # empty actual data buffer
+            data.append(OneMonth(month_days, actD.strftime("%Y-%m")))
+            # create new data buffer for next day
+            actD += timedelta(1)
+            month_days = []
+        # check if we are getting next day
+        while row.datetime.date() > actD:
+            # add empty day for no data
+            min_val = min(day_acumulator, min_val)
+            max_val = max(day_acumulator, max_val)
+            month_days.append(day_acumulator)
+            day_acumulator = 0
+            actD += timedelta(1)  # add 1 day
+            # check if we are in the next month!
+            if actD.month != actM:
+                data.append(OneMonth(month_days, actD.strftime("%Y-%m")))
+                # create new data buffer for next month
+                actM = actD.month
+                month_days = []
+
+        # treat actual slot
+        day_acumulator += float(row.file_size)
+    # add the last acumulator value into month
+    while datetime.combine(actD, time()) < end_datetime:  # add empty data until end_datetime
+            min_val = min(day_acumulator, min_val)
+            max_val = max(day_acumulator, max_val)
+            month_days.append(day_acumulator)
+            day_acumulator = 0
+            actD += timedelta(1)  # add 1 day
+            # check if we are in the next month!
+            if actD.month != actM:
+                data.append(OneMonth(month_days, actD.strftime("%Y-%m")))
+                # create new data buffer for next month
+                actM = actD.month
+                month_days = []
+    month_days.append(day_acumulator)
+    data.append(OneMonth(month_days, actD.strftime("%Y-%m")))
+
+    data2 = [] # recompute the colors
+    for the_month in data:
+        data2.append(OneMonth([
+        [numberToColor(None if day_sum is 0 else day_sum, max_val, min_val), day_sum] for day_sum in the_month.days], the_month.month))
+
+    # back to rendering....
+    # constants for creating svg + labels in it
+    width = 3
+    height = 3
+    day_in_month_numbers = ["" if i%10 else i for i in range(1,31)]
+    print("data2: ", data2)
+
+    global template
+    return template.render(data=data2, width=width, height=height, nameChart=nameChart, nameX=nameX, nameY=nameY, x_labels=day_in_month_numbers)
+
+
+template = Template("""<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#"
+  xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:svg="http://www.w3.org/2000/svg"
+  xmlns="http://www.w3.org/2000/svg" viewBox = "0 0 460 {{(data|length-1)*height + 42}}" version="1.1"><g>
+<text x="230" y="12" style="font-size:15px;text-anchor: middle;">{{nameChart}}</text>
+<text x="8" y="37" font-size="11" transform="rotate(-90,8,37)">{{nameY}}</text>
+{%- set heatmapColumn = 0 -%}
+{%- set heatmapRow = 0 -%}
+{%- for day in data %}
+    <text x="10" y="{{heatmapRow * height + 22.5}}" font-size="{{height}}">{{day.date}}</text>
+    <!-- transform="rotate(-90,0,{{heatmapRow * height + 12}})"-->
+    {%- for slot in day.slots -%}
+        <rect style="fill:{{slot.0}};stroke:#000000;stroke-width:0" width="{{width}}" height="{{height}}"
+        x="{{heatmapColumn*width+25}}" y="{{heatmapRow*height + 20}}" desc="{{slot.1}}" />
+        <!-- heatmapColumn {{heatmapColumn}} , heatmapRow {{heatmapRow}} -->
+         {%- set heatmapColumn = heatmapColumn + 1 -%}
+    {%- endfor -%}
+    {%- set heatmapRow = heatmapRow + 1 -%}
+{%- endfor -%}
+{%- set heatmapColumn = 0 -%}
+{%- for slotNumber in x_labels %}
+    {%- set heatmapColumn = heatmapColumn + 1 -%}
+    <text x="{{heatmapColumn*width+25}}" y="{{(data|length-1)*height+32}}" font-size="{{width}}" transform="rotate(-90,{{heatmapColumn*width+25}},{{(data|length-1)*height+32}})">{{slotNumber}}</text>
+{%- endfor -%}
+<!-- heatmapColumn {{heatmapColumn}} , heatmapRow {{heatmapRow}} -->
+<text x="25" y="{{(data|length-1)*height + 40}}" font-size="11" >{{nameX}}</text>
+</g></svg>""")
+
+
+# ## Index page
+INDEX_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Index demonstration page</title>
+  </head>
+  <body>
+    <h2>Overviews of Downloaded data</h2>
+    <p>(Showing days on y axis, slots on x axis)</p>
+    <ul><li><a href="./downloaded">All</a></li>
+    {%-for channel_name in channel_names_downloaded-%}
+        <li><a href="./downloaded?channel_name={{channel_name}}">{{channel_name}}</a></li>
+    {%endfor-%}</ul>
+
+    <h2>Overviews of Processed data</h2>
+    <p>(Showing days on y axis, slots on x axis)</p>
+    <ul><li><a href="./processed">All</a></li>
+    {%-for channel_name in channel_names_processed-%}
+        <li><a href="./processed?channel_name={{channel_name}}">{{channel_name}}</a></li>
+    {%endfor-%}</ul>
+
+    <h2>Simple <a href="./test">test</a></h2>
+  </body>
+</html>"""
+
+
+# ## BOTTLE SERVER
+@route("/")
+def index():
+    return Template(INDEX_HTML).render(
+        channel_names_downloaded=get_channels_downloaded(),
+        get_channels_processed=get_channels_processed() )
+
+
+@route("/test")
+def test():
+    return str("Ahoy, I am working!")
+
+
+@route("/downloaded")
+def get_downloaded_data():
+    start_datetime = datetime.now() - timedelta(days=60)
+    end_datetime = datetime.now() + timedelta(days=10)
+    channel_name = request.query.get("channel_name", None)
+    name = "Slots plot of downloaded" + ("" if channel_name is None else " for channel "+channel_name)
+    slots_per_day = 144
+
+    rows = get_downloaded(start_datetime,end_datetime, channel_name=channel_name)
+    return create_svg_slots(rows=rows, start_datetime=start_datetime, end_datetime=end_datetime,
+                                       nameChart=name, slots_per_day=slots_per_day, nameX="Slots", nameY="Days")
+
+
+@route("/processed")
+def get_processed_data():
+    start_datetime = datetime.now() - timedelta(days=60)
+    end_datetime = datetime.now() + timedelta(days=10)
+    channel_name = request.query.get("channel_name", None)
+    name = "Slots plot of processed" + ("" if channel_name is None else " for channel "+channel_name)
+    slots_per_day = 144
+
+    rows = get_processed(start_datetime,end_datetime, channel_name=channel_name)
+    return create_svg_slots(rows=rows, start_datetime=start_datetime, end_datetime=end_datetime,
+                                       nameChart=name, slots_per_day=slots_per_day, nameX="Slots", nameY="Days")
+
+
+# ## RUN THE SERVER!
+
+main()  # This is deployment independent way of running

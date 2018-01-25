@@ -1,0 +1,631 @@
+'''
+This is an attempt to create a site reader for Himawari8
+As far as I am concerned (Jano) the concept of site reader coresponds to
+a software that computes the solar model for a location defined by lat lon coordinates
+and stores the raw data as well as the results pof the mdoels into the database
+
+
+'''
+
+
+from general_utils import daytimeconv_num
+from general_utils import latlon
+from general_utils import db_sites, db_utils, daytimeconv
+from himawari8.navigation import proj4_navigation as h08pnav, hrit_navigation as h08hnav
+from himawari8 import utils
+from himawari8.slotmapping import slot2time
+import netCDF4 as nc
+import numpy
+import datetime
+import os
+import StringIO
+
+
+
+from playhouse.db_url import connect
+from playhouse.reflection import Introspector
+
+def get_table(table_name=None,  dbengine=None, host=None, port=None,  database=None, user=None, password=None ):
+    """
+        Gets the python class that corresponds to a table in the database defined by keyword arguments
+        the table in the database corresponds to a class in python. Use this class to manipulate (CRUD) the table
+        This function needs to be much more robust. The idea is to create a clas on demand using peewee introspection
+        tools (see pwiz)
+
+        @returns  a python class that can be used to interact with the table table_name ins the database specified by the rest of parameters
+        This should be database agnostic!!!!
+
+    """
+
+    def create_model(introspector, table=None):
+
+        intr_db = introspector.introspect()
+
+        def expose_table(table, seen, accum=None):
+            code_list = []
+            accum = accum or []
+            foreign_keys = intr_db.foreign_keys[table]
+            for foreign_key in foreign_keys:
+                dest = foreign_key.dest_table
+                # In the event the destination table has already been pushed
+                # for printing, then we have a reference cycle.
+                if dest in accum and table not in accum:
+                    logger.debug('# Possible reference cycle: %s' % foreign_key)
+
+                # If this is not a self-referential foreign key, and we have
+                # not already processed the destination table, do so now.
+                if dest not in seen and dest not in accum:
+                    seen.add(dest)
+                    if dest != table:
+                        expose_table(dest, seen, accum + [table])
+            code_list.append('from peewee import *')
+            code_list.append('class %s(Model):' % table)
+            primary_keys = intr_db.primary_keys[table]
+            columns = intr_db.columns[table]
+            for name, column in sorted(columns.items()):
+                if name == 'id' and column.field_class in introspector.pk_classes:
+                    continue
+                if column.primary_key and len(primary_keys) > 1:
+                    # If we have a CompositeKey, then we do not want to explicitly
+                    # mark the columns as being primary keys.
+                    column.primary_key = False
+                code_list.append('\t%s' % column.get_field())
+            code_list.append('')
+
+            if len(primary_keys) > 1:
+                code_list.append('')
+                code_list.append('\tclass Meta:')
+                pk_field_names = sorted([field.name for col, field in columns.items() if col in primary_keys])
+                pk_list = ', '.join("'%s'" % pk for pk in pk_field_names)
+                code_list.append('\t\tprimary_key = CompositeKey(%s)' % pk_list)
+            code_list.append('')
+            seen.add(table)
+            return '\n'.join(code_list)
+
+
+        seen = set()
+        for table_n in sorted(intr_db.model_names.keys()):
+             if table_n == table:
+                    code = expose_table(table, seen)
+                    try:
+                        exec code in locals()
+                    except SyntaxError as se:
+                        logger.error(code)
+                        raise
+                    table_inst = locals()[table_name]
+                    return table_inst
+
+    url = '%s://%s:%s@%s:%s/%s' % (dbengine, user, password, host, port, database)
+    db = connect(url)
+    try:
+        inst = globals()[table_name]
+        # inst = table_name
+    except KeyError as ke:
+        tables = db.get_tables()
+        if table_name in tables:
+            # make an intropsector
+            introspector = Introspector.from_database(db)
+            # create the python code that will handle the interaction with the table
+            inst = create_model(introspector, table=table_name)
+            # attach the database
+            inst._meta.database = db
+            return inst
+        else:
+            db.close()
+            raise Exception, 'table "%s" does not exist in the database %s. Valid table names are %s. ' % (
+            table_name, database, str(tables))
+    inst._meta.database = db
+    return inst
+
+def delete_raw_data(table_name=None, start_date=None, end_date=None, conn_dict=None):
+    assert table_name is not None, '"table_name" can not be None'
+    assert table_name != '', '"table_name" can noy be empty string'
+    raw_data_table = get_table(table_name=table_name, **conn_dict)
+    try:
+
+        query = raw_data_table.delete().where(raw_data_table.datetime_real.between(start_date, end_date)).execute()
+        #query = raw_data_table.delete().where(raw_data_table.date.between(start_date, end_date)) # add execute
+    except Exception as e:
+        print e
+    finally:
+        #disconnect
+        raw_data_table._meta.database.close()
+
+def get_site_id_meta(sid=None, table_name=None, conn_dict=None):
+    assert sid is not None, 'Site id can not be None'
+    assert table_name is not None, '"table_name" can not be None'
+    assert sid != '', 'Site id can noy be empty string'
+    assert table_name != '', '"table_name" can noy be empty string'
+
+    try:
+        site_coords_table = get_table(table_name=table_name, **conn_dict)
+
+        query = site_coords_table.select().where(site_coords_table.id == sid)
+        if query.count() == 1:
+            for e in query:
+                return e._data
+    finally:
+        site_coords_table._meta.database.close()
+
+def table_exists(table_name=None, dbengine=None, host=None, port=None, database=None, user=None, password=None):
+    """
+    Super simple way to check if a table exists in the database using peewee
+    Args are self explanatory
+    :param table_name:
+    :param dbengine:
+    :param host:
+    :param port:
+    :param database:
+    :param user:
+    :param password:
+    :return:
+    """
+
+
+    assert table_name is not None, '"table_name" can not be None'
+    assert table_name != '', '"table_name" can noy be empty string'
+    url = '%s://%s:%s@%s:%s/%s' % (dbengine, user, password, host, port, database)
+
+    try:
+        db = connect(url)
+        tables = db.get_tables()
+        return table_name in tables
+    except Exception as e:
+        logger.error(e)
+    finally:
+        if not db.is_closed():
+            db.close()
+
+def create_raw_data_table(table_name=None, dbengine=None, host=None, port=None, database=None, user=None, password=None):
+
+
+    url = '%s://%s:%s@%s:%s/%s' % (dbengine, user, password, host, port, database)
+    db = connect(url)
+    conn = db.get_conn()
+    curs = db.get_cursor()
+
+    query='CREATE TABLE ' + table_name + ' (sat text, date date NOT NULL, time time NOT NULL, slot integer, datetime timestamp, date_lat date, time_lat time, a0 real, h0 real, h0_refr real, vis real, ir2 real, ir4 real)'
+    curs.execute(query)
+
+    query="ALTER TABLE " + table_name + " ADD PRIMARY KEY (sat, date, time);"
+    curs.execute(query)
+    query="COMMENT ON COLUMN " + table_name + ".sat IS 'Satellite identifier';"
+    curs.execute(query)
+    query="COMMENT ON COLUMN " + table_name + ".date IS 'Date identifier of data';"
+    curs.execute(query)
+    query="COMMENT ON COLUMN " + table_name + ".time IS 'Start time of slot acquisition';"
+    curs.execute(query)
+    query="COMMENT ON COLUMN " + table_name + ".slot IS 'Slot number';"
+    curs.execute(query)
+    query="COMMENT ON COLUMN " + table_name + ".datetime IS 'Real date and start time of slot acquisition';"
+    curs.execute(query)
+    query="COMMENT ON COLUMN " + table_name + ".date_lat IS 'Solar apparent local date';"
+    curs.execute(query)
+    query="COMMENT ON COLUMN " + table_name + ".time_lat IS 'Solar apparent local date-time';"
+    curs.execute(query)
+    query="COMMENT ON COLUMN " + table_name + ".a0 IS 'Solar azimuth measured from South [rad]';"
+    curs.execute(query)
+    query="COMMENT ON COLUMN " + table_name + ".h0 IS 'Solar altitude (incidence angle)';"
+    curs.execute(query)
+    query="COMMENT ON COLUMN " + table_name + ".h0_refr IS 'h0, when refraction considered [rad]';"
+    curs.execute(query)
+    query="COMMENT ON COLUMN " + table_name + ".vis IS 'Digital count in VIS(1) channel';"
+    curs.execute(query)
+    query="COMMENT ON COLUMN " + table_name + ".ir2 IS 'Digital count in IR2 channel';"
+    curs.execute(query)
+    query="COMMENT ON COLUMN " + table_name + ".ir4 IS 'Digital count in IR4 channel';"
+    curs.execute(query)
+
+    conn.commit()
+    conn.close()
+    return True
+
+
+
+def rawDataTable_create(DSN_string,TableName):
+    '''Static method creates empty table for site raw data'''
+    conn = db_utils.getConnectionDSNString(DSN_string)
+    curs = conn.cursor()
+
+    query='CREATE TABLE '+TableName+' (sat text, slot integer, datetime_nominal timestamp, datetime_real timestamp,  VIS064_2000 real, VIS160_2000 real, IR124_2000 real, IR390_2000 real)'
+    curs.execute(query)
+
+    query="ALTER TABLE " + TableName + " ADD PRIMARY KEY (datetime_real);"
+    curs.execute(query)
+    query="COMMENT ON COLUMN " + TableName + ".sat IS 'Satellite identifier';"
+    curs.execute(query)
+    query="COMMENT ON COLUMN " + TableName + ".slot IS 'Slot number';"
+    curs.execute(query)
+    query="COMMENT ON COLUMN " + TableName + ".datetime_nominal IS 'Nominal date and start time of slot acquisition';"
+    curs.execute(query)
+    query="COMMENT ON COLUMN " + TableName + ".datetime_real IS 'Real date and start time of slot acquisition';"
+    curs.execute(query)
+    query="COMMENT ON COLUMN " + TableName + ".VIS064_2000 IS 'bidirectional reflectance factor for channel 3 at 0.64 um';"
+    curs.execute(query)
+    query = "COMMENT ON COLUMN " + TableName + ".VIS160_2000 IS 'bidirectional reflectance factor for channel 5 at 1.61 um';"
+    curs.execute(query)
+    query="COMMENT ON COLUMN " + TableName + ".IR124_2000 IS 'brightness temperature for channel 15 at 12.38 um';"
+    curs.execute(query)
+    query="COMMENT ON COLUMN " + TableName + ".IR390_2000 IS 'brightness temperature for channel 7 at 3.89 um';"
+    curs.execute(query)
+
+    conn.commit()
+    conn.close()
+    return True
+
+
+
+
+#drop existing data from output table
+def rawDataTable_dropData(DSN_string, out_table, minD, maxD):
+    conn = db_utils.getConnectionDSNString(DSN_string)
+    curs = conn.cursor()
+    #query = "DELETE FROM " + out_table + " WHERE datetime_real >='" + str(minD) + "' AND datetime_real<='" + str(maxD)
+    query = "DELETE FROM " + out_table + " WHERE datetime_real BETWEEN '" + str(minD) + "' AND date('" + str(maxD) + "')" + " + integer '1' "
+    #query = "DELETE FROM " + out_table + " WHERE datetime_real BETWEEN '" + str(minD) + "' AND '" + str(maxD) + "'" #+ " + integer '1' "
+    print query
+    try:
+        curs.execute(query)
+    except:
+        print "Unable to execute the query, skipping."
+        print query
+
+    conn.commit()
+    conn.close()
+    return True
+
+
+
+def rawDataTable_writeData(DSN_string, tableName, sat, slot, datetime_nominal, datetime_real, data_arr, chanNameList):
+
+    '''
+     sat | | slot | datetime_nominal | datetime_real | vis064_2000 | vis160_2000 | ir124_2000 | ir390_2000
+    -----+------+------------------+---------------+-------------+-------------+------------+------------
+    '''
+
+    chan_VIS064_idx = chanNameList.index('VIS064_2000')
+    chan_VIS160_idx = chanNameList.index('VIS160_2000')
+    chan_IR124_idx = chanNameList.index('IR124_2000')
+    chan_IR390_idx = chanNameList.index('IR390_2000')
+    data_arr_VIS064 = data_arr[chan_VIS064_idx,:]
+    data_arr_VIS160 = data_arr[chan_VIS160_idx,:]
+    data_arr_IR124 = data_arr[chan_IR124_idx,:]
+    data_arr_IR390 = data_arr[chan_IR390_idx,:]
+
+
+
+    _buffer = StringIO.StringIO()
+    counter=0
+    for i in range(0, slot.shape[0]):
+
+        #Getting values from dictionaries
+
+        W_sat = sat
+        W_slot = int(slot[i])
+        W_datetime_nominal = daytimeconv_num.num2date(datetime_nominal[i])
+        W_datetime_real = daytimeconv_num.num2date(datetime_real[i])
+
+
+
+        #from satellite data
+
+        W_VIS064 = '\N' if numpy.isnan(data_arr_VIS064[i]) else data_arr_VIS064[i]
+        W_VIS160 = '\N' if numpy.isnan(data_arr_VIS160[i]) else  data_arr_VIS160[i]
+        W_IR124 = '\N' if numpy.isnan(data_arr_IR124[i]) else data_arr_IR124[i]
+        W_IR390 = '\N' if numpy.isnan(data_arr_IR390[i]) else data_arr_IR390[i]
+
+
+
+
+        record = W_sat+"\t"+str(W_slot)+"\t"+"'"+str(W_datetime_nominal)+"'"+"\t" +"'"+str(W_datetime_real)+"'"+"\t"+str(W_VIS064)+"\t"+str(W_VIS160)+"\t" +str(W_IR124)+"\t"+str(W_IR390)
+
+        counter+=1
+
+        _buffer.write(record+"\n")
+
+    logger.debug('writing %d records', counter)
+    #copy data to DB
+    _buffer.seek(0,0)
+    conn = db_utils.getConnectionDSNString(DSN_string)
+    curs = conn.cursor()
+    columns = ('sat', 'slot', 'datetime_nominal', 'datetime_real',  'vis064_2000', 'vis160_2000', 'ir124_2000 ', 'ir390_2000')
+    curs.copy_from(_buffer, tableName, columns=columns)
+    conn.commit()
+    conn.close()
+
+    return True
+
+
+
+
+
+def jump_by_month(start_date, end_date, month_step=1):
+    current_date = start_date
+    while current_date < end_date:
+        yield current_date
+        carry, new_month = divmod(current_date.month - 1 + month_step, 12)
+        new_month += 1
+        current_date = current_date.replace(year=current_date.year + carry, month=new_month, day=1)
+
+
+
+
+def search_nc_files(nc_dir_list=None,start_date=None, end_date=None, sat_list=None,  channels=None, pattern=None):
+
+
+
+    ncfiles = {}
+    for sat in sat_list:
+        ncfiles[sat] = {}
+        for chn in channels:
+            ncfiles[sat][chn] = []
+            for ncdir in nc_dir_list:
+                for d in jump_by_month(start_date, end_date):
+                    nc_name = pattern.format(sat=sat,channel_name=chn, year=d.year, month=d.month)
+                    nc_path = os.path.join(ncdir, nc_name)
+                    if os.path.exists(nc_path):
+                        ncfiles[sat][chn].append(nc_path)
+                    else:
+                        logger.debug('{0} does not exist'.format(nc_path))
+    return  ncfiles
+
+
+def retrieveSiteValues(sites_list, start_date, end_date, nc_read_dir_list, dbInfoRawData, site_table_prefix):
+
+    #connection info to the site_coordinates database and table
+    #sites_meta_conn_dict = {'dbengine': 'postgres', 'host': 'dbdata', 'port': 5432, 'database': 'site_coordinates','user': 'gm_user', 'password': 'ibVal4'}
+    dbInfoSitesMeta = {'DbName': 'site_coordinates', 'DbHost': 'dbdata', 'DbUser': 'gm_user', 'DbPassword': 'ibVal4'}
+
+    #connection info to the raw_data database and tables
+    #raw_data_conn_dict = {'dbengine': 'postgres', 'host': 'dbdata', 'port': 5432, 'database': 'himawari_sites','user': 'gm_user', 'password': 'ibVal4'}
+
+
+    #not used
+    #h08_arch_conn_dict = {'dbengine': 'postgres', 'host': 'dbdata', 'port': 5432, 'database': 'himawari_archive','user': 'sat_oper', 'password': 'itNov6'}
+    #dbInfoH08Archive = {'DbName': 'himawari_archive', 'DbHost': 'dbsatarchive', 'DbUser': 'sat_oper', 'DbPassword': 'itNov6'}
+
+    # ------------------------------------------------------------------------
+    # not recommended to edit
+    ncReadFileNamePattern =  '{sat}GEOS_{channel_name}__TMON_{year:04d}_{month:02d}.nc'  # # Himawari data is in  monthly archive files  H08GEOS_IR104_2000__TMON_2015_10.nc
+    SlotStart = 1
+    SlotEnd = 144
+    #this channels correspont ["VIS", "IR2", "IR4"] in goes
+
+    chanNameList = ['VIS064_2000', 'VIS160_2000', 'IR124_2000', 'IR390_2000']
+    sitesMetaTableName = 'site_coordinates'
+
+    #navigationTableName = 'navigation'
+
+    interpolate = 'nearest'  # nearest | bilinear #bilinear not recommended (not tested and validated)
+    dfb_start = daytimeconv.yyyymmdd2dfb(start_date)
+    dfb_end = daytimeconv.yyyymmdd2dfb(end_date)
+    if dfb_start>dfb_end:
+        raise Exception('Invalid start_date,end_date values. Start date has to be smaller than end date')
+
+    DSN_SitesData_str = db_utils.DSNDictToDSNString(dbInfoRawData)
+    DSN_SitesMeta_str = db_utils.DSNDictToDSNString(dbInfoSitesMeta)
+    sat_list = ['H08']
+    # ------------------------------------------------------------------------
+    # read from SQL DB dictionary with sites details
+    sitesInfoDict = {}
+    for siteID in sites_list:
+
+        # for site get from DB dictionary with 'latitude', 'longitude', 'altitude', 'short_name', 'name', 'country' and other keys
+        #one_site_info_dict = get_site_id_meta(siteID, 'site_coordinates', sites_meta_conn_dict)
+        one_site_info_dict = db_sites.db_get_site_site_info_dict(siteID, DSN_SitesMeta_str, sitesMetaTableName)
+
+        if one_site_info_dict == None:
+            logger.warning('Unable to get details for siteID %s', str(siteID))
+        else:
+            # create bounding box around the point - artificially created so the code with raster reader can be reused
+            lon = one_site_info_dict['longitude']
+            lat = one_site_info_dict['latitude']
+            logger.info('SITE %s, LAT: %.2f, LON: %.2f' % (siteID, lat, lon))
+            #alternative normalization
+            lon = ((lon + 180.0) % 360.0) - 180.0
+#            if lon < 0:
+#                logger.info('Adapting longitude of %d from %f to %f to be consistent with NC coordinate system (extending over -180 to the west)' % (siteID, lon, lon - 360))
+#                lon = lon + 360
+
+#            one_site_info_dict['bbox'] = latlon.bounding_box(xmin=lon - 0.005, xmax=lon + 0.005, ymin=lat - 0.005, ymax=lat + 0.005, width=1, height=1, resolution=0.01)
+
+            # convert latlon to image coordinates.
+            # proj4 nav always reaturns reasults, however, sometimes they need not make sense (asking to transform coordinates out of disk, or on the other side of the globe)
+            # H08 processed tabel contains the geotransform for very image as well as the ssp. But these are allaways the same for the same resolution so intead og going to database
+            # one can just hardcode them assuming the data read has a resolution of 2000 m
+            h08_px_y, h08_px_x = h08pnav.ll2lc(lat=lat, lon=lon, ssp=140.7,gt=(-5500000.0, 2000.0, 0.0, 5500000.0, 0.0, -2000.0))
+            logger.info('SITE %s, LINE: %d, COL: %d' % (siteID, h08_px_y, h08_px_x))
+
+            # hrit based nav, just to get a glimpse
+            # first get the nav coefficients for an image of given size and resolution
+            # nav_coeff = h08hnav.h08nav(resolution=2000,nl=5500, nc=5500)
+            # h08_px_y1, h08_px_x1 = h08hnav.ll2lc(lat=lat, lon=lon, lon0=140.7,cfac=nav_coeff['CFAC'], lfac=nav_coeff['LFAC'], coff=nav_coeff['LOFF'], loff=nav_coeff['COFF'],nl=5500, nc=5500)
+            # print h08_px_y1, h08_px_x1
+
+            if not 0<=h08_px_x<=5500:
+                raise Exception('Site {0} is invalid. The reprojected column is {1}'.format(siteID,h08_px_x ))
+
+            if not 0 <= h08_px_y <= 5500:
+                raise Exception('Site {0} is invalid. The reprojected line is {1}'.format(siteID, h08_px_y))
+
+
+            one_site_info_dict['h08_px_x'] = h08_px_x
+            one_site_info_dict['h08_px_y'] = h08_px_y
+            # print h08_px_y, h08_px_x
+
+            #setup the raw data table
+
+            tableName =  site_table_prefix + '_' + str(siteID)
+            '''
+            #uncomment to delete the tables for sites
+            print tableName
+            t = get_table(table_name=tableName,**raw_data_conn_dict)
+            t.drop_table()
+            continue
+            '''
+
+            if not db_utils.db_dtable_exist(DSN_SitesData_str, tableName):
+                rawDataTable_create(DSN_SitesData_str, tableName)
+            #if not table_exists(table_name=tableName, **raw_data_conn_dict):
+            #    create_raw_data_table(table_name=tableName, **raw_data_conn_dict)
+            one_site_info_dict['tableName'] = tableName
+            sitesInfoDict[siteID] = one_site_info_dict
+
+
+
+
+
+
+            sitesInfoDict[siteID] = one_site_info_dict
+
+
+
+    if len(sitesInfoDict.keys()) < 1:
+        logger.info('No valid sites found for processing. Exit.')
+        exit()
+
+
+
+    date_start = daytimeconv.dfb2date(dfb_start)
+    date_end = daytimeconv.dfb2date(dfb_end)
+
+
+    ncfiles = search_nc_files(start_date=date_start, end_date=date_end, nc_dir_list=ncReadDirsList, channels=chanNameList,pattern=ncReadFileNamePattern, sat_list=sat_list)
+    #allocate raw data arry in shape (num_channels, num_dfbs, num_slots)
+
+
+    raw_data = {}
+    read_start_time = datetime.datetime.now()
+    sat_raw_data_array = numpy.empty((len(sites_list), len(chanNameList), dfb_end - dfb_start + 1, SlotEnd - SlotStart + 1), )
+    sat_raw_data_array[:] = numpy.nan
+
+    for sat in sat_list:
+        for site_idx, siteID in enumerate(sites_list):
+            site_info_dict = sitesInfoDict[siteID]
+            y, x = site_info_dict['h08_px_y'], site_info_dict['h08_px_x']
+            for item in ncfiles[sat].items():
+
+                chn, chn_file_list = item
+                chn_idx = chanNameList.index(chn)
+                logger.info('Reading data for site %s channel %s  index %s' % (siteID, chn, chn_idx))
+
+                #logger.info(compute_scan_time_offset(image_line=y, channel_name=chn))
+                for ncf in chn_file_list:
+                    logger.info(ncf)
+                    with nc.Dataset(ncf) as ds:
+                        file_dfb_start, file_dfb_end = ds.variables['dfb'].valid_range
+                        read_dfb_min = max(dfb_start, file_dfb_start)
+                        read_dfb_max = min(dfb_end, file_dfb_end)
+                        abs_dfb_idx_min = read_dfb_min - dfb_start
+                        abs_dfb_idx_max = read_dfb_max - dfb_start + 1
+                        rel_dfb_idx_min = read_dfb_min-file_dfb_start
+                        rel_dfb_idx_max = read_dfb_max-file_dfb_start + 1
+
+
+
+                        #read using nearest
+
+                        sat_raw_data_array[site_idx,chn_idx, abs_dfb_idx_min:abs_dfb_idx_max, :] = ds.variables[chn][rel_dfb_idx_min:rel_dfb_idx_max,:,y,x].copy() #,makes a copy, i am not completely sure this is the best strategy
+
+
+        #store
+        raw_data[sat] = sat_raw_data_array
+
+    read_end_time = datetime.datetime.now()
+    read_tdelta = read_end_time - read_start_time
+    logger.info('Data for {0} channels and {2} sites was read in {1}'.format(len(chanNameList), read_tdelta, len(sites_list)))
+    dfb_gen = [_dfb for _dfb in range(dfb_start, dfb_end+1)]
+
+
+    slot_gen = [_s for _s in range(SlotStart, SlotEnd+1)]
+    slot_array = numpy.fromiter((s for dfb in dfb_gen for s in slot_gen), numpy.uint32)
+
+    dfb_array = numpy.fromiter((dfb for dfb in dfb_gen for s in slot_gen), numpy.uint32)
+
+
+
+
+    #nomDT_gen = (daytimeconv_num.date2num(daytimeconv.dfb2date(dfb_array[i]) + slot2time(slot_array[i]) ) for i in range(slot_array.size))
+    nomDT_gen = (daytimeconv_num.date2num(datetime.datetime.combine(daytimeconv.dfb2date(dfb_array[i]),slot2time(slot_array[i]))) for i in range(slot_array.size))
+
+
+
+
+    nomDT_array = numpy.fromiter(nomDT_gen,dtype=numpy.float64)
+
+
+    sat_data_array = numpy.empty((len(chanNameList), slot_array.size))
+
+
+    for site_idx, siteID in enumerate(sites_list):
+
+        site_info_dict = sitesInfoDict[siteID]
+        tableName = site_info_dict['tableName']
+
+        #get line and column
+        l, c = site_info_dict['h08_px_y'], site_info_dict['h08_px_x']
+        # compute the scan time (for one coord only)
+
+        scan_time_offset = utils.compute_scan_time_offset(image_line=l, channel_name='VIS064_2000') #the scan time offset is assumed from VIS064_2000. This is the fastest it seems. This decidion was taken by Tomas
+
+        # scan_time_offset = utils.compute_scan_time_offset2(bbox=one_site_info_dict['bbox'], channel_name=chn))
+
+        realDT_gen = (daytimeconv_num.date2num( datetime.datetime.combine(daytimeconv.dfb2date(dfb_array[i]),slot2time(slot_array[i])) + datetime.timedelta(0, scan_time_offset) ) for i in range(slot_array.size))
+        realDT_array = numpy.fromiter(realDT_gen, dtype=numpy.float64)
+
+
+        #remove existing data
+        rawDataTable_dropData(DSN_SitesData_str, tableName, date_start, date_end)
+
+
+        for sat in sat_list:
+            for chn in chanNameList:
+                chn_idx = chanNameList.index(chn)
+                t = 'site %s , channel %s ' % (siteID, chn)
+                d = raw_data[sat][site_idx, chn_idx, :]
+
+                sat_data_array[chn_idx, :] = d.ravel()
+
+            logger.info('write to DB')
+            # insert data to DB
+
+            rawDataTable_writeData(DSN_SitesData_str, tableName, sat, slot_array, nomDT_array, realDT_array, sat_data_array, chanNameList)
+
+
+if __name__ == '__main__':
+
+    import logging
+
+    logger = logging.getLogger()
+    logging.basicConfig(format='%(asctime)s %(filename)-18s %(levelname)-8s: %(message)s')
+    logger.name = str(__file__)
+
+    logger.setLevel('INFO')  # NOTSET DEBUG INFO WARNING ERROR CRITICAL
+    #configuration
+    #pick some sites from that part of the world (centered on 140)
+    sites_list = [2002899,2002900, 2002897]
+    sites_list = [2002899]
+
+    start_date = '20160120'
+    end_date = '20160122'
+
+    ncReadDirsList = ['/mnt/temp/']
+    mail_notification = ['ioan.ferencik@geomodel.eu']
+
+    logger.debug('START')
+
+    #this script uses following channels
+    #['VIS064_2000', 'VIS160_2000', 'IR124_2000', 'IR390_2000']
+    #these channels are hardcoded
+
+    dbInfoRawData = {'DbName': 'himawari_sites', 'DbHost': 'dbdata', 'DbUser': 'gm_user', 'DbPassword': 'ibVal4'}
+
+
+    retrieveSiteValues(sites_list, start_date, end_date, ncReadDirsList, dbInfoRawData, site_table_prefix='himawari_raw_data')
+
+
+
+
+
+
+

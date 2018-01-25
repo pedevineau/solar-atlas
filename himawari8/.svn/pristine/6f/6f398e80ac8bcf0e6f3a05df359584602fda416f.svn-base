@@ -1,0 +1,111 @@
+__author__ = 'jano'
+#IMPORTS
+#we need not mess up modules by importing objects used by main at the module level. This way
+from himawari8.navigation import hrit_navigation as hrit_nav
+from himawari8.navigation import proj4_navigation as proj4_nav
+from himawari8.navigation.hrit_navigation import h08nav
+from general_utils.latlon import get_5x5_seg_bbox, get_5x5_seg
+from mtsat.hrit.utils import toGDAL
+from himawari8.utils import read_himawari8_nc
+
+import pyproj
+
+
+
+if __name__ == '__main__':
+
+	def test_latlon_point():
+
+		h08ncfile = '/home/jano/Desktop/himawari/OPERATIONAL/INCOMING/IDE00203.201509090850.nc'
+		LAT, LON = -25.491220, 112.969880  # North of Dirk Hartog Island WA, Australia
+		print 'Testing PROJ4 reprojection VS HIMAWARI 8 NAVIGATION'
+		gt, SSP, proj4_str, data = read_himawari8_nc(ncfile_path=h08ncfile)
+		nl, nc = data.shape
+
+		nav_dict = h08nav(resolution=2000, nl=nl, nc=nc)
+
+		sorted_nav_prop_names = sorted(nav_dict.keys()[1:])
+		nav_s = ['%s: {%s}' % (e, e) for e in sorted_nav_prop_names]
+		# print ', '.join(nav_s).format(**nav_dict)
+
+
+		print 'LAT: {}, LON: {}'.format(*(LAT, LON))
+
+		Y, X = hrit_nav.ll2YX(lat=LAT, lon=LON, lon0=SSP, cfac=nav_dict['CFAC'], lfac=nav_dict['LFAC'], resolution=nav_dict['RESOLUTION'])
+		print 'GEOS({}) Y:{}, X:{}'.format(SSP, Y, X)
+		L, C = hrit_nav.ll2lc(lat=LAT, lon=LON, lon0=SSP, cfac=nav_dict['CFAC'], lfac=nav_dict['LFAC'], coff=nav_dict['COFF'],
+					   loff=nav_dict['LOFF'], nl=nav_dict['NL'], nc=nav_dict['NC'])
+		print 'RAW L: {}, C: {} '.format(L, C)
+
+		proj4_str = '+proj=geos +a=6378169.0 +b=6356583.8 +h=35785831.0 +lon_0={0:.2f} +units=m'.format(SSP)
+		geosp = pyproj.Proj(proj4_str)
+
+		PROJ4X, PROJ4Y = geosp(LON, LAT)
+		print 'PROJ4 Y: {}, X: {}'.format(PROJ4Y, PROJ4X)
+
+		DERL, DERC = proj4_nav.YX2lc(Y=PROJ4Y, X=PROJ4X, gt=gt, nl=nl, nc=nc)
+		print 'DERIVED RAW L: {}, C: {}'.format(DERL, DERC)
+
+	def test():
+		h08ncfile = '/home/jano/Desktop/himawari/OPERATIONAL/INCOMING/IDE00201.201510090850.nc'
+		LAT, LON = -25.491220, 112.969880  # North of Dirk Hartog Island WA, Australia
+		print 'Testing PROJ4 reprojection VS HIMAWARI 8 NAVIGATION'
+		gt, SSP, proj4_str, data_var_def,  data = read_himawari8_nc(ncfile_path=h08ncfile)
+		nl, nc = data.shape
+
+		nav_dict = h08nav(resolution=2000, nl=nl, nc=nc)
+
+		sorted_nav_prop_names = sorted(nav_dict.keys()[1:])
+		nav_s = ['%s: {%s}' % (e, e) for e in sorted_nav_prop_names]
+		print 'LAT: {}, LON: {}'.format(*(LAT, LON))
+		Y, X = hrit_nav.ll2YX(lat=LAT, lon=LON, lon0=SSP, cfac=nav_dict['CFAC'], lfac=nav_dict['LFAC'], resolution=nav_dict['RESOLUTION'])
+		print 'GEOS({}) Y:{}, X:{}'.format(SSP, Y, X)
+		L, C = hrit_nav.ll2lc(lat=LAT, lon=LON, lon0=SSP, cfac=nav_dict['CFAC'], lfac=nav_dict['LFAC'], coff=nav_dict['COFF'],loff=nav_dict['LOFF'], nl=nav_dict['NL'], nc=nav_dict['NC'])
+		print 'RAW L: {}, C: {} '.format(L, C)
+		Y_,X_ = hrit_nav.lc2YX(l=L,c=C,coff=nav_dict['COFF'],loff=nav_dict['LOFF'],resolution=nav_dict['RESOLUTION'])
+		print 'RETRANSFORMED Y {y}, X: {x}'.format(y=Y_,x=X_)
+
+		PROJ4Y, PROJ4X = proj4_nav.ll2YX(lat=LAT, lon=LON, ssp=SSP)
+		print 'PROJ4 Y: {}, X: {}'.format(PROJ4Y, PROJ4X)
+		PROJ4L, PROJ4C = proj4_nav.YX2lc(Y=PROJ4Y, X=PROJ4X, gt=gt, )
+		print 'DERIVED RAW L: {}, C: {}'.format(PROJ4L, PROJ4C)
+		PROJ4YRETR, PROJ4XRETR = proj4_nav.lc2YX(l=PROJ4L,c=PROJ4C,gt=gt)
+		print 'PROJ4 RETRANSFORMED Y: {y}, X: {x}'.format(y=PROJ4YRETR, x=PROJ4XRETR)
+
+
+	def test_seg():
+
+
+		LAT, LON = -25.491220, 112.969880  # North of Dirk Hartog Island WA, Australia
+		# LAT, LON = -9.571707, 118.991826  # North of Dirk Hartog Island WA, Australia
+
+		RES = 0.02
+		print 'Testing PROJ4 reprojection VS HIMAWARI 8 NAVIGATION'
+		h08ncfile = '/home/jano/Desktop/himawari/OPERATIONAL/INCOMING/IDE00203.201509090850.nc'
+		gt, SSP, proj4_str, data = read_himawari8_nc(ncfile_path=h08ncfile)
+
+		nl, nc = data.shape
+		nav_dict = h08nav(resolution=gt[1], nl=nl, nc=nc)
+		seg_col, seg_row = get_5x5_seg(LON, LAT)
+		seg_bbox = get_5x5_seg_bbox(seg_row, seg_col, resolution=RES)
+
+		lats = seg_bbox.latitudes(array2d=True)
+		lats1 = seg_bbox.latitudes()
+		lons = seg_bbox.longitudes(array2d=True)
+		lons1 = seg_bbox.longitudes()
+
+		l, c = proj4_nav.ll2lc(lat=lats, lon=lons, gt=gt, ssp=SSP, nl=nl, nc=nc)
+
+		l1, c1 = hrit_nav.ll2lc(lat=lats1, lon=lons1, lon0=SSP, cfac=nav_dict['CFAC'], lfac=nav_dict['LFAC'], coff=nav_dict['COFF'], loff=nav_dict['LOFF'],
+						 nl=nav_dict['NL'], nc=nav_dict['NC'])
+
+		repr_data = data[l, c]
+		repr_data1 = data[l1, c1]
+
+		llgt = (seg_bbox.xmin, RES, 0, seg_bbox.ymax, 0, -RES )
+		toGDAL('/home/jano/Desktop/himawari/seg_{}_{}_LL.tif'.format(seg_row, seg_col), array=repr_data, gt=llgt, proj=4326)
+		toGDAL('/home/jano/Desktop/himawari/seg_{}_{}_LL1.tif'.format(seg_row, seg_col), array=repr_data1, gt=llgt, proj=4326)
+
+	#test_latlon_point()
+	test()
+	#test_seg()

@@ -1,8 +1,5 @@
 {
-  "satellite": "GOES16",
-  "time_step": {
-    "H08": 10
-  },
+  "satellite": "H08",
   "H08": {
     "time_step": 10,
     "channels_name": ["IR124_2000", "IR390_2000", "VIS160_2000", "VIS064_2000"],
@@ -23,7 +20,8 @@
     "channels": {
       "dir": "/data/test_data",
       "pattern": "{SATELLITE}LATLON_{CHANNEL}__TMON_{YYYY}_{mm}__SDEG05_r{SDEG5_LATITUDE}_c{SDEG5_LONGITUDE}.nc"
-    }
+    },
+    "model_path": "/data/test_data/models/model_H8"
   },
   "GOES16": {
     "time_step": 15,
@@ -45,7 +43,8 @@
     "channels": {
       "dir": "/data/test_data_goesr",
       "pattern": "{SATELLITE}_{CHANNEL}_{YYYY}_{mm}_c{SDEG5_LONGITUDE}_r{SDEG5_LATITUDE}_east.nc"
-    }
+    },
+    "model_path": "/data/test_data/models/model_GOES16"
   },
 
   "masks": {

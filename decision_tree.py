@@ -160,7 +160,6 @@ def get_classes_v2_image(latitudes,
     if method in ['watershed-2d', 'watershed-3d']:
         vis = get_features('visible', latitudes, longitudes, beginning, ending, False, slot_step, normalize=False)[:,
                 :, :, 1]
-        # visualize_map_time(segmentation_otsu_2d(visible_features[:, :, :, 0]), bbox)
         # visualize_map_time(segmentation_otsu_2d(vis), bbox)
         bright = (
             segmentation_otsu_2d(visible_features[:, :, :, 0]) &
@@ -242,17 +241,26 @@ def get_classes_v2_image(latitudes,
 
 def reduce_classes(classes):
     to_return = np.full_like(classes, 3)
-    cloudless = ((classes == 0) | (classes == 9) | (classes == 10))
-    cloudless = (cloudless & np.roll(cloudless, 1) & np.roll(cloudless, -1))
-    to_return[cloudless] = 0   # cloudless
+    snow_free_cloudless = ((classes == 0) | (classes == 9) | (classes == 10))
+    snow_free_cloudless = (snow_free_cloudless & np.roll(snow_free_cloudless, 1) & np.roll(snow_free_cloudless, -1))
+    to_return[snow_free_cloudless] = 0
+    snow = (classes == 5)
+    snow = (snow & np.roll(snow, 1) & np.roll(snow, -1))
+    to_return[snow] = 1
     to_return[(classes == 2) | (classes == 4)] = 2
-    to_return[classes == 5] = 1
     to_return[classes == 13] = 4
-    print 'uncovered lands: 0'
-    print 'snowy ground:1'
+    print 'snow free cloud free: 0'
+    print 'snow:1'
     print 'slight clouds:2'
-    print 'cloudy:3'
+    print 'clouds:3'
     print 'undefined:4'
+    return to_return
+
+
+def reduce_two_classes(classes):
+    classes = reduce_classes(classes)
+    to_return = np.full_like(classes, 1)
+    to_return[(classes == 1) | (classes == 0)] = 0
     return to_return
 
 
@@ -260,19 +268,19 @@ if __name__ == '__main__':
     nb_classes = 14
 
     slot_step = 1
-    beginning = 13517
-    nb_days = 5
+    beginning = 13525
+    nb_days = 6
     ending = beginning + nb_days - 1
     compute_indexes = True
 
-    method = 'watershed-3d'  # 'on-point', 'otsu-2d', 'otsu-3d', 'watershed-2d', 'watershed-3d'
-    # method = 'on-point'  # 'on-point', 'otsu-2d', 'otsu-3d', 'watershed-2d', 'watershed-3d'
+    # method = 'watershed-3d'  # 'on-point', 'otsu-2d', 'otsu-3d', 'watershed-2d', 'watershed-3d'
+    method = 'on-point'  # 'on-point', 'otsu-2d', 'otsu-3d', 'watershed-2d', 'watershed-3d'
     print method
 
-    latitude_beginning = 40.
+    latitude_beginning = 40
     latitude_end = 45.
-    longitude_beginning = 125.
-    longitude_end = 130.
+    longitude_beginning = 125.  # 125.
+    longitude_end = 130.  # 130.
     latitudes, longitudes = get_latitudes_longitudes(latitude_beginning, latitude_end,
                                                      longitude_beginning, longitude_end)
 
@@ -281,35 +289,46 @@ if __name__ == '__main__':
     from quick_visualization import visualize_map_time, get_bbox
     bbox = get_bbox(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
 
+    from  time import time
+    t_begin = time()
     if method == 'on-point':
-        classes = get_classes_v1_point(latitudes,
-                                       longitudes,
-                                       beginning,
-                                       ending,
-                                       slot_step,
-                                       )
+        classes_ped = get_classes_v1_point(latitudes,
+                                           longitudes,
+                                           beginning,
+                                           ending,
+                                           slot_step,
+                                           )
     elif method in ['otsu-2d', 'otsu-3d', 'watershed-2d', 'watershed-3d']:
-        classes = get_classes_v2_image(latitudes,
-                                       longitudes,
-                                       beginning,
-                                       ending,
-                                       slot_step,
-                                       method
-                                       )
-
-
+        classes_ped = get_classes_v2_image(latitudes,
+                                           longitudes,
+                                           beginning,
+                                           ending,
+                                           slot_step,
+                                           method
+                                           )
 
     from bias_checking import statistics_classes
-    visualize_map_time(classes, bbox, vmin=0, vmax=nb_classes-1, title=method+' Classes 0-'+str(nb_classes-1)+
-                                                                       ' from' + str(date_begin))
 
-    statistics_classes(classes, display_now=True)
+    print  'classification time: ', time()-t_begin
+    # visualize_map_time(classes, bbox, vmin=0, vmax=nb_classes-1, title=method+' Classes 0-'+str(nb_classes-1) +
+    #                    ' from' + str(date_begin))
 
-    classes = reduce_classes(classes)
-    visualize_map_time(classes, bbox, vmin=0, vmax=4, title=method+' Classes 0-'+str(5-1)+
-                                                                       ' from' + str(date_begin))
+    # statistics_classes(classes_ped, display_now=True)
 
-    statistics_classes(classes, display_now=True)
+    classes_ped = reduce_two_classes(classes_ped)
+    # visualize_map_time(classes_ped, bbox, vmin=0, vmax=4, title=method + ' Classes 0-' + str(5 - 1) +
+    #                    ' from' + str(date_begin))
+
+    from tomas_outputs import get_tomas_outputs, reduce_tomas_2_classes
+    classes_tomas = get_tomas_outputs(beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end)
+    classes_tomas = reduce_tomas_2_classes(classes_tomas)
+
+    from bias_checking import comparision_algorithms
+
+    statistics_classes(classes_ped, display_now=True)
+    statistics_classes(classes_tomas, display_now=True)
+    visualize_map_time(comparision_algorithms(classes_ped, classes_tomas), bbox)
+
 
 
 

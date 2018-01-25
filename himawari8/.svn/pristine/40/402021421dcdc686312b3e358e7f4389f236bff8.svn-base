@@ -1,0 +1,52 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""Himawari8 downloader
+@author: Milos Korenciak"""
+
+from __future__ import print_function
+import datetime as DT
+from himawari8.downloader import *
+
+# config change for cupid high priority channels
+#
+CONSTANTS.update({
+    # COMMENT channels you do not want to download. They will be selected through listing
+    "CHANNELS_TO_DOWNLOAD": [
+        '01',  # VIS047_2000
+        '02',  # VIS051_2000
+        '03',  # VIS064_2000
+        '04',  # VIS086_2000
+        '05',  # VIS160_2000
+        '06',  # VIS229_2000
+        '07',  # IR390_2000
+        '08',  # IR620_2000
+        '09',  # IR690_2000
+        '10',  # IR730_2000
+        '11',  # IR860_2000
+        '12',  # IR960_2000
+        '13',  # IR104_2000
+        '14',  # IR112_2000
+        '15',  # IR124_2000
+        '16',  # IR133_2000
+        '18',  # VIS047_1000
+        '19',  # VIS051_1000
+        '20',  # VIS064_0500
+        '21',  # VIS086_1000
+    ],
+    # Mail the error stacktrace to this people if the downloader crashes
+    "EMAIL_RECEIVERS": ['milos.korenciak@solargis.com', 'ioan.ferencik@solargis.com', 'tomas.cebecauer@solargis.com'],
+    # For downloading, use this count of connections - each in its own thread
+    "OVERRIDE_CONNECTIONS_COUNT": 20,  # not to override
+    # DB connection credentials
+    "DB_NAME": "himawari_archive",
+    "DB_USER": "sat_oper",
+    "DB_PASSWORD": "itNov6",
+    "DB_HOST": "localhost",
+    # Latency = download the files old at least this timespan
+    "LATENCY": DT.timedelta(0, 90 * 60),
+})
+#
+# end of config ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+if __name__ == "__main__":
+    main(os.path.abspath(__file__))
