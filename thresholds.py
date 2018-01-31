@@ -15,15 +15,19 @@ def compute_cli_cloud_threshold():
 
 
 def compute_thresh_temperature():
-    return 10
+    return 240
 
 
 def compute_vis_snow_threshold():
     return 0.35
 
 
-def compute_vis_sea_cloud_threshold():
-    return 0.15
+def compute_vis_sea_cloud_all_thresholds(zen):
+    from numpy import cos, power
+    cos_zen = cos(zen)
+    cos_zen[cos_zen < 0.03] = 0.03
+    cos_zen = power(cos_zen, 0.3)
+    return 0.2/cos_zen
 
 
 def compute_snow_ndsi_threshold():

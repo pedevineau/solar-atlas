@@ -1,116 +1,107 @@
 from utils import *
 
 
-def get_infrared_predictors(array_data, times, latitudes, longitudes, satellite_step, slot_step, compute_indexes,
-                            normalize, return_m_s=False):
+def infrared_outputs(times, latitudes, longitudes, temperatures, content_infrared, satellite_step, slot_step,
+                     output_level='abstract', gray_scale=False):
     '''
 
-    :param array_data: matrix with all infrared channels available
     :param times: a datetime matrix giving the times of all sampled slots
     :param latitudes: a float matrix giving the bottom latitudes of all pixels
     :param longitudes: a float matrix giving the bottom longitudes of all pixels
+    :param content_infrared: matrix with all infrared channels available
     :param satellite_step: the satellite characteristic time step between two slots (10 minutes for Himawari 8)
     :param slot_step: the chosen sampling of slots. if slot_step = n, the sampled slots are s[0], s[n], s[2*n]...
-    :param compute_indexes
-    :param normalize:
-    :param return_m_s:
+    :param output_level
+    :param gray_scale:
     :return: a matrix with all infrared predictors (shape: slots, latitudes, longitudes, predictors)
     '''
     from get_data import mask_channels
     from angles_geom import get_zenith_angle
-    # from filter import median_filter_3d
+    content_infrared, mask_input = mask_channels(content_infrared)
+    nb_channels = np.shape(content_infrared)[-1]
 
-    array_data, mask = mask_channels(array_data, False)
-    nb_channels = np.shape(array_data)[-1]
-
-    if not compute_indexes:
-        if not normalize:
-            return array_data
+    if output_level == 'channel':
+        if not gray_scale:
+            return content_infrared
         else:
             for chan in range(nb_channels):
-                array_data[:, :, :, chan] = normalize_array(array_data[:, :, :, chan], mask, normalization='gray-scale')
-            return array_data
+                content_infrared[:, :, :, chan] = normalize(content_infrared[:, :, :, chan], mask_input, 'gray-scale')
+            return content_infrared
 
-    nb_features = 4  # cli, variations, warm predictor, cold
-    (nb_slots, nb_latitudes, nb_longitudes, nb_channels) = np.shape(array_data)
     angles = get_zenith_angle(times, latitudes, longitudes)
-    mask_cli = mask | (angles > 85./180.*np.pi) | (angles <= 0)
-    mu = np.cos(angles)
-    del angles
 
-    # remove spatial smoothing
-    cli, m, s = get_cloud_index(mir=array_data[:, :, :, nb_channels-1], fir=array_data[:, :, :, nb_channels-2],
-                                return_m_s=True, method='mu-normalization', mask=mask_cli, cos_zen=mu)
+    cli = get_cloud_index(cos_zen=np.cos(angles), mir=content_infrared[:, :, :, nb_channels - 1],
+                          fir=content_infrared[:, :, :, nb_channels - 2], method='mu-normalization')
 
-    cold = get_cold(fir=array_data[:, :, :, 0], mask=mask_cli, threshold=240)
+    if output_level == 'cli':
+        return cli, mask_input
 
-    # cold==1 for cold things: snow, icy clouds, or cold water clouds like altocumulus
-    high_cli_mask = (cli > (60 - m) / s)
-    del cli
+    else:
+        difference = get_cloud_index(cos_zen=np.cos(angles), mir=content_infrared[:, :, :, nb_channels - 1],
+                                     fir=content_infrared[:, :, :, nb_channels - 2], mask=mask_input, method='default')
+        lir = content_infrared[:, :, :, nb_channels - 2]
+        del content_infrared
+        return infrared_abstract_predictors(angles, lir, mask_input, temperatures, cli, difference, satellite_step, slot_step, gray_scale)
 
-    difference = get_cloud_index(mir=array_data[:, :, :, nb_channels-1], fir=array_data[:, :, :, nb_channels-2],
-                                 method='default', mask=mask_cli, cos_zen=mu)
 
-    if not normalize:  # if on-point
+def infrared_abstract_predictors(zen, lir, mask_input, temperatures, cli, ancillary_cloud_index, satellite_step, slot_step, gray_scale):
+    from static_tests import dawn_day_test, dynamic_temperature_test
+    mask_output = mask_input | ~dawn_day_test(zen)
+    cli[mask_output] = -10
+    (nb_slots, nb_latitudes, nb_longitudes) = np.shape(lir)
+    nb_features = 3  # cli, variations, cold
+    if not gray_scale:  # if on-point
         array_indexes = np.empty(shape=(nb_slots, nb_latitudes, nb_longitudes, nb_features))
-        array_indexes[:, :, :, 1] = get_cloud_index_positive_variability_5d(cloud_index=difference,
-                                                    definition_mask=mask_cli,
-                                                    pre_cloud_mask=high_cli_mask | (cold == 1),
-                                                    satellite_step=satellite_step,
-                                                    slot_step=slot_step)
-        array_indexes[:, :, :, 0][high_cli_mask] = 1  # "hot" water clouds
-        array_indexes[:, :, :, 0][mask_cli] = -10
-        # array_indexes[:, :, :, 0] = cli * s + m
+        array_indexes[:, :, :, 0] = cli
+        array_indexes[:, :, :, 1] = \
+            get_cloud_index_positive_variability_5d(
+                cloud_index=ancillary_cloud_index,
+                definition_mask=mask_output,
+                # pre_cloud_mask=high_cli_mask | (cold == 1),
+                pre_cloud_mask=None,
+                satellite_step=satellite_step,
+                slot_step=slot_step) #*\
+        # np.abs(get_cloud_short_variability(cloud_index=ancillary_cloud_index, definition_mask=mask_input))
 
-    else:  # if on-image
+            # array_indexes[:, :, :, 0][high_cli_mask] = 1  # "hot" water clouds
+        # array_indexes[:, :, :, 0][mask_output] = -10
+
+    else:  # if image
         array_indexes = np.empty(shape=(nb_slots, nb_latitudes, nb_longitudes, nb_features), dtype=np.uint8)
-        array_indexes[:, :, :, 1] = normalize_array(
-            get_cloud_index_positive_variability_5d(cloud_index=difference,
-                                                    definition_mask=mask_cli,
-                                                    pre_cloud_mask=high_cli_mask | (cold == 1),
+        array_indexes[:, :, :, 0] = normalize(cli, mask=mask_output, normalization='gray-scale')
+        array_indexes[:, :, :, 1] = normalize(
+            # np.abs(get_cloud_short_variability(cloud_index=ancillary_cloud_index, definition_mask=mask_input)) * \
+            get_cloud_index_positive_variability_5d(cloud_index=ancillary_cloud_index,
+                                                    definition_mask=mask_output,
+                                                    # pre_cloud_mask= high_cli_mask | (cold == 1),
+                                                    pre_cloud_mask=None,
                                                     satellite_step=satellite_step,
                                                     slot_step=slot_step),
-            mask_cli, normalization='gray-scale')
-        array_indexes[:, :, :, 0][high_cli_mask] = 1  # "hot" water clouds
 
-    array_indexes[:, :, :, 2] = get_warm(mir=array_data[:, :, :, nb_channels-1], cos_zen=mu,
-                                         satellite_step=satellite_step,
-                                         slot_step=slot_step, cloudy_mask=high_cli_mask,
-                                         threshold_median=300)
-
-    del mask, high_cli_mask, difference
-    array_indexes[:, :, :, 3] = cold
-
-    me, std = np.zeros(nb_features), np.full(nb_features, 1.)
-    me[0] = m
-    std[0] = s
-    if return_m_s:
-        return array_indexes, me, std
-    else:
-        return array_indexes
+            normalization='gray_scale')
+    cold = dynamic_temperature_test(lir, temperatures, satellite_step, slot_step)
+    # cold==1 for cold things: snow, icy clouds, or cold water clouds like altocumulus
+    cold[mask_output] = 0
+    array_indexes[:, :, :, 2] = cold
+    return array_indexes
 
 
-def get_cloud_index(mir, fir, mask, cos_zen, return_m_s=False, pre_cloud_mask=None, method='default'):
+def get_cloud_index(cos_zen, mir, fir, mask=None, pre_cloud_mask=None, method='default'):
     '''
+    :param cos_zen: cos of zenith angle matrix (shape: slots, latitudes, longitudes)
     :param mir: medium infra-red band (centered on 3890nm for Himawari 8)
     :param fir: far infra-red band (centered on 12380nm for Himawari 8)
     :param mask: mask for outliers and missing isolated data
-    :param cos_zen: cos of zenith angle matrix (shape: slots, latitudes, longitudes)
     :param pre_cloud_mask:
     :param method: {'default', 'mu-normalization', 'clear-sky', 'without-bias'}
     :return: a cloud index matrix (shape: slots, latitudes, longitudes)
     '''
     difference = mir - fir
     if method == 'mu-normalization':
-        mu_threshold = 0.03
-        mask = mask | (cos_zen <= mu_threshold)
-        cli, m, s, = normalize_array(difference / np.maximum(cos_zen, mu_threshold),
-                                     mask=mask, normalization='standard', return_m_s=True)
-        if return_m_s:
-            cli[mask] = -10
-            return cli, m, s
+        mu_threshold = 0.04
+        cli = difference / np.maximum(cos_zen, mu_threshold)
     else:
-        diffstd = normalize_array(difference, mask, normalization='standard')
+        diffstd = normalize(difference, mask, normalization='standard')
         if method == 'without-bias':
             # mustd = normalize_array(cos_zen, mask, 'standard')
             # NB: ths use of mustd add a supplementary bias term alpha*std(index)*m(cos-zen)/std(cos_zen)
@@ -118,16 +109,20 @@ def get_cloud_index(mir, fir, mask, cos_zen, return_m_s=False, pre_cloud_mask=No
             # WARNING DANGER #TODO DANGER
             mask = (mask | pre_cloud_mask)
             cli = remove_cos_zen_correlation(diffstd, cos_zen, mask)
-            cli = normalize_array(cli, mask, 'standard')
+            cli = normalize(cli, mask, 'standard')
         elif method == 'clear-sky':
-                cli = diffstd-normalize_array(cos_zen, mask, normalization='standard')
+                cli = diffstd - normalize(cos_zen, mask, normalization='standard')
         elif method == 'default':
             cli = diffstd
         else:
             raise Exception('Please choose a valid method to compute cloud index')
-    cli[mask] = -10
     # cli, m, s = normalize_array(cli, maski, normalization='max')
     return cli
+
+
+def get_cloud_short_variability(cloud_index, definition_mask):
+    from get_data import compute_short_variability
+    return compute_short_variability(array=cloud_index, mask=definition_mask, step=1)
 
 
 def get_cloud_index_positive_variability_5d(cloud_index, definition_mask, pre_cloud_mask,
@@ -354,6 +349,7 @@ def get_lag_high_peak(difference, cos_zen, satellite_step, slot_step):
 
 
 if __name__ == '__main__':
+    from scipy.stats import pearsonr
     lis = np.arange(0,10)
     T=1
     r1 = 1 * (np.random.random_sample(len(lis)) - 0.5)

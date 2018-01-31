@@ -10,6 +10,20 @@ def median_filter_3d(array, scope=5):
     return array
 
 
+def contrast_filter(array):
+    from scipy import signal
+    s = np.shape(array)
+    contrast = 0.125 * np.array([[-1, -1, -1],
+                                 [-1, 8, -1],
+                                 [-1, -1, -1]])
+    if len(s) == 2:
+        return signal.convolve2d(array, contrast, boundary='symm', mode='same')
+    if len(s) == 3:
+        for k in range(s[0]):
+            array[k] = signal.convolve2d(array[k], contrast, boundary='symm', mode='same')
+        return array
+
+
 # low pass spatial filter case use: NOT ndsi, perhaps CLI or stressed NDSI
 def low_pass_filter_3d(array, cutoff, omega=0):
     from scipy import fftpack
@@ -57,7 +71,6 @@ def digital_low_cut_filtering_time(array, mask, satellite_step):
     # y[mask] = 0
     # return y
     #
-
 
 
 # unused. relevant??

@@ -71,3 +71,49 @@ def read_classes(latitudes, longitudes, dfb_beginning, dfb_ending, slot_step=1):
         day_slot_b += nb_slots
         day_slot_e += nb_slots
     return content
+
+
+def read_temperature_forecast(latitudes, longitudes, dfb_beginning, dfb_ending):
+    from read_metadata import read_mask_dir_and_pattern
+    dir, pattern = read_mask_dir_and_pattern('temperature_forecast')
+    nb_days = dfb_ending - dfb_beginning + 1
+
+    from nclib2.dataset import DataSet
+    content = np.empty((24 * nb_days, len(latitudes), len(longitudes)))
+
+    dataset = DataSet.read(dirs=dir,
+                           extent={
+                               'latitude': latitudes,
+                               'longitude': longitudes,
+                               'day': {'start': dfb_beginning, 'end': dfb_ending, "end_inclusive": True,
+                                       'start_inclusive': True, },
+                               'time': {"enumeration": np.linspace(0., 24., num=24, endpoint=False), "override_type": "hours"},
+                           },
+                           file_pattern=pattern,
+                           variable_name='temp_2m',
+                           fill_value=np.nan, interpolation='N', max_processes=0,
+                           )
+
+    data = dataset['data'].data
+    day_slot_b = 0
+    day_slot_e = 24
+    for day in range(nb_days):
+        content[day_slot_b:day_slot_e, :, :] = data[day]
+        day_slot_b += 24
+        day_slot_e += 24
+    return content
+
+
+def read_land_mask(latitudes, longitudes):
+    from read_metadata import read_mask_dir_and_pattern
+    from nclib2.dataset import DataSet
+    dir, pattern = read_mask_dir_and_pattern('land')
+    land = DataSet.read(dirs=dir,
+                         extent={
+                               'lat': latitudes,
+                               'lon': longitudes,
+                           },
+                         file_pattern=pattern,
+                         variable_name='Band1', interpolation='N', max_processes=0,
+                         )
+    return land['data'] == 1

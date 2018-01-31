@@ -1,68 +1,85 @@
 from utils import *
 
 
-def get_visible_predictors(array_data, ocean_mask, times, latitudes, longitudes, satellite_step, slot_step,
-                           compute_indexes, normalize, return_m_s=False):
+def visible_outputs(times, latitudes, longitudes, is_land, content_visible, satellite_step, slot_step,
+                    output_level='abstract', gray_scale=False):
     from get_data import mask_channels
-    from angles_geom import get_zenith_angle
 
-    array_data, mask = mask_channels(array_data, False)
-    nb_channels = np.shape(array_data)[-1]
+    content_visible, mask_input = mask_channels(content_visible)
 
-    if not compute_indexes:
-        if not normalize:
-            return array_data
+    if output_level == 'channel':
+        if not gray_scale:
+            return content_visible
         else:
+            nb_channels = np.shape(content_visible)[-1]
             for chan in range(nb_channels):
-                array_data[:, :, :, chan] = normalize_array(array_data[:, :, :, chan], mask, normalization='gray-scale')
-            return array_data
+                content_visible[:, :, :, chan] = normalize(content_visible[:, :, :, chan], mask_input, 'gray-scale')
+            return content_visible
 
-    (nb_slots, nb_latitudes, nb_longitudes, nb_channels) = np.shape(array_data)
+    elif output_level == 'ndsi':
+        zen, vis, ndsi = get_zen_vis_ndsi(times, latitudes, longitudes, content_visible)
+        return zen, vis, ndsi, mask_input
+    else:
+        zen, vis, ndsi = get_zen_vis_ndsi(times, latitudes, longitudes, content_visible)
+        del content_visible
+        return visible_abstract_predictors(zen, is_land, vis, mask_input, ndsi, satellite_step, slot_step, gray_scale)
+
+
+def visible_abstract_predictors(zen, is_land, vis, mask_input, ndsi, satellite_step, slot_step, gray_scale):
+    from static_tests import dawn_day_test, sea_cloud_test
+    mask_output = ~dawn_day_test(zen) | mask_input | ~is_land
+    (nb_slots, nb_latitudes, nb_longitudes) = np.shape(vis)
 
     nb_features = 4  # snow index, negative variability, positive variability, cloudy sea
-
-    me, std = np.zeros(nb_features), np.full(nb_features, 1.)
-    zen = get_zenith_angle(times, latitudes, longitudes)
-    ndsi, m, s, mask_ndsi = get_snow_index(vis=array_data[:, :, :, 1], nir=array_data[:, :, :, 0], threshold_denominator=0.02,
-                                           mask=mask, zen=zen, ocean_mask=ocean_mask,
-                                           return_m_s_mask=True, index='ndsi-zenith')
-
-    me[0] = m
-    std[0] = s
-    if not normalize:
+    if not gray_scale:
         array_indexes = np.empty(shape=(nb_slots, nb_latitudes, nb_longitudes, nb_features))
-        array_indexes[:, :, :, 3] = get_cloudy_sea(vis=array_data[:, :, :, 1], ocean_mask=ocean_mask,
-                                                   thresholds=thresholds_cloudy_sea(zen))
-        array_indexes[:, :, :, 1] = get_bright_negative_variability_5d(ndsi, mask_ndsi, satellite_step, slot_step)
-        array_indexes[:, :, :, 2] = get_bright_positive_variability_5d(ndsi, mask_ndsi, satellite_step, slot_step)
-        ndsi[array_data[:, :, :, 1] < 0.35] = -10  # mask 'bright' pixels with low visibility
+        array_indexes[:, :, :, 3] = sea_cloud_test(zen, is_land, vis)
+        array_indexes[:, :, :, 1] = get_bright_negative_variability_5d(ndsi, mask_output, satellite_step, slot_step)
+        array_indexes[:, :, :, 2] = get_bright_positive_variability_5d(ndsi, mask_output, satellite_step, slot_step)
+        ndsi[mask_output] = -10
         array_indexes[:, :, :, 0] = ndsi
     else:
         array_indexes = np.empty(shape=(nb_slots, nb_latitudes, nb_longitudes, nb_features), dtype=np.uint8)
-        array_indexes[:, :, :, 3] = get_cloudy_sea(vis=array_data[:, :, :, 1], ocean_mask=ocean_mask,
-                                                   thresholds=thresholds_cloudy_sea(zen))
+        array_indexes[:, :, :, 3] = sea_cloud_test(zen, is_land, vis)
+        array_indexes[:, :, :, 2] = normalize(
+                get_bright_negative_variability_5d(ndsi, mask_output, satellite_step, slot_step),
+                mask_output, normalization='gray-scale')
+        array_indexes[:, :, :, 2][mask_output] = 0
+        array_indexes[:, :, :, 1] = normalize(
+                get_bright_positive_variability_5d(ndsi, mask_output, satellite_step, slot_step),
+                mask_output, normalization='gray-scale')
+        array_indexes[:, :, :, 1][mask_output] = 0
+        array_indexes[:, :, :, 0] = normalize(ndsi, mask_output, normalization='gray-scale')
+        array_indexes[:, :, :, 2][mask_output] = 0
+    return array_indexes
 
-        array_indexes[:, :, :, 2] = normalize_array(
-                get_bright_negative_variability_5d(ndsi, mask_ndsi, satellite_step, slot_step),
-                mask_ndsi, normalization='gray-scale')
-        array_indexes[:, :, :, 2][mask_ndsi] = 0
-        array_indexes[:, :, :, 1] = normalize_array(
-                get_bright_positive_variability_5d(ndsi, mask_ndsi, satellite_step, slot_step),
-                mask_ndsi, normalization='gray-scale')
-        array_indexes[:, :, :, 1][mask_ndsi] = 0
-        array_indexes[:, :, :, 0] = normalize_array(ndsi, mask_ndsi, normalization='gray-scale')
-        array_indexes[:, :, :, 2][mask_ndsi] = 0
-    if return_m_s:
-        return array_indexes, me, std
+
+def get_zen_vis_ndsi(times, latitudes, longitudes, content_visible):
+    '''
+    all useful data for static snow test (except cli)
+    :param times:
+    :param latitudes:
+    :param longitudes:
+    :param content_visible:
+    :return:
+    '''
+    from angles_geom import get_zenith_angle
+    zen = get_zenith_angle(times, latitudes, longitudes)
+    ndsi = get_snow_index(vis=content_visible[:, :, :, 1], nir=content_visible[:, :, :, 0],
+                          zen=zen, threshold_denominator=0.02, index='ndsi-zenith')
+    return zen, content_visible[:, :, :, 1], ndsi
+
+
+def get_snow_index(vis, nir, zen, threshold_denominator, index):
+
+    if index == 'ndsi':
+        # nir *= 5
+        ndsi = (vis - nir) / np.maximum(nir + vis, threshold_denominator)
+    elif index == 'ndsi-zenith':
+        ndsi = (vis - nir) / np.maximum(nir + vis, threshold_denominator) + 0.15*np.square(1-np.cos(zen))
     else:
-        return array_indexes
-
-
-def thresholds_cloudy_sea(zen):
-    cos_zen = np.cos(zen)
-    cos_zen[cos_zen < 0.03] = 0.03
-    cos_zen = np.power(cos_zen, 0.3)
-    return 0.2/cos_zen
+        ndsi = vis / np.maximum(nir, threshold_denominator)
+    return ndsi
 
 
 def get_bright_negative_variability_5d(index, definition_mask, satellite_step, slot_step):
@@ -221,26 +238,6 @@ def get_bright_positive_variability_5d(index, definition_mask, satellite_step, s
     return to_return
 
 
-def get_snow_index(vis, nir, mask, zen, ocean_mask, threshold_denominator=0.02, index='ndsi',
-                   return_m_s_mask=False):
-
-    if index == 'ndsi':
-        # nir *= 5
-        ndsi = (vis - nir) / np.maximum(nir + vis, threshold_denominator)
-    elif index == 'ndsi-zenith':
-        ndsi = (vis - nir) / np.maximum(nir + vis, threshold_denominator) + 0.15*np.square(1-np.cos(zen))
-    else:
-        ndsi = vis / np.maximum(nir, threshold_denominator)
-    threshold_zen = 85.*np.pi/180.  # inferior to 85 deg
-    mask_ndsi = (zen > threshold_zen) | (zen <= 0) | mask | ocean_mask
-    ndsi, m, s = normalize_array(ndsi, mask_ndsi, normalization='standard', return_m_s=True)  # normalization take into account the mask
-    ndsi[mask_ndsi] = -10
-    if return_m_s_mask:
-        return ndsi, m, s, mask_ndsi
-    else:
-        return ndsi
-
-
 def get_flat_nir(variable, cos_zen, mask, nb_slots_per_day, slices_per_day, tolerance, persistence_sigma,
                  mask_not_proper_weather=None):
     if mask_not_proper_weather is not None:
@@ -262,11 +259,11 @@ def get_tricky_transformed_ndsi(snow_index, summit, gamma=4):
     # beta = full_like(snow_index, 0.5)
     # alpha = -0.5/(max(1-summit, summit)**2)
     # return beta + alpha * recentered * recentered
-    return normalize_array(np.exp(-gamma*recentered) - np.exp(-gamma*summit))
+    return normalize(np.exp(-gamma * recentered) - np.exp(-gamma * summit))
 
 
-def get_cloudy_sea(vis, ocean_mask, thresholds):
+def get_cloudy_sea(vis, is_land, thresholds):
     to_return = np.zeros_like(vis)
     for slot in range(len(to_return)):
-        to_return[slot, :, :][ocean_mask & (vis[slot, :, :] > thresholds[slot])] = 1
+        to_return[slot, :, :][~is_land & (vis[slot, :, :] > thresholds[slot])] = 1
     return to_return

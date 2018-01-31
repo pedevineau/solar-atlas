@@ -25,9 +25,9 @@ def apply_gaussian_persistence(persistence_array_1d, persistence_mask_1d, persis
     from scipy.ndimage.filters import gaussian_filter1d
     persistence_sigma = float(persistence_sigma)
     trunc = persistence_scope/persistence_sigma
-    return normalize_array(gaussian_filter1d(persistence_array_1d[~persistence_mask_1d],
-                                             sigma=persistence_sigma, axis=0, truncate=trunc),
-                           normalization='max')
+    return normalize(gaussian_filter1d(persistence_array_1d[~persistence_mask_1d],
+                                       sigma=persistence_sigma, axis=0, truncate=trunc),
+                     normalization='max')
 
 
 def look_like_cos_zen_1d(variable, cos_zen, under_bound, upper_bound, mask=None):

@@ -145,26 +145,38 @@ def visualize_hist(array_1d, title='Histogram', precision=50):
 if __name__ == '__main__':
     from get_data import get_features
     from utils import *
-    compute_indexes_ = False
+    output_levels = ['channel', 'ndsi', 'cli', 'abstract']
     types_channel = ['infrared', 'visible']
+    level = 0
     channel_number = 1
     display_curves = False
+    output_level = output_levels[level]
     type_channels = types_channel[channel_number]
     dfb_beginning = 13525
     nb_days = 5
     dfb_ending = dfb_beginning + nb_days - 1
-    latitude_beginning = -5.
-    latitude_end = 0.
-    longitude_beginning = 100.  # 125.
-    longitude_end = 105.  # 130.
+    latitude_beginning = 40
+    latitude_end = 45.
+    longitude_beginning = 125.-15
+    longitude_end = 130.-15
+    print dfb_beginning, dfb_ending
+    print 'NS:', latitude_beginning, latitude_end, ' WE:', longitude_beginning, longitude_end
+
+
+    from read_netcdf import read_temperature_forecast
 
     date_begin, date_end = print_date_from_dfb(dfb_beginning, dfb_ending)
     lat, lon = get_latitudes_longitudes(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
 
     bbox = get_bbox(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
 
-    features = get_features(type_channels, lat, lon, dfb_beginning, dfb_ending, compute_indexes_, slot_step=1,
-                            normalize=False)
+    # forecast = read_temperature_forecast(lat, lon, dfb_beginning, dfb_ending)
+    # lir = get_features(type_channels, lat, lon, dfb_beginning, dfb_ending, 'channel')[:,:,:,0]
+    # visualize_map_time(lir-253, bbox, vmin=-30, vmax=30)
+    # visualize_map_time(forecast, bbox, vmin=0, vmax=30)
+
+    features = get_features(type_channels, lat, lon, dfb_beginning, dfb_ending, output_level, slot_step=1,
+                            gray_scale=False)
 
 
     # from bias_checking import medians_index
@@ -205,11 +217,17 @@ if __name__ == '__main__':
             visualize_input(features[:, lat_pix, lon_pix, 0:2], display_now=True, style='^')
 
 
-    if type_channels == 'infrared' and not compute_indexes_:
-        visualize_map_time(features[:, :, :, 0:4], bbox, title=type_channels, vmin=240, vmax=300, color='gray')
+    if type_channels == 'infrared' and level>0:
+        visualize_map_time(features[:, :, :, 0:4], bbox, title=type_channels, vmin=0, vmax=1, color='gray')
         # visualize_map_time(features[:, :, :, 1]-features[:, :, :, 0], bbox, title=type_channels, vmin=-10, vmax=10, color='gray')
-    elif not compute_indexes_:
+    elif type_channels == 'infrared' and level==0:
+        visualize_map_time((features[:, :, :, :]), bbox, title=type_channels, vmin=230, vmax=310, color='gray')
+    elif level == 0:
         visualize_map_time((features[:, :, :, :]), bbox, title=type_channels, vmin=0, vmax=1, color='gray')
+        # print 'show contrast'
+        # from filter import contrast_filter
+        # visualize_map_time(normalize(contrast_filter(features[:, :, :, 1]), normalization='gray-scale'),
+        #                    bbox, title='contrast', vmin=0, vmax=255, color='gray')
     else:
         visualize_map_time(features[:, :, :, :], bbox, title=type_channels, vmin=-2
                            , vmax=1, color='gray')

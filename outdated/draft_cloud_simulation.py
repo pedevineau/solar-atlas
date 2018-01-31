@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 #
 
 from filter import digital_low_cut_filtering_time
-from get_data import normalize_array
+from get_data import normalize
 from scipy.misc import derivative
 T = 144
 ignore_sun_low_angle = 7
@@ -19,7 +19,7 @@ lis = np.arange(ignore_sun_low_angle, T-ignore_sun_low_angle)
 mu = np.sin(np.pi * (lis) / T)
 muprim = mu - np.roll(mu, shift=-1)
 x1 = mu
-mustd = normalize_array(mu, normalization='standard', return_m_s=False)
+mustd = normalize(mu, normalization='standard', return_m_s=False)
 
 
 r1 = 0.08*(np.random.random_sample(len(lis))-0.5)
@@ -84,7 +84,7 @@ for montecarlo in range(5):
 
     diff = x1+r1+r2
 
-    diffstd = normalize_array(diff, normalization='standard', return_m_s=False)
+    diffstd = normalize(diff, normalization='standard', return_m_s=False)
 
 
     # y1 = diffstd-np. roll(diffstd-mustd, shift=-1)
@@ -113,7 +113,7 @@ for montecarlo in range(5):
 
     plt.plot(diffstd,'g')
     plt.plot(r2,'r')
-    plt.plot(normalize_array(diff/mu, normalization='standard', return_m_s=False), 'c')
+    plt.plot(normalize(diff / mu, normalization='standard', return_m_s=False), 'c')
     plt.plot(diffstd-unbasied_coeff*mustd, 'b')
     # plt.plot(diffstd-slope*mustd-intercept,'y')
     plt.show()

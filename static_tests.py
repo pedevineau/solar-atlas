@@ -23,14 +23,29 @@ def gross_snow_test(lir_observed, lir_forecast):
     return threshold_test_positive(lir_observed, lir_forecast, thresh)
 
 
-def temperature_test(lir_observed):
+def static_temperature_test(lir_observed):
     '''
     snow (or ice) is supposed to be colder than snow-free pixels under clear-sky conditions
+    TODO: the threshold should depends on local factors
     :param lir_observed: channel fir
     :return:
     '''
     thresh_temperature = compute_thresh_temperature()
     return lir_observed < thresh_temperature
+
+
+def dynamic_temperature_test(lir_observed, temperature_mask, satellite_step, slot_step):
+    from numpy import shape, empty_like
+    s = shape(lir_observed)
+    to_return = empty_like(lir_observed, dtype=bool)
+    for slot in range(s[0]):
+        try:
+            nearest_temp_meas = int(0.5+satellite_step*slot_step*slot/60)
+            to_return[slot] = (273.15+temperature_mask[nearest_temp_meas] - lir_observed[slot]) > 20
+        except IndexError:
+            nearest_temp_meas = int(satellite_step*slot_step*slot/60)
+            to_return[slot] = (273.15+temperature_mask[nearest_temp_meas] - lir_observed[slot]) > 20
+    return to_return
 
 
 def ndsi_test(ndsi, cos_scat=None):
@@ -155,10 +170,10 @@ def land_visible_test(is_land, vis, clear_sky_vis):
 
 
 def sea_cloud_test(angles, is_land, vis_observed):
-    thresh = compute_vis_sea_cloud_threshold()
+    thresholds = compute_vis_sea_cloud_all_thresholds(angles)
     # expand is_land because of high visibility of coast pixels
     is_land_expanded = expand_connectivity_2(is_land)
-    return ~is_land_expanded & (vis_observed > thresh*angular_factor(angles))
+    return ~is_land_expanded & (vis_observed > thresholds)
 
 
 def thin_cirrus_test(is_land, lir_observed, fir_observed, lir_forecast, fir_forecast):
@@ -297,14 +312,14 @@ def partial_dawn_day_cloud_test(angles, is_land, cli_observed, vis_observed):
 
 
 def exhaustive_dawn_day_snow_test(angles, is_land, ndsi_observed, cli_observed, vis_observed, lir_observed, fir_observed, lir_forecast):
-    snow_dawn_day = (dawn_day_test(angles) & is_land % ndsi_test(ndsi_observed) & cli_snow_test(cli_observed) &
+    snow_dawn_day = (dawn_day_test(angles) & is_land & ndsi_test(ndsi_observed) & cli_snow_test(cli_observed) &
                      gross_snow_test(lir_observed, lir_forecast) & broad_cirrus_snow_test(lir_observed, fir_observed) &
                      visible_snow_test(vis_observed))
     return snow_dawn_day
 
 
 def partial_dawn_day_snow_test(angles, is_land, ndsi_observed, cli_observed, vis_observed):
-    snow_dawn_day = (dawn_day_test(angles) & is_land % ndsi_test(ndsi_observed) & cli_snow_test(cli_observed) &
+    snow_dawn_day = (dawn_day_test(angles) & is_land & ndsi_test(ndsi_observed) & cli_snow_test(cli_observed) &
                      visible_snow_test(vis_observed))
     return snow_dawn_day
 
@@ -314,7 +329,7 @@ def is_lir_available():
 
 
 if __name__ == '__main__':
-    print 'running tests.py'
+    print 'running static_tests.py'
     from numpy import array
     seeds = array([ [False, False, False, False],[True, False, False, False], [False, False, True, False]])
     visible = array([[1.0,0,0,0],[0.8, 0.9, 0.2,0], [0.3, 0.1, 0.6,0]])

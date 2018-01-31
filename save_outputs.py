@@ -63,7 +63,7 @@ if __name__ == '__main__':
 
     dfb_ending = dfb_beginning+nb_dfbs-1
 
-    times = get_times(dfb_beginning, dfb_ending, satellite_timestep, slot_step_)
+    times = get_times_utc(dfb_beginning, dfb_ending, satellite_timestep, slot_step_)
 
     latitudes, longitudes = get_latitudes_longitudes(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
 
@@ -77,11 +77,9 @@ if __name__ == '__main__':
             longitudes,
             dfb_beginning,
             dfb_ending,
-            compute_indexes=True,
+            output_level=True,
             slot_step=slot_step_,
-            normalize=False,
-            weights=None,
-            return_m_s=False,
+            gray_scale=False,
         )
 
         features = np.flip(features, axis=1)
@@ -137,9 +135,9 @@ if __name__ == '__main__':
             longitudes,
             dfb_beginning,
             dfb_ending,
-            compute_indexes=True,
+            output_level=True,
             slot_step=slot_step_,
-            normalize=False,
+            gray_scale=False,
             weights=None,
             return_m_s=False,
         )

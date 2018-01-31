@@ -1,7 +1,7 @@
 from utils import *
 
 
-def classify_brightness(bright_index, m, s):
+def classify_brightness(bright_index):
     '''
 
     :param bright_index: array slots*latitudes*longitudes with cloud index (cli or unbiased difference).
@@ -10,7 +10,7 @@ def classify_brightness(bright_index, m, s):
     :return: array slots*latitudes*longitudes with 1 for bright, 0 for dark, and 2 for undetermined
     '''
 
-    default_threshold = (0.35-m)/s
+    default_threshold = 0.35
     shape = np.shape(bright_index)
     if len(shape) == 3:
         (nb_slots, nb_latitudes, nb_longitudes) = np.shape(bright_index)

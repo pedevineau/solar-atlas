@@ -19,24 +19,11 @@ def get_nb_slots_per_day(satellite_step, slot_step):
     return int(24 * 60 / (satellite_step * slot_step))
 
 
-def looks_like_night(point, me=None, std=None):
-    ## wait for array such as [0,17,-25,3]
-    # if me is None and std is None:
-    for k in range(len(point)-1):
-        if abs(point[k]+10) > 0.001:
+def looks_like_night(point, indexes_to_test):
+    for k in indexes_to_test:
+        if (point[k]+1) != 0:
             return False
     return True
-    # elif me is not None and std is not None:
-    #     for k in range(len(point)-1):
-    #         m = me[k]
-    #         s = std[k]
-    #         if abs(point[k] + 10) > 0.001:
-    #             return False
-    #     return True
-    # elif me is None:
-    #     raise AttributeError('standard deviation is known but not mean')
-    # elif std is None:
-    #     raise AttributeError('mean is known but not standard deviation')
 
 
 def rc_to_latlon(r, c, size_tile=5):
@@ -62,14 +49,14 @@ def latlon_to_rc(lat, lon, size_tile=5):
 
 
 def get_latitudes_longitudes(lat_start, lat_end, lon_start, lon_end, resolution=2.0 / 60):
-    nb_lat = int((lat_end - lat_start) / resolution) + 1
+    nb_lat = int((lat_end - lat_start) / resolution)
     latitudes = np.linspace(lat_start, lat_end, nb_lat, endpoint=False)
-    nb_lon = int((lon_end - lon_start) / resolution) + 1
+    nb_lon = int((lon_end - lon_start) / resolution)
     longitudes = np.linspace(lon_start, lon_end, nb_lon, endpoint=False)
     return latitudes, longitudes
 
 
-def get_times(dfb_beginning, dfb_ending, satellite_timestep, slot_step):
+def get_times_utc(dfb_beginning, dfb_ending, satellite_timestep, slot_step):
     from datetime import datetime, timedelta
     len_times = (1 + dfb_ending - dfb_beginning) * 60 * 24 / (satellite_timestep * slot_step)
     origin_of_time = datetime(1980, 1, 1)
@@ -80,7 +67,7 @@ def get_times(dfb_beginning, dfb_ending, satellite_timestep, slot_step):
 
 def get_dfbs_slots(dfb_beginning, dfb_ending, satellite_timestep, slot_step):
     dfbs = np.arange(dfb_beginning, dfb_ending+1, step=1)
-    slots = np.arange(0, 60 * 24 /satellite_timestep, step=slot_step)
+    slots = np.arange(0, 60 * 24 / satellite_timestep, step=slot_step)
     return dfbs, slots
 
 
@@ -90,7 +77,7 @@ def upper_divisor_slot_step(slot_step, nb_slots_per_day):
     return slot_step
 
 
-def normalize_array(array, mask=None, normalization='max', return_m_s=False):
+def normalize(array, mask=None, normalization='max', return_m_s=False):
     # normalization: max, standard, 'reduced', 'gray-scale'
     if normalization == 'gray-scale':
         if mask is None:

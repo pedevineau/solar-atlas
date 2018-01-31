@@ -25,9 +25,9 @@ if __name__ == '__main__':
             longitudes,
             beginning,
             ending,
-            compute_indexes=True,
+            output_level=True,
             slot_step=1,
-            normalize=False,
+            gray_scale=False,
         )
 
         cli = infra[:, :, :, 0]
@@ -39,9 +39,9 @@ if __name__ == '__main__':
             longitudes,
             beginning,
             ending,
-            compute_indexes=False,
+            output_level=False,
             slot_step=1,
-            normalize=False
+            gray_scale=False
         )
 
     elif type_channels == 1:
@@ -51,20 +51,19 @@ if __name__ == '__main__':
             longitudes,
             beginning,
             ending,
-            compute_indexes=False,
+            output_level=False,
             slot_step=1,
-            normalize=False
+            gray_scale=False
         )
-        features, mu = get_features(
+        features = get_features(
             'visible',
             latitudes,
             longitudes,
             beginning,
             ending,
-            compute_indexes=True,
+            output_level=True,
             slot_step=1,
-            normalize=False,
-            return_zen=True
+            gray_scale=False,
         )
 
         ndsi = features[:, :, :, 0]
@@ -111,8 +110,8 @@ if __name__ == '__main__':
         visualize_map(infrared_means)
         visualize_map(cli_means)
         visualize_map(var_means)
-        bias = normalize_array(infrared_means, normalization='standard') - \
-                         normalize_array(var_means, normalization='standard')
+        bias = normalize(infrared_means, normalization='standard') - \
+               normalize(var_means, normalization='standard')
         visualize_map(bias)
     elif type_channels == 1:
         visualize_map(visible_correlations)

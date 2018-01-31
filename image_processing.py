@@ -197,7 +197,7 @@ if __name__ == '__main__':
     # from quick_visualization import get_bbox
     # bbox = get_bbox(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
     features = get_features(type_channels, lat, lon, dfb_beginning, dfb_ending, compute_indexes, slot_step=1,
-                            normalize=True)
+                            gray_scale=True)
 
     segmentation_watershed_2d(features[16, :, :, chan])
 

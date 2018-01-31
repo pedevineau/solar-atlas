@@ -64,16 +64,16 @@ def classify_cloud_variability(cloud_variability):
     del cloud_index_1d_copy
     from naive_gaussian_classification import get_basis_model, get_trained_model
     process = 'bayesian'
-    print 'classify cloud covertness', process
-    nb_components = 3
+    print 'classify cloud covertness var', process
+    nb_components = 4
     max_iter = 300
-    means_init = [[-10], [-1], [1]]
+    means_init = [[-10], [-1], [1], [2]]
     model = get_basis_model(process, nb_components, max_iter, means_init)
     model = get_trained_model(cloud_index_1d_training, model, process)
-    cloud_covertness = model.predict(cloud_variability).reshape((nb_slots, nb_latitudes, nb_longitudes))
+    cloud_covertness_var = model.predict(cloud_variability).reshape((nb_slots, nb_latitudes, nb_longitudes))
     centers3 = get_centers(model, process)
-    [undefined, cloudless, slightly_cloudy] = np.argsort(centers3.flatten())
+    [undefined, cloudless, slightly_cloudy, cloudy] = np.argsort(centers3.flatten())
     del cloud_variability
-    cloud_covertness[cloud_covertness == cloudless] = nb_components
-    cloud_covertness[cloud_covertness == slightly_cloudy] = nb_components + 1
-    return cloud_covertness-nb_components
+    # cloud_covertness_var[cloud_covertness_var == undefined] = nb_components
+    cloud_covertness_var[(cloud_covertness_var == slightly_cloudy) | (cloud_covertness_var == cloudy)] = nb_components + 1
+    return cloud_covertness_var-nb_components

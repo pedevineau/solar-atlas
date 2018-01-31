@@ -50,3 +50,11 @@ def read_channels_dir_and_pattern():
     pattern = metadata[satellite]["channels"]["pattern"]
     dir = metadata[satellite]["channels"]["dir"]
     return dir, pattern
+
+
+def read_mask_dir_and_pattern(mask_name):
+    from json import load
+    metadata = load(open('metadata.json'))
+    pattern = metadata["masks"][mask_name]["pattern"]
+    dir = metadata["masks"][mask_name]["dir"]
+    return dir, pattern

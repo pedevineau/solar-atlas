@@ -14,36 +14,35 @@ def get_autocorr_predictor_array_2d(x):
     return np.max(auto_x[142:146]) / (np.max(auto_x))
 
 
-def get_random_database(normalize):
+def get_random_database():
     latitude_beginning = 45.0   # salt lake mongolia  45.
     latitude_end = 46.0
     longitude_beginning = 125.0
     longitude_end = 126.0
     dfb_beginning = 13512+60
     lat, lon = get_latitudes_longitudes(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
-    bbox=get_bbox(latitude_beginning,latitude_end,longitude_beginning,longitude_end)
-    features_pre = get_features(lat, lon, dfb_beginning, dfb_beginning+10, True, normalize=normalize)
+    features_pre = get_features(lat, lon, dfb_beginning, dfb_beginning + 10, True)
     latitude_beginning = 36.0   # salt lake mongolia  45.
     latitude_end = 37.0
     longitude_beginning = 128.0
     longitude_end = 129.0
     dfb_beginning = 13527+60
     lat, lon = get_latitudes_longitudes(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
-    features_bis = get_features(lat, lon, dfb_beginning, dfb_beginning+10, True, normalize=normalize)
+    features_bis = get_features(lat, lon, dfb_beginning, dfb_beginning + 10, True)
     latitude_beginning = 35.0   # salt lake mongolia  45.
     latitude_end = 36.0
     longitude_beginning = 128.0
     longitude_end = 129.0
     dfb_beginning = 13542+60
     lat, lon = get_latitudes_longitudes(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
-    features_ter = get_features(lat, lon, dfb_beginning, dfb_beginning+10, True, normalize=normalize)
+    features_ter = get_features(lat, lon, dfb_beginning, dfb_beginning + 10, True)
     latitude_beginning = 38.0   # salt lake mongolia  45.
     latitude_end = 39.0
     longitude_beginning = 125.0
     longitude_end = 126.0
     dfb_beginning = 13562+60
     lat, lon = get_latitudes_longitudes(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
-    features_qua = get_features(lat, lon, dfb_beginning, dfb_beginning+10, True, normalize=normalize)
+    features_qua = get_features(lat, lon, dfb_beginning, dfb_beginning + 10, True)
     return np.concatenate((features_pre, features_bis, features_ter, features_qua))
 
 

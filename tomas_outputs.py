@@ -6,7 +6,7 @@ def get_tomas_outputs(dfb_begin, dfb_end, lat_begin, lat_end, lon_begin, lon_end
     from general_utils import latlon
     r_end, c_begin = latlon_to_rc(lat_begin, lon_begin)
     r_begin, c_end = latlon_to_rc(lat_end, lon_end)
-    r_end -= 1
+    r_begin += 1
     c_end -= 1
     print [c_begin, c_end, r_begin, r_end]
     himawari_slot_min = 1
@@ -45,7 +45,7 @@ def get_tomas_outputs(dfb_begin, dfb_end, lat_begin, lat_end, lon_begin, lon_end
 
     print dfb_begin
     title = daytimeconv.dfb2yyyymmdd(dfb_begin) + ' - ' + daytimeconv.dfb2yyyymmdd(dfb_end)
-    latlon.visualize_map_3d(map_data_3d, bbox, vmin=vmin, vmax=vmax, interpolation='nearest', title=title)
+    # latlon.visualize_map_3d(map_data_3d, bbox, vmin=vmin, vmax=vmax, interpolation='nearest', title=title)
 
     print 'done'
     return map_data_3d
@@ -60,11 +60,11 @@ def reduce_tomas_2_classes(classes):
 
 if __name__ == '__main__':
     print 'tomas reader'
-    dfb_begin = 13525
-    nb_days = 1
+    dfb_begin = 13525+180
+    nb_days = 3
     dfb_end = dfb_begin + nb_days - 1
-    latitude_begin = -5.
-    latitude_end = 0.
-    longitude_begin = 125.
-    longitude_end = 130.
+    latitude_begin = 40.
+    latitude_end = 45.
+    longitude_begin = 120.
+    longitude_end = 125.
     print get_tomas_outputs(dfb_begin, dfb_end, latitude_begin, latitude_end, longitude_begin, longitude_end)

@@ -274,73 +274,30 @@ def training(beginning, ending, latitudes, longitudes, process, compute_indexes,
 
     print 'TRAINING'
     time_start_training = time.time()
-    return_m_s = True
-    from choose_training_sample import get_temporally_stratified_samples, evaluate_randomization
+    from choose_training_sample import temporally_stratified_samples, evaluate_randomization
 
-    # visible_samples_for_training = get_features(
-    #     'visible',
-    #     latitudes,
-    #     longitudes,
-    #     beginning,
-    #     ending,
-    #     compute_indexes,
-    #     slot_step,
-    #     normalize,
-    #     normalization,
-    #     weights,
-    # )
-
-    if return_m_s:
-        infrared_samples_for_training, infrared_me, infrared_std = get_features(
-            'infrared',
-            latitudes,
-            longitudes,
-            beginning,
-            ending,
-            compute_indexes,
-            slot_step,
-            normalize,
-            weights,
-            return_m_s=True
-        )
-        visible_samples_for_training, visible_me, visible_std = get_features(
-            'visible',
-            latitudes,
-            longitudes,
-            beginning,
-            ending,
-            compute_indexes,
-            slot_step,
-            normalize,
-            weights,
-            return_m_s=True
-        )
-        nb_features = np.shape(infrared_samples_for_training)[-1]+np.shape(visible_samples_for_training)[-1]
-    else:
-        infrared_samples_for_training = get_features(
-            'infrared',
-            latitudes,
-            longitudes,
-            beginning,
-            ending,
-            compute_indexes,
-            slot_step,
-            normalize,
-            weights,
-        )
-        visible_samples_for_training = get_features(
-            'visible',
-            latitudes,
-            longitudes,
-            beginning,
-            ending,
-            compute_indexes,
-            slot_step,
-            normalize,
-            weights,
-        )
-        nb_features = np.shape(infrared_samples_for_training)[-1]+np.shape(visible_samples_for_training)[-1]
-        infrared_me, infrared_std = np.zeros(nb_features), np.full(nb_features, 1)
+    infrared_samples_for_training = get_features(
+        'infrared',
+        latitudes,
+        longitudes,
+        beginning,
+        ending,
+        compute_indexes,
+        slot_step,
+        normalize,
+    )
+    visible_samples_for_training = get_features(
+        'visible',
+        latitudes,
+        longitudes,
+        beginning,
+        ending,
+        compute_indexes,
+        slot_step,
+        normalize,
+    )
+    nb_features = np.shape(infrared_samples_for_training)[-1]+np.shape(visible_samples_for_training)[-1]
+    infrared_me, infrared_std = np.zeros(nb_features), np.full(nb_features, 1)
     len_training = int(len(infrared_samples_for_training) * training_rate)
 
     print len(visible_samples_for_training[np.isnan(visible_samples_for_training)])
@@ -354,9 +311,9 @@ def training(beginning, ending, latitudes, longitudes, process, compute_indexes,
 
     if randomization:
         t_randomization = time.time()
-        data_training = get_temporally_stratified_samples(infrared_samples_for_training, training_rate,
-                                                          coef_randomization * nb_days_testing, infrared_me, infrared_std)
-        evaluate_randomization(data_training, infrared_me, infrared_std)
+        data_training = temporally_stratified_samples(infrared_samples_for_training, training_rate,
+                                                      coef_randomization * nb_days_testing)
+        evaluate_randomization(data_training)
         print 'time for ramdomization', time.time() - t_randomization
 
     else:

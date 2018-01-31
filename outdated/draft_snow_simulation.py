@@ -5,7 +5,7 @@ from scipy.stats import pearsonr, linregress
 # https://docs.scipy.org/doc/scipy-0.14.0/reference/generated/scipy.stats.pearsonr.html
 
 
-from get_data import normalize_array
+from get_data import normalize
 T = 144
 nb_days = 7
 ignore_sun_low_angle = 11
@@ -69,12 +69,10 @@ for K in Ks:
     mask[:, 0, 0][mu <= 0] = True
     mask[:, 1, 0][mu <= 0] = True
 
-    map, m, s = normalize_array(map, mask, normalization='standard', return_m_s=True)
-
     max_variability = get_bright_negative_variability_5d(map, mask, 10, 1)
 
     from classification_snow_index import *
-    classified_brightness = 0.3*classify_brightness(map, m, s)
+    classified_brightness = 0.3*classify_brightness(map)
     classified_brightness_var = classifiy_brightness_variability(max_variability)
 
     from get_data import remove_cos_zen_correlation
@@ -100,7 +98,7 @@ for K in Ks:
 
     plt.plot(compute_short_variability(map[:, 0], step=1, abs_value=True), 'r')
     plt.plot(compute_short_variability(map[:, 1], step=1, abs_value=True), 'y')
-    mapstd = normalize_array(map, normalization='standard')
+    mapstd = normalize(map, normalization='standard')
     # mapstd = map
     plt.plot(mapstd[:, 0], 'b')
     plt.plot(mapstd[:, 1], 'g')

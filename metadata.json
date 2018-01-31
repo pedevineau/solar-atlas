@@ -48,9 +48,13 @@
   },
 
   "masks": {
-    "ocean": {
+    "land": {
       "dir": "/data/test_data/masks",
       "pattern": "landsea_mask_2arcmin.nc"
+    },
+    "temperature_forecast": {
+      "dir": "/net/sponde/data/weather_params/CFSv2/netcdf_optimized",
+      "pattern": "CFSv2_t2_{YYYY}_ts.nc"
     },
     "terrain": {
 

@@ -1,8 +1,8 @@
 ### user input ###
 
 from utils import *
-from visible_predictors import get_visible_predictors
-from infrared_predictors import get_infrared_predictors
+from visible_predictors import visible_outputs
+from infrared_predictors import infrared_outputs
 
 
 def get_selected_channels(all_channels, ask_channels=True):
@@ -43,24 +43,6 @@ def get_mask_outliers(array):
     masknan = np.isnan(array) | np.isinf(array)
     mask = maskup | maskdown | masknan
     return mask
-
-
-def get_ocean_mask(latitudes, longitudes):
-    from nclib2.dataset import DataSet
-    import json
-    metadata = json.load(open('metadata.json'))
-    dir_ = metadata["masks"]["ocean"]["dir"]
-    pattern = metadata["masks"]["ocean"]["pattern"]
-
-    ocean = DataSet.read(dirs=dir_,
-                         extent={
-                               'lat': latitudes,
-                               'lon': longitudes,
-                           },
-                         file_pattern=pattern,
-                         variable_name='Band1', interpolation='N', max_processes=0,
-                         )
-    return ocean['data'] == 0
 
 
 def is_likely_outlier(point):
@@ -129,7 +111,7 @@ def get_list_isolated_missing_slots(array, maximal_scope=3):
     return indexes_isolated_1, indexes_isolated_2, indexes_isolated_3
 
 
-def mask_channels(array_data, normalize):
+def mask_channels(array_data):
     (nb_slots, nb_latitudes, nb_longitudes, nb_channels) = np.shape(array_data)
 
     mask = np.zeros((nb_slots, nb_latitudes, nb_longitudes), dtype=bool)
@@ -144,8 +126,6 @@ def mask_channels(array_data, normalize):
                                                                   interpolation='linear')
         # get mask for non isolated nan and aberrant
         mask_current_channels = get_mask_outliers(array_data[:, :, :, chan])
-        if normalize:   # a normalization here does not seems very relevant
-            array_data[:, :, :, chan] = normalize_array(array_data[:, :, :, chan], mask_current_channels)[0]
         mask = mask | mask_current_channels
 
     array_data[mask] = -1
@@ -182,7 +162,7 @@ def compute_short_variability(array, mask=None, cos_zen=None, step=1, return_mas
     if mask is not None:
         array[mask] = -10
     if normalization != 'none':
-        array = normalize_array(array, mask=mask, normalization=normalization)
+        array = normalize(array, mask=mask, normalization=normalization)
     if return_mask:
         return array, mask
     else:
@@ -261,18 +241,17 @@ def get_variability_array_modified(array, mask, step=1, th_1=0.02, th_2=0.3,
     return arr
 
 
-def get_features(type_channels, latitudes, longitudes, dfb_beginning, dfb_ending, compute_indexes,
+def get_features(type_channels, latitudes, longitudes, dfb_beginning, dfb_ending, output_level,
                  slot_step=1,
-                 normalize=False,
-                 weights=None,
-                 return_m_s=False,
+                 gray_scale=False,
                  ):
-    from read_netcdf import read_channels
+    from read_netcdf import read_channels, read_land_mask, read_temperature_forecast
     from read_metadata import read_satellite_step, read_channels_names
     satellite_step = read_satellite_step()
 
-    ocean = get_ocean_mask(latitudes, longitudes)
-    times = get_times(dfb_beginning, dfb_ending, satellite_step, slot_step)
+    is_land = read_land_mask(latitudes, longitudes)
+    temperatures = read_temperature_forecast(latitudes, longitudes, dfb_beginning, dfb_ending)
+    times = get_times_utc(dfb_beginning, dfb_ending, satellite_step, slot_step)
 
     channels = read_channels_names(type_channels)
     if type_channels == 'visible':
@@ -284,17 +263,16 @@ def get_features(type_channels, latitudes, longitudes, dfb_beginning, dfb_ending
             dfb_ending,
             slot_step
         )
-        return get_visible_predictors(
-            content_visible,
-            ocean,
+        return visible_outputs(
             times,
             latitudes,
             longitudes,
+            is_land,
+            content_visible,
             satellite_step,
             slot_step,
-            compute_indexes,
-            normalize,
-            return_m_s,
+            output_level,
+            gray_scale,
         )
 
     elif type_channels == 'infrared':
@@ -306,16 +284,16 @@ def get_features(type_channels, latitudes, longitudes, dfb_beginning, dfb_ending
             dfb_ending,
             slot_step
         )
-        return get_infrared_predictors(
-            content_infrared,
+        return infrared_outputs(
             times,
             latitudes,
             longitudes,
+            temperatures,
+            content_infrared,
             satellite_step,
             slot_step,
-            compute_indexes,
-            normalize,
-            return_m_s,
+            output_level,
+            gray_scale,
         )
     else:
         raise AttributeError('The type of channels should be \'visible\' or \'infrared\'')

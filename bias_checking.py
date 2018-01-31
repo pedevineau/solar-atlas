@@ -5,6 +5,7 @@ def statistics_classes(classes, display_now=True):
     nb_classes = int(np.max(classes))+1
     nb_slots = np.shape(classes)[0]
     import matplotlib.pyplot as plt
+    plt.clf()
     import matplotlib.patches as mpatches
     patches = []
     colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k', 'burlywood', 'chartreuse', '#cccccc', '#444444', '#333333',
@@ -36,10 +37,10 @@ def medians_index(index, mask, display_now=True):
 def comparision_visible(vis, classes):
     threshold_visible = 0.35
     comparision = np.empty_like(vis)
-    comparision[(vis > threshold_visible) & (classes == 0)] = -2
-    comparision[(vis > threshold_visible) & ((classes == 2) | (classes == 4))] = -1
-    comparision[(vis < threshold_visible) & ((classes == 2) | (classes == 4))] = 1
-    comparision[(vis < threshold_visible) & (classes != 0) & (classes != 2) & (classes != 4) & (classes != 7) & (classes != 12)] = 2
+    comparision[(vis > threshold_visible) & (classes == 0)] = -1
+    # comparision[(vis > threshold_visible) & ((classes == 2) | (classes == 4))] = -1
+    # comparision[(vis < threshold_visible) & ((classes == 2) | (classes == 4))] = 1
+    comparision[(vis < threshold_visible) & (classes != 0) & (classes != 2) & (classes != 4) & (classes != 7) & (classes != 12)] = 1
     return comparision
 
 
@@ -55,7 +56,7 @@ def comparision_algorithms(reduced_classes_1, reduced_classes_2):
 if __name__ == '__main__':
     slot_step = 1
     beginning = 13525
-    nb_days = 5
+    nb_days = 3
     ending = beginning + nb_days - 1
 
     latitude_beginning = 40.
@@ -90,13 +91,13 @@ if __name__ == '__main__':
                     latitude_end,
                     longitude_beginning,
                     longitude_end)
-    #
-    # visualize_map_time(classes,
-    #                    bbox,
-    #                    vmin=0,
-    #                    vmax=12,
-    #                    )
-    #
+
+    visualize_map_time(classes,
+                       bbox,
+                       vmin=0,
+                       vmax=12,
+                       )
+
     # visualize_map_time(vis,
     #                    bbox
     #                    )
