@@ -135,7 +135,7 @@ def test_models(zen, features, classes, method_learning, meta_method, pca_compon
     print 'time testing:', t_testing - t_save
     print 'differences', predicted_labels[predicted_labels != predicted_labels[0]]
     if learn_new_model:
-        stri = 'accuracy score:' + str(accuracy_score(reshape_features(classes), predicted_labels))
+        stri = 'accuracy score:' + str(accuracy_score(reshape_features(classes), predicted_labels)) + '\n'
         if return_string:
             print stri
             return stri
@@ -238,7 +238,7 @@ if __name__ == '__main__':
                 pca_components_ = PCA_COMPONENTS[m]
                 header = str(method_learning_) + ' ' + str(meta_method_) + ' pca:', str(pca_components_)
                 try:
-                    LOGS = header + test_models(angles, features_, classes_, method_learning_, meta_method_, pca_components_)
+                    LOGS = header + '\n' + test_models(angles, features_, classes_, method_learning_, meta_method_, pca_components_)
                 except Exception as e:
                     LOGS = header + str(e)
                 print 'LOGS ready'
