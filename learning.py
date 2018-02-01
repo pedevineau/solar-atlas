@@ -90,6 +90,7 @@ def test_models(zen, features, classes, method_learning, meta_method, pca_compon
         select = temporally_stratified_samples(zen, training_rate, coef_randomization * nb_days_training)
         features = reshape_features(features)
         select = select.flatten()
+        nb_features = np.shape(features)[-1]
         if pca_components is not None:
             nb_features = pca_components
             features = immediate_pca(features, pca_components)
@@ -134,7 +135,7 @@ def test_models(zen, features, classes, method_learning, meta_method, pca_compon
     print 'time testing:', t_testing - t_save
     print 'differences', predicted_labels[predicted_labels != predicted_labels[0]]
     if learn_new_model:
-        stri = 'accuracy score:', accuracy_score(reshape_features(classes), predicted_labels)
+        stri = 'accuracy score:' + str(accuracy_score(reshape_features(classes), predicted_labels))
         if return_string:
             print stri
             return stri
@@ -183,8 +184,8 @@ if __name__ == '__main__':
     times = get_times_utc(beginning, ending, read_satellite_step(), slot_step=1)
 
     a, b, c = len(times), len(latitudes), len(longitudes)
-    nb_features = 6
-    features_ = np.empty((a, b, c, nb_features))
+    nb_features_ = 6
+    features_ = np.empty((a, b, c, nb_features_))
 
     date_begin, date_end = print_date_from_dfb(beginning, ending)
     print beginning, ending
@@ -235,11 +236,11 @@ if __name__ == '__main__':
                 method_learning_ = METHODS_LEARNING[k]
                 meta_method_ = META_METHODS[l]
                 pca_components_ = PCA_COMPONENTS[m]
-                header = method_learning_ + ' ' + meta_method_ + ' pca:', pca_components_
+                header = str(method_learning_) + ' ' + str(meta_method_) + ' pca:', str(pca_components_)
                 try:
                     LOGS = header + test_models(angles, features_, classes_, method_learning_, meta_method_, pca_components_)
                 except Exception as e:
                     LOGS = header + str(e)
                 print 'LOGS ready'
-                with open('~/Desktop/logs', 'wr') as f:
+                with open('logs', 'a') as f:
                     f.write(LOGS)
