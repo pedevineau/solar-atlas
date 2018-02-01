@@ -54,7 +54,7 @@ def get_classes_v1_point(latitudes,
     var_cloud = (classify_cloud_variability(infrared_features[:, :, :, 1]) == 1)
     # cold_not_bright = (infrared_features[:, :, :, 2] == 1) & ~bright
     cold = (infrared_features[:, :, :, 2] == 1)
-    obvious_clouds = (classify_cloud_covertness(infrared_features[:, :, :, 0]) == 1) & var_cloud
+    obvious_clouds = (classify_cloud_covertness(infrared_features[:, :, :, 0]) == 1)
     # foggy = (obvious_clouds | var_cloud) & ((visible_features[:, :, :, 0]) < -1.5) & (visible_features[:, :, :, 0] > -9)
     #  foggy: low snow index, good vis
     (nb_slots, nb_latitudes, nb_longitudes) = np.shape(visible_features)[0:3]
@@ -273,7 +273,7 @@ if __name__ == '__main__':
 
     slot_step = 1
     beginning = 13525
-    nb_days = 8
+    nb_days = 3
     ending = beginning + nb_days - 1
 
     # method = 'watershed-3d'  # 'on-point', 'otsu-2d', 'otsu-3d', 'watershed-2d', 'watershed-3d'
