@@ -60,7 +60,14 @@ def infrared_abstract_predictors(zen, lir, mask_input, temperatures, cli, ancill
                 # pre_cloud_mask=high_cli_mask | (cold == 1),
                 pre_cloud_mask=None,
                 satellite_step=satellite_step,
-                slot_step=slot_step) #*\
+                slot_step=slot_step)  # *\
+            # get_cloud_index_positive_variability_5d(
+            #     cloud_index=ancillary_cloud_index,
+            #     definition_mask=mask_output,
+            #     # pre_cloud_mask=high_cli_mask | (cold == 1),
+            #     pre_cloud_mask=None,
+            #     satellite_step=satellite_step,
+            #     slot_step=slot_step) #*\
         # np.abs(get_cloud_short_variability(cloud_index=ancillary_cloud_index, definition_mask=mask_input))
 
             # array_indexes[:, :, :, 0][high_cli_mask] = 1  # "hot" water clouds
@@ -195,6 +202,77 @@ def get_cloud_index_positive_variability_5d(cloud_index, definition_mask, pre_cl
                     )
     # we are interested only in positive cli variations
     to_return[to_return < 0] = 0
+    return to_return
+
+
+def get_cloud_index_total_variability_5d(cloud_index, definition_mask, pre_cloud_mask,
+                                         satellite_step, slot_step):
+    '''
+
+    :param cloud_index: cloud index computed with the previous function
+    :param definition_mask: mask points where cloud index is not defined
+    :param pre_cloud_mask: mask points where we don't want to compute 5 days variability (eg: obvious water clouds)
+    :param satellite_step: the satellite characteristic time step between two slots (10 minutes for Himawari 8)
+    :param slot_step: the chosen sampling of slots. if slot_step = n, the sampled slots are s[0], s[n], s[2*n]...
+    :return:
+    '''
+    from get_data import compute_short_variability
+    if pre_cloud_mask is not None:
+        mask = definition_mask | pre_cloud_mask
+    else:
+        mask = definition_mask
+    nb_slots_per_day = get_nb_slots_per_day(satellite_step, slot_step)
+    nb_days = np.shape(cloud_index)[0] / nb_slots_per_day
+    to_return = np.full_like(cloud_index, -10)
+    if nb_days >= 2:
+        var_cli_1d_past = compute_short_variability(array=cloud_index, mask=mask, abs_value=True,
+                                                    step=nb_slots_per_day)
+
+        var_cli_1d_future = compute_short_variability(array=cloud_index, mask=mask, abs_value=True,
+                                                      step=-nb_slots_per_day)
+        if nb_days == 2:
+            to_return[:nb_slots_per_day] = var_cli_1d_future[:nb_slots_per_day]
+            to_return[nb_slots_per_day:] = var_cli_1d_past[nb_slots_per_day:]
+        else:  # nb_days >=3
+            var_cli_2d_past = compute_short_variability(array=cloud_index, mask=mask, abs_value=True,
+                                                        step=nb_slots_per_day * 2)
+            var_cli_2d_future = compute_short_variability(array=cloud_index, mask=mask,  abs_value=True,
+                                                          step=-2 * nb_slots_per_day)
+
+            # first day
+            to_return[:nb_slots_per_day] = np.minimum(var_cli_1d_future[:nb_slots_per_day],
+                                                      var_cli_2d_future[:nb_slots_per_day])
+            # last day
+            to_return[-nb_slots_per_day:] = np.minimum(var_cli_1d_past[-nb_slots_per_day:],
+                                                       var_cli_2d_past[-nb_slots_per_day:])
+
+            if nb_days == 3:
+                # second day
+                to_return[nb_slots_per_day:2*nb_slots_per_day] = np.minimum(
+                    var_cli_1d_past[nb_slots_per_day:2*nb_slots_per_day],
+                    var_cli_1d_future[nb_slots_per_day:2*nb_slots_per_day])
+            else:  # nb_days >= 4
+                # the day previous the last one
+                to_return[-2*nb_slots_per_day:-nb_slots_per_day] = np.minimum(
+                    np.minimum(
+                        var_cli_1d_past[-2*nb_slots_per_day:-nb_slots_per_day],
+                        var_cli_2d_past[-2*nb_slots_per_day:-nb_slots_per_day]),
+                    var_cli_1d_future[-2*nb_slots_per_day:-nb_slots_per_day])
+                # second day
+                to_return[nb_slots_per_day:2*nb_slots_per_day] = np.minimum(
+                    np.minimum(
+                        var_cli_1d_future[nb_slots_per_day:2*nb_slots_per_day],
+                        var_cli_2d_future[nb_slots_per_day:2*nb_slots_per_day]),
+                    var_cli_1d_past[nb_slots_per_day:2*nb_slots_per_day])
+                if nb_days >= 5:
+                    to_return[2*nb_slots_per_day:-2*nb_slots_per_day] = np.minimum(
+                        np.minimum(
+                            var_cli_1d_past[2*nb_slots_per_day:-2*nb_slots_per_day],
+                            var_cli_2d_past[2*nb_slots_per_day:-2*nb_slots_per_day]),
+                        np.minimum(
+                            var_cli_1d_future[2*nb_slots_per_day:-2*nb_slots_per_day],
+                            var_cli_2d_future[2*nb_slots_per_day:-2*nb_slots_per_day])
+                    )
     return to_return
 
 

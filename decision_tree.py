@@ -6,7 +6,7 @@ def get_classes_v1_point(latitudes,
                          longitudes,
                          beginning,
                          ending,
-                         slot_step,
+                         slot_step=1,
                          shades_detection=False
                          ):
 
@@ -47,14 +47,17 @@ def get_classes_v1_point(latitudes,
 
     bright = (classify_brightness(visible_features[:, :, :, 0]) == 1) & (visible > 0.25)
 
-    negative_variable_brightness = (classifiy_brightness_variability(visible_features[:, :, :, 1]) == 1)
-    positive_variable_brightness = (classifiy_brightness_variability(visible_features[:, :, :, 2]) == 1)
+    # negative_variable_brightness = (classifiy_brightness_variability(visible_features[:, :, :, 1]) == 1)
+    # positive_variable_brightness = (classifiy_brightness_variability(visible_features[:, :, :, 2]) == 1)
+    negative_variable_brightness = visible_features[:, :, :, 1] > 0.15
+    positive_variable_brightness = visible_features[:, :, :, 2] > 0.15
+
 
     from classification_cloud_index import classify_cloud_covertness, classify_cloud_variability
-    var_cloud = (classify_cloud_variability(infrared_features[:, :, :, 1]) == 1)
+    # var_cloud = (classify_cloud_variability(infrared_features[:, :, :, 1]) == 1)
     # cold_not_bright = (infrared_features[:, :, :, 2] == 1) & ~bright
     cold = (infrared_features[:, :, :, 2] == 1)
-    obvious_clouds = (classify_cloud_covertness(infrared_features[:, :, :, 0]) == 1)
+    obvious_clouds = (classify_cloud_covertness(infrared_features[:, :, :, 0]) == 1) & (infrared_features[:, :, :, 1] > 1)
     # foggy = (obvious_clouds | var_cloud) & ((visible_features[:, :, :, 0]) < -1.5) & (visible_features[:, :, :, 0] > -9)
     #  foggy: low snow index, good vis
     (nb_slots, nb_latitudes, nb_longitudes) = np.shape(visible_features)[0:3]
@@ -124,7 +127,7 @@ def get_classes_v2_image(latitudes,
                          longitudes,
                          beginning,
                          ending,
-                         slot_step,
+                         slot_step=1,
                          method='otsu-3d',
                          shades_detection=False
                          ):
@@ -173,8 +176,8 @@ def get_classes_v2_image(latitudes,
 
         bright = (segmentation(method, visible_features[:, :, :, 0]) & visible)
 
-    negative_variable_brightness = segmentation(method, visible_features[:, :, :, 1])
-    positive_variable_brightness = segmentation(method, visible_features[:, :, :, 2])
+    negative_variable_brightness = visible_features[:, :, :, 1] > 25
+    positive_variable_brightness = visible_features[:, :, :, 2] > 25
     slight_clouds = segmentation(method, infrared_features[:, :, :, 1])
     # obvious_clouds = (infrared_features[:, :, :, 0] == 1)
     obvious_clouds = segmentation(method, infrared_features[:, :, :, 0])
@@ -272,8 +275,8 @@ if __name__ == '__main__':
     nb_classes = 14
 
     slot_step = 1
-    beginning = 13525
-    nb_days = 3
+    beginning = 13525+15
+    nb_days = 5
     ending = beginning + nb_days - 1
 
     # method = 'watershed-3d'  # 'on-point', 'otsu-2d', 'otsu-3d', 'watershed-2d', 'watershed-3d'
@@ -282,8 +285,8 @@ if __name__ == '__main__':
 
     latitude_beginning = 40.
     latitude_end = 45.
-    longitude_beginning = 110.
-    longitude_end = 115.
+    longitude_beginning = 125.
+    longitude_end = 130.
     latitudes, longitudes = get_latitudes_longitudes(latitude_beginning, latitude_end,
                                                      longitude_beginning, longitude_end)
 
@@ -326,7 +329,7 @@ if __name__ == '__main__':
     from bias_checking import comparision_algorithms, comparision_visible
     visualize_map_time(comparision_visible(
         get_features('visible', latitudes, longitudes, beginning, ending, 'channel')[:, :, :, 1],
-        classes_ped), bbox)
+        classes_ped), bbox, title='comparision visible')
     classes_ped = reduce_two_classes(classes_ped)
     visualize_map_time(classes_ped, bbox, vmin=0, vmax=1, title=method + ' Classes 0-' + str(1) +
                        ' from' + str(date_begin))
