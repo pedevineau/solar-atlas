@@ -41,8 +41,8 @@ def latlon_to_rc(lat, lon, size_tile=5):
     if lon % size_tile == 0:
         lon += 1
     if -90 <= lat < 90 and -180 <= lon <= 175:
-        row = (90 - int(lat)) / size_tile
-        col = (180 + int(lon)) / size_tile
+        row = int(np.ceil((90. - 1.*lat) / size_tile))
+        col = int((180 + lon) / size_tile)
         return row, col
     else:
         raise AttributeError('latlon not well formatted')
