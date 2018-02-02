@@ -124,7 +124,8 @@ def test_models(zen, features, classes, method_learning, meta_method, pca_compon
         save_model(path_, model)
         t_save = time()
         print 'time save:', t_save - t_train
-
+    if pca_components is not None:
+        features = immediate_pca(reshape_features(features), pca_components)
     t_save = time()
     model_bis = load_model(path_)
     t_load = time()
@@ -241,6 +242,8 @@ if __name__ == '__main__':
                     LOGS = header + '\n' + test_models(angles, features_, classes_, method_learning_, meta_method_, pca_components_)
                 except Exception as e:
                     LOGS = header + str(e)
+                    print LOGS
+                    raise e
                 print 'LOGS ready'
                 with open('logs', 'a') as f:
                     f.write(LOGS)
