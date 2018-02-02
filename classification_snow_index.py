@@ -87,5 +87,44 @@ def classifiy_brightness_variability(bright_variability):
     return brightness_variability-nb_components
 
 
+def check_gaussian_hypothesis(latitudes, longitudes, begin, end, method='none'):
+    from tomas_outputs import reduce_tomas_2_classes, get_tomas_outputs
+    from decision_tree import reduce_two_classes, get_classes_v1_point, reduce_classes, get_classes_v2_image
+    from get_data import get_features
+    snow = get_features('visible', latitudes, longitudes, begin, end, 'abstract')[:, :, :, 0]
+    from quick_visualization import visualize_hist, visualize_map_time, get_bbox
+    bb = get_bbox(latitudes[0], latitudes[-1], longitudes[0], longitudes[-1])
+    # visualize_map_time(snow, bb, vmin=0, vmax=1)
+    if method == 'tomas':
+        cloud = (reduce_tomas_2_classes(get_tomas_outputs(
+            begin, end, latitudes[0], latitudes[-1], longitudes[0], longitudes[-1]
+        )) == 1)
+        snow = snow[~cloud]
+        # visualize_map_time(cloud, bb)
+    elif method == 'ped':
+        classes = reduce_classes(get_classes_v1_point(
+            latitudes, longitudes, beginning, ending
+        ))
+        cloud = (reduce_two_classes(classes) == 1)
+        # visualize_map_time(cloud, bb)
+        del classes
+        snow = snow[~cloud]
+    snow = snow[snow > 0.1]
+    visualize_hist(snow.flatten(), 'level of snow', precision=100)
 
+
+if __name__ == '__main__':
+    slot_step = 1
+    beginning = 13525+10
+    nb_days = 8
+    ending = beginning + nb_days - 1
+    latitude_beginning = -30+65
+    latitude_end = -25.+65
+    longitude_beginning = 115.
+    longitude_end = 130.
+    lat, lon = get_latitudes_longitudes(latitude_beginning, latitude_end,
+                                        longitude_beginning, longitude_end)
+    check_gaussian_hypothesis(lat, lon, beginning, ending, 'none')
+    check_gaussian_hypothesis(lat, lon, beginning, ending, 'tomas')
+    check_gaussian_hypothesis(lat, lon, beginning, ending, 'ped')
 
