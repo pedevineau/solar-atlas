@@ -209,3 +209,121 @@ def get_map_all_midnight_slots(mu, nb_slots_per_day):
                                                                  current_slots[day-1, lat, lon])
     return current_slots
 
+
+def compute_angle_glint(zen, sat, scat):
+    return 2*np.cos(zen)*np.cos(sat) - np.cos(scat)
+
+
+def simplified_declination_angle(day, year=None, method='tomas'):
+    # from THE EUROPEAN SOLAR RADIATION ATLASVol. 1: Fundamentals and maps
+    # can be used with scalars or arrays
+    assert method in ['julian', 'tomas'], 'method non implemented'
+    if method == 'julian':
+        julian = day/365.*360
+        sin_delta = 0.3978*np.sin(julian-80.2+1.92*np.sin(julian-2.8))
+        return np.arcsin(sin_delta)
+    elif method == 'tomas':
+        from general_utils.solar_geom_v5 import declin_r
+        return declin_r(year, day, 0)
+
+
+def solar_altitude_angle(times, lats, lons, declin):
+    # can be used with scalars or arrays
+    from general_utils.solar_geom_v5_test import parseDateTime
+    from general_utils.solar_geom_v5 import UTC2LAT_r
+    lons, lats = np.asarray(lons), np.asarray(lats)
+    sin_altitude = np.empty((len(times), len(lats), len(lons)))
+    for t_ind, t in enumerate(times):
+        year, day, time = parseDateTime(t.isoformat())
+        for lon_ind, lon in enumerate(lons):
+            time_apparent = UTC2LAT_r(time, day, lon)
+            omega = 15 * (time_apparent - 12)  # angle in degrees
+            for lat_ind, lat in enumerate(lons):
+                sin_altitude[t_ind, lat_ind, lon_ind] = np.sin(lat)*np.sin(declin) + np.cos(lat)*np.cos(declin)*np.cos(omega)
+    return np.arcsin(sin_altitude)
+
+
+def solar_azimuth_angle():
+    cos_alpha = np.sin(lats)*np.sin(altitude)-np.sin(declin)/(np.cos(lats)*np.cos(altitude))
+    sin_alpha = np.cos(declin)*np.sin(omega)/np.cos(altitude)
+    alpha = np.empty_like(cos_alpha)
+    alpha[sin_alpha < 0] = -np.arccos(cos_alpha)
+    alpha[sin_alpha >= 0] = np.arccos(cos_alpha)
+    return alpha
+
+
+def calculate_satellite_geometry_point(lon_r, lat_r, asun_r, hsun_r, satlon_r):
+    '''
+    inputs in radians
+    :param satlon_r # satellite position longitude - sub-satellite point
+    :param asun_r # sun azimuth A0
+    :param hsun_r # sun elevation h0
+    :param lat_r # latitude
+    :param lon_r # longitude
+    :return:
+    '''
+
+    from general_utils.satellite_geom import sat_asat_r_vect2, sat_hsat_r_vect2, sat_sun_angle_r, sat_sun_mirror_angle_r
+    # satellite geometry
+    Asat_r = sat_asat_r_vect2(lon_r, lat_r, satlon_r)#[:, :, 0, 0]
+    Hsat_r = sat_hsat_r_vect2(lon_r, lat_r, satlon_r)#[:, :, 0, 0]
+    # sun - ground - satellite geometry
+    sun_sat_angle_r = sat_sun_angle_r(asun_r, hsun_r, Asat_r, Hsat_r)
+    # specular angle - give idea of possible mirroring effect
+    sun_sat_mirror_r = sat_sun_mirror_angle_r(asun_r, hsun_r, Asat_r, Hsat_r)
+    print sun_sat_mirror_r
+
+    return sun_sat_angle_r, sun_sat_mirror_r
+
+
+if __name__ == '__main__':
+    beginning = 13517 + 60
+    nb_days = 2
+    ending = beginning + nb_days - 1
+    latitude_beginning = 40.
+    latitude_ending = 45.
+    longitude_beginning = 125.
+    longitude_ending = 130.
+    latitudes, longitudes = get_latitudes_longitudes(latitude_beginning, latitude_ending, longitude_beginning, longitude_ending)
+
+    from math import radians
+    from general_utils.solar_geom_v5_test import parseDateTime
+    from general_utils.latlon import bounding_box
+    from read_metadata import read_satellite_step, read_satellite_longitude
+    times = get_times_utc(beginning, ending, read_satellite_step(), 1)
+
+    from general_utils.solar_geom_v5 import declin_r, sunposition_r, UTC2LAT_r
+
+    nb_slots_per_day = get_nb_slots_per_day(read_satellite_step(), 1)
+    res = 2/60.
+    w = len(longitudes)
+    h = len(latitudes)
+    bb = bounding_box(xmin=longitude_beginning, xmax=longitude_ending, ymin=latitude_beginning,
+                      ymax=latitude_ending, resolution=res, width=w, height=h)
+
+    coef = (2*np.pi/360.)
+    # for lon in lons_1d:
+    asun_r = np.empty((nb_days, nb_slots_per_day, h, w))
+    hsun_r = np.empty((nb_days, nb_slots_per_day, h, w))
+
+    for t_ind, t in enumerate(times):
+        date = t.isoformat()
+        year, day, time = parseDateTime(date)
+        dfb_index = int(t_ind / nb_slots_per_day)
+        slot_index = t_ind - nb_slots_per_day*dfb_index
+        for lon_ind, lon in enumerate(longitudes):
+            decl = declin_r(year, day, radians(lon))
+            #     print 'declination:',decli,'rad  ', declin_d(year,doy,longi),'deg'
+            #     print 'perturbation:',perturbation(doy), ' perturbation(min)',perturbation(doy)*60.
+            time_LAT = UTC2LAT_r(time, day, radians(lon))
+            for lat_ind, lat in enumerate(latitudes):
+                asun_r[dfb_index, slot_index, lat_ind, lon_ind], hsun_r[dfb_index, slot_index, lat_ind, lon_ind] = \
+                    sunposition_r(decl, radians(lat), time_LAT)
+
+    satlon_r = np.empty(shape=(nb_days, nb_slots_per_day))
+    satlon_r[0,0]=read_satellite_longitude()
+    lats_2d = bb.latitudes(array2d=True)
+    lons_2d = bb.longitudes(array2d=True)
+    calculate_satellite_geometry_point(lons_2d, lats_2d, asun_r, hsun_r, satlon_r)
+
+
