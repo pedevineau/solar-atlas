@@ -49,15 +49,17 @@ def get_classes_v1_point(latitudes,
 
     # negative_variable_brightness = (classifiy_brightness_variability(visible_features[:, :, :, 1]) == 1)
     # positive_variable_brightness = (classifiy_brightness_variability(visible_features[:, :, :, 2]) == 1)
-    negative_variable_brightness = visible_features[:, :, :, 1] > 0.15
-    positive_variable_brightness = visible_features[:, :, :, 2] > 0.15
+    negative_variable_brightness = visible_features[:, :, :, 1] > 0.2
+    positive_variable_brightness = visible_features[:, :, :, 2] > 0.2
 
 
     from classification_cloud_index import classify_cloud_covertness, classify_cloud_variability
     # var_cloud = (classify_cloud_variability(infrared_features[:, :, :, 1]) == 1)
     # cold_not_bright = (infrared_features[:, :, :, 2] == 1) & ~bright
     cold = (infrared_features[:, :, :, 2] == 1)
-    obvious_clouds = (classify_cloud_covertness(infrared_features[:, :, :, 0]) == 1) & (infrared_features[:, :, :, 1] > 1)
+    # obvious_clouds = (infrared_features[:, :, :, 0] >=30) & (infrared_features[:, :, :, 1] > 1)
+    obvious_clouds = (classify_cloud_covertness(infrared_features[:, :, :, 0])) & (infrared_features[:, :, :, 1] > 1)
+
     # foggy = (obvious_clouds | var_cloud) & ((visible_features[:, :, :, 0]) < -1.5) & (visible_features[:, :, :, 0] > -9)
     #  foggy: low snow index, good vis
     (nb_slots, nb_latitudes, nb_longitudes) = np.shape(visible_features)[0:3]
@@ -155,7 +157,6 @@ def get_classes_v2_image(latitudes,
     )
 
     from image_processing import segmentation, segmentation_otsu_2d, segmentation_otsu_3d
-    from quick_visualization import visualize_map_time
 
     if method in ['watershed-2d', 'watershed-3d']:
         visible = get_features('visible', latitudes, longitudes, beginning, ending, 'abstract', slot_step, gray_scale=False)
@@ -164,7 +165,7 @@ def get_classes_v2_image(latitudes,
             segmentation_otsu_2d(visible_features[:, :, :, 0]) &
             (visible[:, :, :, 1] > 0.35))
         # visualize_map_time(bright, bbox)
-        bright = segmentation(method, bright, thresh_method=None)
+        bright = segmentation(method, bright, thresh_method='binary')
 
     else:
         visible = get_features('visible', latitudes, longitudes, beginning, ending, 'abstract', slot_step, gray_scale=False)
@@ -176,12 +177,15 @@ def get_classes_v2_image(latitudes,
 
         bright = (segmentation(method, visible_features[:, :, :, 0]) & visible)
 
-    negative_variable_brightness = visible_features[:, :, :, 1] > 25
-    positive_variable_brightness = visible_features[:, :, :, 2] > 25
-    slight_clouds = segmentation(method, infrared_features[:, :, :, 1])
+    # negative_variable_brightness = visible_features[:, :, :, 1] > 25
+    # positive_variable_brightness = visible_features[:, :, :, 2] > 25
+    negative_variable_brightness = segmentation(method, visible_features[:, :, :, 1], thresh_method='static', static=30)
+    positive_variable_brightness = segmentation(method, visible_features[:, :, :, 2], thresh_method='static', static=30)
+
+    # slight_clouds = segmentation(method, infrared_features[:, :, :, 1])
     # obvious_clouds = (infrared_features[:, :, :, 0] == 1)
-    obvious_clouds = segmentation(method, infrared_features[:, :, :, 0])
-    cold_not_bright = (infrared_features[:, :, :, 2] == 1) & ~bright
+    obvious_clouds = segmentation(method, infrared_features[:, :, :, 0]) & segmentation(method, infrared_features[:, :, :, 1], thresh_method='static', static=20)
+    cold = (infrared_features[:, :, :, 2] == 1)
 
     # warm = (infrared_features[:, :, :, 2] == 1)
 
@@ -195,15 +199,15 @@ def get_classes_v2_image(latitudes,
     begin_affectation = time()
     classes[(infrared_features[:, :, :, 0] == -10)] = 13 # before all the other classes (important)
     classes[(visible_features[:, :, :, 3] == 1)] = 12  # before all the other classes (important)
-    classes[bright & ~(obvious_clouds | slight_clouds) & ~negative_variable_brightness] = 5  # class ground snow or ice
+    classes[bright & ~obvious_clouds & ~negative_variable_brightness] = 5  # class ground snow or ice
     classes[bright & positive_variable_brightness] = 6
     classes[bright & negative_variable_brightness] = 7
     # classes[bright & ~negative_variable_brightness & warm] = 10
     # classes[bright & negative_variable_brightness & warm] = 9
-    classes[cold_not_bright] = 8
+    classes[cold] = 8
     # WARNING: slight clouds AND obvious clouds => obvious clouds
-    classes[slight_clouds & bright] = 4
-    classes[slight_clouds & ~bright] = 2
+    # classes[slight_clouds & bright] = 4
+    # classes[slight_clouds & ~bright] = 2
     classes[obvious_clouds & ~bright] = 1
     classes[obvious_clouds & bright] = 3
 
@@ -276,7 +280,7 @@ if __name__ == '__main__':
 
     slot_step = 1
     beginning = 13525+15
-    nb_days = 5
+    nb_days = 3
     ending = beginning + nb_days - 1
 
     # method = 'watershed-3d'  # 'on-point', 'otsu-2d', 'otsu-3d', 'watershed-2d', 'watershed-3d'
@@ -285,7 +289,7 @@ if __name__ == '__main__':
 
     latitude_beginning = 40.
     latitude_end = 45.
-    longitude_beginning = 125.
+    longitude_beginning = 120.
     longitude_end = 130.
     latitudes, longitudes = get_latitudes_longitudes(latitude_beginning, latitude_end,
                                                      longitude_beginning, longitude_end)
@@ -329,20 +333,20 @@ if __name__ == '__main__':
     from bias_checking import comparision_algorithms, comparision_visible
     visualize_map_time(comparision_visible(
         get_features('visible', latitudes, longitudes, beginning, ending, 'channel')[:, :, :, 1],
-        classes_ped), bbox, title='comparision visible')
+        classes_ped), bbox, vmin=-1, vmax=1, title='comparision visible')
     classes_ped = reduce_two_classes(classes_ped)
-    visualize_map_time(classes_ped, bbox, vmin=0, vmax=1, title=method + ' Classes 0-' + str(1) +
+    visualize_map_time(classes_ped, bbox, vmin=0, vmax=1, title='ped-'+method + ' Classes 0-' + str(1) +
                        ' from' + str(date_begin))
     # raise Exception('stop here for now pliz')
     from tomas_outputs import get_tomas_outputs, reduce_tomas_2_classes
     classes_tomas = get_tomas_outputs(beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end)
     classes_tomas = reduce_tomas_2_classes(classes_tomas)
-    visualize_map_time(classes_tomas, bbox, vmin=0, vmax=1, title=method + ' Classes 0-' + str(1) +
+    visualize_map_time(classes_tomas, bbox, vmin=0, vmax=1, title='Tomas classification ' +
                        ' from' + str(date_begin))
 
     statistics_classes(classes_ped, display_now=True)
     statistics_classes(classes_tomas, display_now=True)
-    visualize_map_time(comparision_algorithms(classes_ped, classes_tomas), bbox)
+    visualize_map_time(comparision_algorithms(classes_ped, classes_tomas), bbox, 'comparision')
     del classes_tomas
 
 

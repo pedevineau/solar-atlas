@@ -30,6 +30,9 @@ def infrared_outputs(times, latitudes, longitudes, temperatures, content_infrare
 
     angles = get_zenith_angle(times, latitudes, longitudes)
 
+    # cli = get_cloud_index(cos_zen=np.cos(angles), mir=content_infrared[:, :, :, nb_channels - 1],
+    #                       fir=content_infrared[:, :, :, nb_channels - 2], method='norm-diff')
+
     cli = get_cloud_index(cos_zen=np.cos(angles), mir=content_infrared[:, :, :, nb_channels - 1],
                           fir=content_infrared[:, :, :, nb_channels - 2], method='mu-normalization')
 
@@ -99,17 +102,34 @@ def get_cloud_index(cos_zen, mir, fir, mask=None, pre_cloud_mask=None, method='d
     :param mir: medium infra-red band (centered on 3890nm for Himawari 8)
     :param fir: far infra-red band (centered on 12380nm for Himawari 8)
     :param mask: mask for outliers and missing isolated data
+
     :param pre_cloud_mask:
-    :param method: {'default', 'mu-normalization', 'clear-sky', 'without-bias'}
+    :param method: {'default', 'mu-normalization', 'clear-sky', 'without-bias', 'norm-diff', 'epsilon'}
     :return: a cloud index matrix (shape: slots, latitudes, longitudes)
     '''
     difference = mir - fir
     if method == 'mu-normalization':
-        mu_threshold = 0.04
-        cli = difference / np.maximum(cos_zen, mu_threshold)
+        mu_threshold = 0.05
+        return difference / np.maximum(cos_zen, mu_threshold)
+    elif method == 'norm-diff':
+        return difference/(mir+fir)
+    elif method == 'default':
+        return difference
+    elif method == 'epsilon':
+        dlen = 12.4-10.8
+        dlen = 12.4-3.9
+        h = 6.626*10**(-34)
+        k = 1.38*10**(-23)
+        c = 3. * 10**8
+        K = h*c/(k*dlen*10**(-6))
+        print K
+        from scipy import exp
+        return K*(1./fir-1./mir)
+
+        # return 1. - K*(1./fir-1./mir)
     else:
-        diffstd = normalize(difference, mask, normalization='standard')
         if method == 'without-bias':
+            diffstd = normalize(difference, mask, normalization='standard')
             # mustd = normalize_array(cos_zen, mask, 'standard')
             # NB: ths use of mustd add a supplementary bias term alpha*std(index)*m(cos-zen)/std(cos_zen)
             from get_data import remove_cos_zen_correlation
@@ -118,13 +138,12 @@ def get_cloud_index(cos_zen, mir, fir, mask=None, pre_cloud_mask=None, method='d
             cli = remove_cos_zen_correlation(diffstd, cos_zen, mask)
             cli = normalize(cli, mask, 'standard')
         elif method == 'clear-sky':
-                cli = diffstd - normalize(cos_zen, mask, normalization='standard')
-        elif method == 'default':
-            cli = diffstd
+            diffstd = normalize(difference, mask, normalization='standard')
+            cli = diffstd - normalize(cos_zen, mask, normalization='standard')
         else:
             raise Exception('Please choose a valid method to compute cloud index')
     # cli, m, s = normalize_array(cli, maski, normalization='max')
-    return cli
+        return cli
 
 
 def get_cloud_short_variability(cloud_index, definition_mask):

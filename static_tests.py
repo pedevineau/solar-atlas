@@ -38,13 +38,16 @@ def dynamic_temperature_test(lir_observed, temperature_mask, satellite_step, slo
     from numpy import shape, empty_like
     s = shape(lir_observed)
     to_return = empty_like(lir_observed, dtype=bool)
+    from thresholds import expected_brightness_temperature_only_emissivity
     for slot in range(s[0]):
         try:
             nearest_temp_meas = int(0.5+satellite_step*slot_step*slot/60)
-            to_return[slot] = (273.15+temperature_mask[nearest_temp_meas] - lir_observed[slot]) > 20
+            to_return[slot] = (expected_brightness_temperature_only_emissivity(
+                temperature_mask[nearest_temp_meas]+273.25, lw_nm=12.4*10**(-6), eps=0.85) - lir_observed[slot]) > 10
         except IndexError:
             nearest_temp_meas = int(satellite_step*slot_step*slot/60)
-            to_return[slot] = (273.15+temperature_mask[nearest_temp_meas] - lir_observed[slot]) > 20
+            to_return[slot] = (expected_brightness_temperature_only_emissivity(
+                temperature_mask[nearest_temp_meas]+273.25, lw_nm=12.4*10**(-6), eps=0.85) - lir_observed[slot]) > 10
     return to_return
 
 
