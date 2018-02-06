@@ -237,7 +237,7 @@ if __name__ == '__main__':
                 method_learning_ = METHODS_LEARNING[k]
                 meta_method_ = META_METHODS[l]
                 pca_components_ = PCA_COMPONENTS[m]
-                header = str(method_learning_) + ' ' + str(meta_method_) + ' pca:', str(pca_components_)
+                header = str(method_learning_) + ' ' + str(meta_method_) + ' pca:' + str(pca_components_)
                 try:
                     LOGS = header + '\n' + test_models(angles, features_, classes_, method_learning_, meta_method_, pca_components_)
                 except Exception as e:
