@@ -2,6 +2,7 @@
   "satellite": "H08",
   "H08": {
     "time_step": 10,
+    "longitude": 140.7,
     "channels_name": ["IR124_2000", "IR390_2000", "VIS160_2000", "VIS064_2000"],
     "indexes": {
       "visible": {

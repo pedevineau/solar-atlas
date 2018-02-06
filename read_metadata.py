@@ -58,3 +58,11 @@ def read_mask_dir_and_pattern(mask_name):
     pattern = metadata["masks"][mask_name]["pattern"]
     dir = metadata["masks"][mask_name]["dir"]
     return dir, pattern
+
+
+def read_satellite_longitude():
+    from json import load
+    metadata = load(open('metadata.json'))
+    satellite = metadata["satellite"]
+    longitude = metadata[satellite]["longitude"]
+    return longitude
