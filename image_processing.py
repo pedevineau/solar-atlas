@@ -1,22 +1,19 @@
 from utils import *
 
 
-def segmentation(method, feature, chan=None, thresh_method='otsu'):
+def segmentation(method, feature, chan=None, thresh_method='otsu', static=None):
     if len(np.shape(feature)) == 4:
-        if chan is not None:
-            feature = feature[:, :, :, chan]
-        else:
-            raise AttributeError('please give a channel number')
+        assert chan is not None and chan < np.shape(feature)[-1], 'please give a valid channel number'
+        feature = feature[:, :, :, chan]
+    assert method in ['otsu-2d', 'otsu-3d', 'watershed-2d', 'watershed-3d'], 'segmentation method unknown'
     if method == 'otsu-2d':
         return segmentation_otsu_2d(feature)
     elif method == 'otsu-3d':
         return segmentation_otsu_3d(feature)
     elif method == 'watershed-2d':
-        return segmentation_watershed_2d(feature, thresh_method)
+        return segmentation_watershed_2d(feature, thresh_method, static=static)
     elif method == 'watershed-3d':
-        return segmentation_watershed_3d(feature, thresh_method)
-    else:
-        raise AttributeError('please give a valid segmentation method')
+        return segmentation_watershed_3d(feature, thresh_method, static=static)
 
 
 def segmentation_otsu_2d(feature):
@@ -41,32 +38,35 @@ def segmentation_otsu_3d(feature):
         return np.zeros_like(feature, dtype=bool)
 
 
-def segmentation_watershed_2d(feature, thresh_method='otsu'):
+def segmentation_watershed_2d(feature, thresh_method='otsu', coherence=0.2, static=None):
     (slots, lats, lons) = np.shape(feature)
     to_return = np.empty((slots, lats, lons), dtype=bool)
     for slot in range(slots):
         # opencv library
-        to_return[slot] = watershed_2d(feature[slot], thresh_method)
+        to_return[slot] = watershed_2d(feature[slot], thresh_method, coherence, static)
     return to_return
 
 
-def segmentation_watershed_3d(feature, thresh_method='otsu', coherence=0.2):
-    return watershed_3d(feature, coherence, thresh_method)
+def segmentation_watershed_3d(feature, thresh_method='otsu', coherence=0.2, static=None):
+    return watershed_3d(feature, coherence, thresh_method, static)
 
 
-def watershed_3d(feature, coherence, thresh_method):
+def watershed_3d(feature, coherence, thresh_method, static):
     from scipy.ndimage import distance_transform_edt
     from skimage.morphology import watershed, dilation, opening, cube, octahedron
     from skimage.measure import find_contours, label
     from skimage.filters import threshold_otsu, threshold_minimum
     # kernel = cube(3)  # try other forms
     kernel = octahedron(1)
+    assert thresh_method in ['otsu', 'static', 'binary'], 'threshing method unknown'
     if thresh_method == 'otsu':
         try:
             thresh = feature < threshold_otsu(feature)  # mask=True for background
         except ValueError:
             # if the feature is monochromatic
             return np.zeros_like(feature, dtype=bool)
+    elif thresh_method == 'static':
+        thresh = feature > static
     else:  # if the image is already binary
         thresh = (feature == 0)
     opened = opening(thresh, kernel)
@@ -97,7 +97,7 @@ def watershed_3d(feature, coherence, thresh_method):
     return (water == 1)
 
 
-def watershed_2d(image, thresh_method, spatial_coherence=0.2):
+def watershed_2d(image, thresh_method, spatial_coherence=0.2, static=None):
     # Image Segmentation with Watershed Algorithm
     # http://opencv-python-tutroals.readthedocs.io/en/latest/py_tutorials/py_imgproc/py_watershed/py_watershed.html
     from scipy import ndimage
@@ -106,11 +106,13 @@ def watershed_2d(image, thresh_method, spatial_coherence=0.2):
     from skimage.measure import find_contours, label
     import numpy as np
     import cv2
-    import matplotlib.pyplot as plt
 
     # noise removal
+    assert thresh_method in ['otsu', 'static', 'binary'], 'threshing method unknown'
     if thresh_method == 'otsu':
         thresh = apply_inverted_otsu(image)[0]
+    elif thresh_method == 'static':
+        thresh = image > static
     else:
         thresh = image
 
