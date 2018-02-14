@@ -53,7 +53,7 @@ def compute_lir_texture_land():
     return 2
 
 
-def compute_lir_mir_texture_land():
+def compute_mir_lir_texture_land():
     return 2
 
 

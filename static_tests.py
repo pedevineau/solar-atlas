@@ -457,7 +457,7 @@ def maybe_cloud_after_all(is_land, is_supposed_free, vis):
 
 def typical_static_classifier():
     from infrared_predictors import get_cloud_index, get_cloud_index_positive_variability_5d
-    from utils import typical_outputs, typical_bbox,typical_temperatures_forecast, typical_land_mask, np
+    from utils import typical_outputs, typical_temperatures_forecast, typical_land_mask, np, typical_time_step
     zen, vis, ndsi, mask_input = typical_outputs('visible', 'ndsi')
     infrared = typical_outputs('infrared', 'channel')
     lands = typical_land_mask()
@@ -472,8 +472,6 @@ def typical_static_classifier():
     else:
         cli_default = get_cloud_index(np.cos(zen), mir=infrared[:, :, :, 1], lir=infrared[:, :, :, 0], method='default')
         snow = partial_dawn_day_snow_test(zen, lands, ndsi, cli_default, vis)
-
-    from quick_visualization import visualize_map_time
 
     cli_var = get_cloud_index_positive_variability_5d(cli_default, definition_mask=mask_input, pre_cloud_mask=None,
                                                       satellite_step=typical_time_step(), slot_step=1)
