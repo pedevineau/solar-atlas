@@ -20,23 +20,42 @@ def get_snow_composite(latitudes, longitudes, dfb_beginning, dfb_ending, slot_st
     return 255*composite
 
 
+def infrared_low_cloud_composite(latitudes, longitudes, dfb_beginning, dfb_ending, slot_step):
+    from get_data import get_features
+    from numpy import round
+    infrared_features = get_features('infrared', latitudes, longitudes, dfb_beginning, dfb_ending, 'channel', slot_step)
+    (nb_slots, nb_latitudes, nb_longitudes) = np.shape(infrared_features)[0:3]
+    composite = np.zeros((nb_slots, nb_latitudes, nb_longitudes, 3))
+    try:
+        fir = infrared_features[:, :, :, 2]
+        fir = round(2 * (fir - 200))
+        composite[:, :, :, 0] = fir
+    except IndexError:
+        print 'Computing '
+        pass
+    lir = infrared_features[:, :, :, 1]
+    mir = infrared_features[:, :, :, 0]
+    mir = round(2*(mir - 200))
+    lir = round(2*(lir - 200))
+    composite[:, :, :, 1] = lir
+    composite[:, :, :, 2] = mir
+    composite[(lir<=0) | (lir>250)]=0
+    return 255*composite
+
+
 if __name__ == '__main__':
-    dfb_beginning = 13548-15
-    nb_days = 8
-    dfb_ending = dfb_beginning + nb_days - 1
-    latitude_beginning = 40.+5
-    latitude_end = 45.+5
-    longitude_beginning = 125.
-    longitude_end = 130.
-    slot_step = 5
+    from utils import typical_input
+    slot_step = 1
+    beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end = typical_input()
     latitudes, longitudes = get_latitudes_longitudes(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
-    date_begin, date_end = print_date_from_dfb(dfb_beginning, dfb_ending)
-    composite = get_snow_composite(latitudes, longitudes, dfb_beginning, dfb_ending, slot_step)
+    date_begin, date_end = print_date_from_dfb(beginning, ending)
+    composite = infrared_low_cloud_composite(latitudes, longitudes, beginning, ending, slot_step)
 
     from quick_visualization import get_bbox
     bbox = get_bbox(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
     from matplotlib.pyplot import imshow, show
-    for slot in range(np.shape(composite)[0]):
+    start = 70
+    for slot in range(start, np.shape(composite)[0]):
         if not np.all(composite[slot, :, :, 0] == 0):
             print slot_step*slot
             imshow(composite[slot])
