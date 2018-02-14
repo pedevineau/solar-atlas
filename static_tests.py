@@ -457,7 +457,7 @@ def maybe_cloud_after_all(is_land, is_supposed_free, vis):
 
 def typical_static_classifier():
     from infrared_predictors import get_cloud_index, get_cloud_index_positive_variability_5d
-    from utils import typical_outputs, typical_bbox,typical_temperatures_forecast, typical_land_mask
+    from utils import typical_outputs, typical_bbox,typical_temperatures_forecast, typical_land_mask, np
     zen, vis, ndsi, mask_input = typical_outputs('visible', 'ndsi')
     infrared = typical_outputs('infrared', 'channel')
     lands = typical_land_mask()
