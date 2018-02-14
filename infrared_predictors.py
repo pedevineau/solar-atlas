@@ -30,51 +30,44 @@ def infrared_outputs(times, latitudes, longitudes, temperatures, content_infrare
 
     angles = get_zenith_angle(times, latitudes, longitudes)
 
-    # cli = get_cloud_index(cos_zen=np.cos(angles), mir=content_infrared[:, :, :, nb_channels - 1],
-    #                       fir=content_infrared[:, :, :, nb_channels - 2], method='norm-diff')
+    # cli = get_cloud_index(cos_zen=np.cos(angles), mir=content_infrared[:, :, :,  nb_channels - 1],
+    #                       lir=content_infrared[:, :, :, nb_channels - 2], method='mu-normalization')
 
-    cli = get_cloud_index(cos_zen=np.cos(angles), mir=content_infrared[:, :, :, nb_channels - 1],
-                          fir=content_infrared[:, :, :, nb_channels - 2], method='mu-normalization')
-
+    from read_metadata import read_satellite_name
+    if read_satellite_name() in ['GOES16']:
+        cli = get_cloud_index(cos_zen=np.cos(angles), mir=content_infrared[:, :, :, 1],
+                              lir=content_infrared[:, :, :, 0], method='epsilon')
+    else:
+        cli = np.zeros_like(angles)
     if output_level == 'cli':
         return cli, mask_input
 
     else:
-        difference = get_cloud_index(cos_zen=np.cos(angles), mir=content_infrared[:, :, :, nb_channels - 1],
-                                     fir=content_infrared[:, :, :, nb_channels - 2], mask=mask_input, method='default')
+        difference = get_cloud_index(cos_zen=np.cos(angles), mir=content_infrared[:, :, :,  nb_channels - 1],
+                                     lir=content_infrared[:, :, :, nb_channels - 2], method='default')
         lir = content_infrared[:, :, :, nb_channels - 2]
         del content_infrared
         return infrared_abstract_predictors(angles, lir, mask_input, temperatures, cli, difference, satellite_step, slot_step, gray_scale)
 
 
 def infrared_abstract_predictors(zen, lir, mask_input, temperatures, cli, ancillary_cloud_index, satellite_step, slot_step, gray_scale):
-    from static_tests import dawn_day_test, dynamic_temperature_test
-    mask_output = mask_input | ~dawn_day_test(zen)
-    cli[mask_output] = -10
+    from static_tests import night_test, dynamic_temperature_test, dawn_day_test
+    mask_output = mask_input | ~night_test(zen)
     (nb_slots, nb_latitudes, nb_longitudes) = np.shape(lir)
     nb_features = 3  # cli, variations, cold
     if not gray_scale:  # if on-point
         array_indexes = np.empty(shape=(nb_slots, nb_latitudes, nb_longitudes, nb_features))
         array_indexes[:, :, :, 0] = cli
-        array_indexes[:, :, :, 1] = \
-            get_cloud_index_positive_variability_5d(
+        array_indexes[:, :, :, 0][mask_output] = -10
+        array_indexes[:, :, :, 1] = ancillary_cloud_index
+        var = 35 * get_cloud_index_positive_variability_5d(
                 cloud_index=ancillary_cloud_index,
-                definition_mask=mask_output,
+                definition_mask=(mask_input|~dawn_day_test(zen)),
                 # pre_cloud_mask=high_cli_mask | (cold == 1),
                 pre_cloud_mask=None,
                 satellite_step=satellite_step,
-                slot_step=slot_step)  # *\
-            # get_cloud_index_positive_variability_5d(
-            #     cloud_index=ancillary_cloud_index,
-            #     definition_mask=mask_output,
-            #     # pre_cloud_mask=high_cli_mask | (cold == 1),
-            #     pre_cloud_mask=None,
-            #     satellite_step=satellite_step,
-            #     slot_step=slot_step) #*\
-        # np.abs(get_cloud_short_variability(cloud_index=ancillary_cloud_index, definition_mask=mask_input))
-
-            # array_indexes[:, :, :, 0][high_cli_mask] = 1  # "hot" water clouds
-        # array_indexes[:, :, :, 0][mask_output] = -10
+                slot_step=slot_step) / (lir-203.7)
+        array_indexes[:, :, :, 1][var < 8] = 0
 
     else:  # if image
         array_indexes = np.empty(shape=(nb_slots, nb_latitudes, nb_longitudes, nb_features), dtype=np.uint8)
@@ -82,11 +75,11 @@ def infrared_abstract_predictors(zen, lir, mask_input, temperatures, cli, ancill
         array_indexes[:, :, :, 1] = normalize(
             # np.abs(get_cloud_short_variability(cloud_index=ancillary_cloud_index, definition_mask=mask_input)) * \
             get_cloud_index_positive_variability_5d(cloud_index=ancillary_cloud_index,
-                                                    definition_mask=mask_output,
-                                                    # pre_cloud_mask= high_cli_mask | (cold == 1),
+                                                 definition_mask=(mask_input|~dawn_day_test(zen)),
+                                                 # pre_cloud_mask= high_cli_mask | (cold == 1),
                                                     pre_cloud_mask=None,
-                                                    satellite_step=satellite_step,
-                                                    slot_step=slot_step),
+                                                 satellite_step=satellite_step,
+                                                 slot_step=slot_step),
 
             normalization='gray_scale')
     cold = dynamic_temperature_test(lir, temperatures, satellite_step, slot_step)
@@ -96,7 +89,7 @@ def infrared_abstract_predictors(zen, lir, mask_input, temperatures, cli, ancill
     return array_indexes
 
 
-def get_cloud_index(cos_zen, mir, fir, mask=None, pre_cloud_mask=None, method='default'):
+def get_cloud_index(cos_zen, mir, lir, mask=None, pre_cloud_mask=None, method='default'):
     '''
     :param cos_zen: cos of zenith angle matrix (shape: slots, latitudes, longitudes)
     :param mir: medium infra-red band (centered on 3890nm for Himawari 8)
@@ -107,24 +100,23 @@ def get_cloud_index(cos_zen, mir, fir, mask=None, pre_cloud_mask=None, method='d
     :param method: {'default', 'mu-normalization', 'clear-sky', 'without-bias', 'norm-diff', 'epsilon'}
     :return: a cloud index matrix (shape: slots, latitudes, longitudes)
     '''
-    difference = mir - fir
+    difference = mir - lir
     if method == 'mu-normalization':
         mu_threshold = 0.05
         return difference / np.maximum(cos_zen, mu_threshold)
     elif method == 'norm-diff':
-        return difference/(mir+fir)
+        return difference/(mir+lir)
     elif method == 'default':
         return difference
     elif method == 'epsilon':
-        dlen = 12.4-10.8
-        dlen = 12.4-3.9
+        from read_metadata import read_epsilon_param
+        dlen = read_epsilon_param()
         h = 6.626*10**(-34)
         k = 1.38*10**(-23)
         c = 3. * 10**8
         K = h*c/(k*dlen*10**(-6))
-        print K
         from scipy import exp
-        return K*(1./fir-1./mir)
+        return 1-exp(-K*(1./lir-1./mir))
 
         # return 1. - K*(1./fir-1./mir)
     else:
@@ -219,12 +211,51 @@ def get_cloud_index_positive_variability_5d(cloud_index, definition_mask, pre_cl
                             var_cli_1d_future[2*nb_slots_per_day:-2*nb_slots_per_day],
                             var_cli_2d_future[2*nb_slots_per_day:-2*nb_slots_per_day])
                     )
+                else: # nb_days >= 6
+                    var_cli_3d_past = compute_short_variability(array=cloud_index, mask=mask, step=nb_slots_per_day*3)
+
+                    var_cli_3d_future = compute_short_variability(array=cloud_index, mask=mask,step=-nb_slots_per_day*3)
+                    # two days previous the last one
+                    to_return[-3 * nb_slots_per_day:-2*nb_slots_per_day] = np.maximum(
+                        np.maximum(
+                            np.maximum(
+                                var_cli_1d_past[-3 * nb_slots_per_day:-2*nb_slots_per_day],
+                                var_cli_2d_past[-3 * nb_slots_per_day:-2*nb_slots_per_day]),
+                            var_cli_3d_past[-3 * nb_slots_per_day:-2*nb_slots_per_day]),
+                        np.maximum(
+                            var_cli_1d_future[-3 * nb_slots_per_day:-2*nb_slots_per_day],
+                            var_cli_2d_future[-3 * nb_slots_per_day:-2*nb_slots_per_day])
+                    )
+                    # third day
+                    to_return[2 * nb_slots_per_day:3*nb_slots_per_day] = np.maximum(
+                        np.maximum(
+                            np.maximum(
+                                var_cli_1d_future[2 * nb_slots_per_day:3*nb_slots_per_day],
+                                var_cli_2d_future[2 * nb_slots_per_day:3*nb_slots_per_day]),
+                            var_cli_3d_future[2 * nb_slots_per_day:3*nb_slots_per_day]),
+                        np.maximum(
+                            var_cli_1d_past[2 * nb_slots_per_day:3*nb_slots_per_day],
+                            var_cli_2d_past[2 * nb_slots_per_day:3*nb_slots_per_day])
+                    )
+                    if nb_days >= 7:
+
+                        to_return[3 * nb_slots_per_day:-3 * nb_slots_per_day] = np.maximum(
+                            np.maximum(
+                                np.maximum(
+                                    var_cli_1d_past[3 * nb_slots_per_day:-3 * nb_slots_per_day],
+                                    var_cli_2d_past[3 * nb_slots_per_day:-3 * nb_slots_per_day]),
+                                var_cli_3d_past[3 * nb_slots_per_day:-3 * nb_slots_per_day]),
+                                np.maximum(
+                                np.maximum(
+                                    var_cli_1d_future[3 * nb_slots_per_day:-3 * nb_slots_per_day],
+                                    var_cli_2d_future[3 * nb_slots_per_day:-3 * nb_slots_per_day]),
+                                var_cli_3d_future[3 * nb_slots_per_day:-3 * nb_slots_per_day]))
     # we are interested only in positive cli variations
     to_return[to_return < 0] = 0
     return to_return
 
 
-def get_cloud_index_total_variability_5d(cloud_index, definition_mask, pre_cloud_mask,
+def get_cloud_index_total_variability_7d(cloud_index, definition_mask, pre_cloud_mask,
                                          satellite_step, slot_step):
     '''
 
@@ -283,7 +314,7 @@ def get_cloud_index_total_variability_5d(cloud_index, definition_mask, pre_cloud
                         var_cli_1d_future[nb_slots_per_day:2*nb_slots_per_day],
                         var_cli_2d_future[nb_slots_per_day:2*nb_slots_per_day]),
                     var_cli_1d_past[nb_slots_per_day:2*nb_slots_per_day])
-                if nb_days >= 5:
+                if nb_days == 5:
                     to_return[2*nb_slots_per_day:-2*nb_slots_per_day] = np.minimum(
                         np.minimum(
                             var_cli_1d_past[2*nb_slots_per_day:-2*nb_slots_per_day],
@@ -292,6 +323,48 @@ def get_cloud_index_total_variability_5d(cloud_index, definition_mask, pre_cloud
                             var_cli_1d_future[2*nb_slots_per_day:-2*nb_slots_per_day],
                             var_cli_2d_future[2*nb_slots_per_day:-2*nb_slots_per_day])
                     )
+                else: # nb_days >= 6
+                    var_cli_3d_past = compute_short_variability(array=cloud_index, mask=mask, abs_value=True,
+                                                                step=nb_slots_per_day*3)
+
+                    var_cli_3d_future = compute_short_variability(array=cloud_index, mask=mask, abs_value=True,
+                                                                  step=-nb_slots_per_day*3)
+                    # two days previous the last one
+                    to_return[-3 * nb_slots_per_day:-2*nb_slots_per_day] = np.minimum(
+                        np.minimum(
+                            np.minimum(
+                                var_cli_1d_past[-3 * nb_slots_per_day:-2*nb_slots_per_day],
+                                var_cli_2d_past[-3 * nb_slots_per_day:-2*nb_slots_per_day]),
+                            var_cli_3d_past[-3 * nb_slots_per_day:-2*nb_slots_per_day]),
+                        np.minimum(
+                            var_cli_1d_future[-3 * nb_slots_per_day:-2*nb_slots_per_day],
+                            var_cli_2d_future[-3 * nb_slots_per_day:-2*nb_slots_per_day])
+                    )
+                    # third day
+                    to_return[2 * nb_slots_per_day:3*nb_slots_per_day] = np.minimum(
+                        np.minimum(
+                            np.minimum(
+                                var_cli_1d_future[2 * nb_slots_per_day:3*nb_slots_per_day],
+                                var_cli_2d_future[2 * nb_slots_per_day:3*nb_slots_per_day]),
+                            var_cli_3d_future[2 * nb_slots_per_day:3*nb_slots_per_day]),
+                        np.minimum(
+                            var_cli_1d_past[2 * nb_slots_per_day:3*nb_slots_per_day],
+                            var_cli_2d_past[2 * nb_slots_per_day:3*nb_slots_per_day])
+                    )
+                    if nb_days >= 7:
+
+                        to_return[3 * nb_slots_per_day:-3 * nb_slots_per_day] = np.minimum(
+                            np.minimum(
+                                np.minimum(
+                                    var_cli_1d_past[3 * nb_slots_per_day:-3 * nb_slots_per_day],
+                                    var_cli_2d_past[3 * nb_slots_per_day:-3 * nb_slots_per_day]),
+                                var_cli_3d_past[3 * nb_slots_per_day:-3 * nb_slots_per_day]),
+                                np.minimum(
+                                np.minimum(
+                                    var_cli_1d_future[3 * nb_slots_per_day:-3 * nb_slots_per_day],
+                                    var_cli_2d_future[3 * nb_slots_per_day:-3 * nb_slots_per_day]),
+                                var_cli_3d_future[3 * nb_slots_per_day:-3 * nb_slots_per_day]))
+
     return to_return
 
 
