@@ -34,7 +34,7 @@ def get_classes_v1_point(latitudes,
     # classes: classified_cli, snow over the ground, other (ground, sea...), unknown
 
     from classification_snow_index import classify_brightness, classifiy_brightness_variability
-    visible = get_features(
+    visibles = get_features(
         'visible',
         latitudes,
         longitudes,
@@ -43,53 +43,46 @@ def get_classes_v1_point(latitudes,
         'channel',
         slot_step,
         gray_scale=False,
-    )[:, :, :, 1]
+    )
 
-    bright = (classify_brightness(visible_features[:, :, :, 0]) == 1) & (visible > 0.25)
-
+    from angles_geom import get_zenith_angle
+    from utils import get_times_utc
+    from read_metadata import read_satellite_step
+    angles = get_zenith_angle(get_times_utc(beginning, ending, read_satellite_step(), 1), latitudes, longitudes)
+    # bright = (classify_brightness(visible_features[:, :, :, 0]) == 1) & (visibles[:,:,:,1] > 0.25*angles)
+    # bright = (visible_features[:, :, :, 0] > 0.3) & (visibles[:,:,:,1] > 0.25*angles)
+    from image_processing import segmentation
+    bright = segmentation('watershed-3d', visible_features[:, :, :, 0], thresh_method='static', static=0.3)  # & (visibles[:,:,:,1] > 0.2*angles)
     # negative_variable_brightness = (classifiy_brightness_variability(visible_features[:, :, :, 1]) == 1)
     # positive_variable_brightness = (classifiy_brightness_variability(visible_features[:, :, :, 2]) == 1)
-    negative_variable_brightness = visible_features[:, :, :, 1] > 0.2
-    positive_variable_brightness = visible_features[:, :, :, 2] > 0.2
+    negative_variable_brightness = (visible_features[:, :, :, 1] > 0.2) & bright
+    positive_variable_brightness = (visible_features[:, :, :, 2] > 0.2) & bright
 
 
-    from classification_cloud_index import classify_cloud_covertness, classify_cloud_variability
-    # var_cloud = (classify_cloud_variability(infrared_features[:, :, :, 1]) == 1)
-    # cold_not_bright = (infrared_features[:, :, :, 2] == 1) & ~bright
+    # from classification_cloud_index import classify_cloud_covertness, classify_cloud_variability
     cold = (infrared_features[:, :, :, 2] == 1)
-    # obvious_clouds = (infrared_features[:, :, :, 0] >=30) & (infrared_features[:, :, :, 1] > 1)
-    obvious_clouds = (classify_cloud_covertness(infrared_features[:, :, :, 0])) & (infrared_features[:, :, :, 1] > 1)
-
-    # foggy = (obvious_clouds | var_cloud) & ((visible_features[:, :, :, 0]) < -1.5) & (visible_features[:, :, :, 0] > -9)
-    #  foggy: low snow index, good vis
+    thin_clouds = (infrared_features[:, :, :, 0] > 0.2)
+    obvious_clouds = (infrared_features[:, :, :, 1] > 10)
+    # obvious_clouds = (classify_cloud_covertness(infrared_features[:, :, :, 0]) == 1) & (infrared_features[:, :, :, 1] > 1)
+    snow = bright & ~negative_variable_brightness & ~positive_variable_brightness & ~obvious_clouds & ~cold
+    del bright
     (nb_slots, nb_latitudes, nb_longitudes) = np.shape(visible_features)[0:3]
     classes = np.zeros((nb_slots, nb_latitudes, nb_longitudes))
-
-    # print 'beginning test'
-    # if 2 in classified_cli:
-    #     dark_cli = (classified_cli == 2)
-    #
-    #     from quick_visualization import visualize_map_time, get_bbox
-    #     visualize_map_time(dark_cli, get_bbox(latitudes[0], latitudes[-1], longitudes[0], longitudes[-1]))
-    #     print 'dark cli mask activated'
-    # print 'ending test'
-    # del classified_cli
     from time import time
-
-    # clouds = obvious_clouds | var_cloud
     begin_affectation = time()
+
+    classes[(visibles[:,:,:,1]>0.5*angles)&(visibles[:, :, :, 0]>0.1*angles)] = 3 # before all the other classes (VERY IMPORTANT)
     classes[(infrared_features[:, :, :, 0] == -10)] = 13 # before all the other classes (important)
     classes[(visible_features[:, :, :, 3] == 1)] = 12  # before all the other classes (important)
-    classes[bright & ~obvious_clouds & ~negative_variable_brightness] = 5  # class ground snow or ice
-    classes[bright & positive_variable_brightness] = 6
-    classes[bright & negative_variable_brightness] = 7
+    classes[snow] = 5  # class ground snow or ice
+    classes[positive_variable_brightness] = 6
+    classes[negative_variable_brightness] = 7
+    classes[obvious_clouds] = 1
+    classes[thin_clouds] = 2
     # classes[bright & ~negative_variable_brightness & warm] = 10
     # classes[bright & negative_variable_brightness & warm] = 9
     classes[cold] = 8
-    # classes[var_cloud & bright] = 4
-    # classes[var_cloud & ~bright] = 2
-    classes[obvious_clouds & ~bright] = 1
-    classes[obvious_clouds & bright] = 3
+    # classes[obvious_clouds & bright] = 3
 
     if shades_detection:
         from recognise_shadows import recognize_cloud_shade
@@ -98,7 +91,7 @@ def get_classes_v1_point(latitudes,
         from read_metadata import read_satellite_step
         cloudy = (classes != 0) & (classes != 5)
         print 'launch shades analysis'
-        shades_detection = recognize_cloud_shade(visible, cloudy,
+        shades_detection = recognize_cloud_shade(visibles[:,:,:,1], cloudy,
                                                  get_zenith_angle(get_times_utc(beginning, ending, read_satellite_step(), slot_step=1),
                                                                   latitudes,
                                                                   longitudes))
@@ -108,8 +101,8 @@ def get_classes_v1_point(latitudes,
 
     print 'allegedly uncovered lands'
     print 'obvious clouds:1'
-    print 'slight clouds or sunrise/sunset clouds:2'
-    print 'clouds and bright:3'
+    print 'thin clouds:2'
+    print 'visible but undecided:3'
     print 'slight clouds and bright:4'
     print 'snowy:5'
     print 'snowy clouds:6'
@@ -279,18 +272,22 @@ if __name__ == '__main__':
     nb_classes = 14
 
     slot_step = 1
-    beginning = 13525+15
-    nb_days = 3
+    beginning = 13525+5
+    nb_days = 5
     ending = beginning + nb_days - 1
 
     # method = 'watershed-3d'  # 'on-point', 'otsu-2d', 'otsu-3d', 'watershed-2d', 'watershed-3d'
     method = 'on-point'  # 'on-point', 'otsu-2d', 'otsu-3d', 'watershed-2d', 'watershed-3d'
     print method
 
-    latitude_beginning = 40.
+    latitude_beginning = 40.-5
     latitude_end = 45.
     longitude_beginning = 120.
     longitude_end = 130.
+
+    from utils import typical_input
+
+    beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end = typical_input()
     latitudes, longitudes = get_latitudes_longitudes(latitude_beginning, latitude_end,
                                                      longitude_beginning, longitude_end)
 
@@ -308,7 +305,7 @@ if __name__ == '__main__':
                                            beginning,
                                            ending,
                                            slot_step,
-                                           shades_detection=True
+                                           shades_detection=False
                                            )
     elif method in ['otsu-2d', 'otsu-3d', 'watershed-2d', 'watershed-3d']:
         classes_ped = get_classes_v2_image(latitudes,
