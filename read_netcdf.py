@@ -3,7 +3,7 @@ from utils import *
 
 
 def read_channels(channels, latitudes, longitudes, dfb_beginning, dfb_ending, slot_step=1):
-    from read_metadata import read_channels_dir_and_pattern, read_satellite_name, read_satellite_step
+    from read_metadata import read_channels_dir_and_pattern, read_satellite_name, read_satellite_step, read_start_slot
     dir, pattern, = read_channels_dir_and_pattern()
     satellite = read_satellite_name()
     satellite_step = read_satellite_step()
@@ -12,7 +12,7 @@ def read_channels(channels, latitudes, longitudes, dfb_beginning, dfb_ending, sl
     nb_days = dfb_ending - dfb_beginning + 1
     from nclib2.dataset import DataSet
     content = np.empty((nb_slots * nb_days, len(latitudes), len(longitudes), len(patterns)))
-    # slots = np.arange(1, nb_slots*slot_step, slot_step)
+    start = read_start_slot()
     for k in range(len(patterns)):
         pattern = patterns[k]
         chan = channels[k]
@@ -22,7 +22,7 @@ def read_channels(channels, latitudes, longitudes, dfb_beginning, dfb_ending, sl
                                    'longitude': longitudes,
                                    'dfb': {'start': dfb_beginning, 'end': dfb_ending, "end_inclusive": True,
                                            'start_inclusive': True, },
-                                   'slot': np.arange(1, nb_slots*slot_step+1, slot_step)
+                                   'slot': np.arange(start, start+nb_slots, step=slot_step)
                                },
                                file_pattern=pattern,
                                variable_name=chan,
@@ -45,8 +45,6 @@ def read_classes(latitudes, longitudes, dfb_beginning, dfb_ending, slot_step=1):
     satellite_step = read_satellite_step()
     nb_slots = get_nb_slots_per_day(satellite_step, slot_step)
     nb_days = dfb_ending - dfb_beginning + 1
-    slots = [k*slot_step for k in range(nb_slots)]
-
     from nclib2.dataset import DataSet
     content = np.empty((nb_slots * nb_days, len(latitudes), len(longitudes)))
 
@@ -56,7 +54,8 @@ def read_classes(latitudes, longitudes, dfb_beginning, dfb_ending, slot_step=1):
                                'longitude': longitudes,
                                'dfb': {'start': dfb_beginning, 'end': dfb_ending, "end_inclusive": True,
                                        'start_inclusive': True, },
-                               'slot': slots
+                               'slot': {"enumeration": np.arange(0, nb_slots, step=slot_step), "override_type": "slot"},
+
                            },
                            file_pattern=pattern,
                            variable_name='Classes',
@@ -83,8 +82,8 @@ def read_temperature_forecast(latitudes, longitudes, dfb_beginning, dfb_ending):
 
     dataset = DataSet.read(dirs=dir,
                            extent={
-                               'latitude': latitudes,
-                               'longitude': longitudes,
+                               'latitude': latitudes%180,
+                               'longitude': longitudes%360,
                                'day': {'start': dfb_beginning, 'end': dfb_ending, "end_inclusive": True,
                                        'start_inclusive': True, },
                                'time': {"enumeration": np.linspace(0., 24., num=24, endpoint=False), "override_type": "hours"},

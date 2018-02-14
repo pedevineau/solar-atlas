@@ -6,6 +6,22 @@ def read_satellite_step():
     return satellite_step
 
 
+def read_start_slot():
+    from json import load
+    metadata = load(open('metadata.json'))
+    satellite = metadata["satellite"]
+    satellite_step = metadata[satellite]["start_slot"]
+    return satellite_step
+
+
+def read_epsilon_param():
+    from json import load
+    metadata = load(open('metadata.json'))
+    satellite = metadata["satellite"]
+    epsilon_param = metadata[satellite]["epsilon_param"]
+    return epsilon_param
+
+
 def read_satellite_model_path():
     from json import load
     metadata = load(open('metadata.json'))

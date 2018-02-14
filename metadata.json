@@ -1,8 +1,10 @@
 {
-  "satellite": "H08",
+  "satellite": "GOES16",
   "H08": {
     "time_step": 10,
+    "start_slot": 1,
     "longitude": 140.7,
+    "epsilon_param": 8.5,
     "channels_name": ["IR124_2000", "IR390_2000", "VIS160_2000", "VIS064_2000"],
     "indexes": {
       "visible": {
@@ -26,7 +28,10 @@
   },
   "GOES16": {
     "time_step": 15,
-    "channels_name": ["IR124", "IR103", "IR390", "VIS161", "VIS064"],
+    "start_slot": 0,
+    "longitude": 75.2,
+    "epsilon_param": 2.0,
+    "channels_name": ["IR123", "IR103", "IR390", "VIS161", "VIS064"],
     "indexes": {
       "visible": {
         "dir": "/data/test_data/computed",
@@ -43,7 +48,7 @@
     },
     "channels": {
       "dir": "/data/test_data_goesr",
-      "pattern": "{SATELLITE}_{CHANNEL}_{YYYY}_{mm}_c{SDEG5_LONGITUDE}_r{SDEG5_LATITUDE}_east.nc"
+      "pattern": "{SATELLITE}_{CHANNEL}_{YYYY}_{mm}_c{SDEG5_LONGITUDE}_r{SDEG5_LATITUDE}_east_calibrated.nc"
     },
     "model_path": "/data/test_data/models/model_GOES16"
   },
