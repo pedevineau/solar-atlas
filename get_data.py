@@ -5,35 +5,35 @@ from visible_predictors import visible_outputs
 from infrared_predictors import infrared_outputs
 
 
-def get_selected_channels(all_channels, ask_channels=True):
-    channels = []
-    if ask_channels:
-        print 'Do you want all the channels? (1/0) \n'
-        if raw_input() == '1':
-            channels = all_channels
-        else:
-            for chan in all_channels:
-                print 'Do you want ', chan, '? (1/0) \n'
-                if raw_input() == '1':
-                    channels.append(chan)
-    else:
-        channels = all_channels
-    return channels
-
-
-def get_dfb_tuple(dfb_beginning, nb_days, ask_dfb=False):
-    from datetime import datetime,timedelta
-    print 'Which day from beginning (eg: 13527)?'
-    if ask_dfb:
-        dfb_input = raw_input()
-        if dfb_input == '':
-            begin = dfb_beginning
-        else:
-            begin = int(dfb_input)
-    else:
-        begin = dfb_beginning
-    ending = begin + nb_days - 1
-    return [begin, ending]
+# def get_selected_channels(all_channels, ask_channels=True):
+#     channels = []
+#     if ask_channels:
+#         print 'Do you want all the channels? (1/0) \n'
+#         if raw_input() == '1':
+#             channels = all_channels
+#         else:
+#             for chan in all_channels:
+#                 print 'Do you want ', chan, '? (1/0) \n'
+#                 if raw_input() == '1':
+#                     channels.append(chan)
+#     else:
+#         channels = all_channels
+#     return channels
+#
+#
+# def get_dfb_tuple(dfb_beginning, nb_days, ask_dfb=False):
+#     from datetime import datetime,timedelta
+#     print 'Which day from beginning (eg: 13527)?'
+#     if ask_dfb:
+#         dfb_input = raw_input()
+#         if dfb_input == '':
+#             begin = dfb_beginning
+#         else:
+#             begin = int(dfb_input)
+#     else:
+#         begin = dfb_beginning
+#     ending = begin + nb_days - 1
+#     return [begin, ending]
 
 
 # precomputing data and indexes

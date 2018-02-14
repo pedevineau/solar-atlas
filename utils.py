@@ -1,6 +1,67 @@
 import numpy as np
 
 
+def typical_input():
+    from read_metadata import read_satellite_name
+    sat_name = read_satellite_name()
+    if sat_name == 'GOES16':
+        beginning = 13516 + 365 + 10
+        nb_days = 15
+        ending = beginning + nb_days - 1
+        latitude_beginning = 35.
+        latitude_end = 40.
+        longitude_beginning = -115.+35
+        longitude_end = -110.+35
+    elif sat_name == 'H08':
+        beginning = 13525 + 180
+        nb_days = 5
+        ending = beginning + nb_days - 1
+        latitude_beginning = 35.
+        latitude_end = 45.
+        longitude_beginning = 125.
+        longitude_end = 130.
+    return beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end
+
+
+def typical_outputs(type_channels, output_level):
+    beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end = typical_input()
+    lats, lons = get_latitudes_longitudes(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
+    from get_data import get_features
+    return get_features(type_channels, lats, lons, beginning, ending, output_level)
+
+
+def typical_angles():
+    from angles_geom import get_zenith_angle
+    from read_metadata import read_satellite_step
+    beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end = typical_input()
+    lats, lons = get_latitudes_longitudes(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
+    return get_zenith_angle(get_times_utc(beginning, ending, read_satellite_step, 1), lats, lons)
+
+
+def typical_land_mask():
+    from read_netcdf import read_land_mask
+    beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end = typical_input()
+    lats, lons = get_latitudes_longitudes(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
+    return read_land_mask(lats, lons)
+
+
+def typical_temperatures_forecast():
+    beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end = typical_input()
+    lats, lons = get_latitudes_longitudes(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
+    return prepare_temperature_mask(lats, lons, beginning, ending)
+
+
+def typical_bbox():
+    beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end = typical_input()
+    from quick_visualization import get_bbox
+    return get_bbox(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
+
+
+def typical_time_step():
+    from read_metadata import read_satellite_step
+    return read_satellite_step()
+
+
 def print_date_from_dfb(begin, ending):
     from datetime import datetime, timedelta
     d_beginning = datetime(1980, 1, 1) + timedelta(days=begin-1, seconds=1)
@@ -17,6 +78,26 @@ def get_nb_slots_per_day(satellite_step, slot_step):
     :return: number of slots per day for this satellite and the chosen sampling step
     '''
     return int(24 * 60 / (satellite_step * slot_step))
+
+
+def rounding_mean_list(list_1d, window):
+    cumsum = np.cumsum(np.insert(list_1d, 0, 0))
+    list_1d[window/2:-window/2+1] = (cumsum[window:] - cumsum[:-window]) / float(window)
+    return list_1d
+
+
+def vis_clear_sky_rolling_mean_on_time(array, window=5):
+    assert window % 2 == 1, 'please give an uneven window width'
+    s = array.shape
+    assert len(s) in [1, 3], 'dimension non valid'
+    if len(s) == 1:
+        return rounding_mean_list(array, window)
+    if len(s) == 3:
+        lats, lons = s[1:3]
+        for lat in range(lats):
+            for lon in range(lons):
+                array[:, lat, lon] = rounding_mean_list(array[:, lat, lon], window)
+    return array
 
 
 def looks_like_night(point, indexes_to_test):
@@ -41,7 +122,7 @@ def latlon_to_rc(lat, lon, size_tile=5):
     if lon % size_tile == 0:
         lon += 1
     if -90 <= lat < 90 and -180 <= lon <= 175:
-        row = int(np.ceil((90. - 1.*lat) / size_tile))
+        row = int(np.ceil(90 - lat)) / size_tile
         col = int((180 + lon) / size_tile)
         return row, col
     else:
@@ -144,3 +225,34 @@ def get_std(model, process, index):
         return 0
     else:
         raise Exception('not implemented classifier')
+
+
+def prepare_temperature_mask(lats, lons, beginning, ending, slot_step=1):
+    '''
+    Create a temperature mask which has the same temporal sampling than spectral channels
+    :param lats: latitudes array
+    :param lons: longitudes array
+    :param beginning: dfb beginning sampling
+    :param ending: dfb ending sampling
+    :param slot_step: slot sampling chosen by the user (probably 1)
+    :return:
+    '''
+    from read_netcdf import read_temperature_forecast
+    from read_metadata import read_satellite_step
+    satellite_step = read_satellite_step()
+    nb_slots = get_nb_slots_per_day(satellite_step, slot_step)*(ending-beginning+1)
+    temperatures = read_temperature_forecast(lats, lons, beginning, ending)
+    to_return = np.empty((nb_slots, len(lats), len(lons)))
+    for slot in range(nb_slots):
+        try:
+            nearest_temp_meas = int(0.5+satellite_step*slot_step*slot/60)
+            to_return[slot] = temperatures[nearest_temp_meas] + 273.15
+        except IndexError:
+            nearest_temp_meas = int(satellite_step*slot_step*slot/60)
+            to_return[slot] = temperatures[nearest_temp_meas] + 273.15
+    return to_return
+
+
+if __name__ == '__main__':
+    print rc_to_latlon(10, 12)
+    print latlon_to_rc(35,-115.1)

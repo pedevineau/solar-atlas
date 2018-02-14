@@ -78,15 +78,16 @@ def reshape_features(features):
         return features.reshape((a * b * c, d))
 
 
-def test_models(zen, features, classes, method_learning, meta_method, pca_components, return_string=True):
+def test_models(zen, features, classes, method_learning, meta_method, pca_components, training_rate, return_string=True):
+    from quick_visualization import visualize_map_time, get_bbox
     bbox = get_bbox(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
     if learn_new_model:
-        # labels_ = reduce_classes(classes)
-        # a = s
+        from decision_tree import reduce_classes
         classes = reduce_classes(classes)
+        t_beg = time()
         from choose_training_sample import temporally_stratified_samples
-
-        nb_days_training = nb_days
+        from read_metadata import read_satellite_step
+        nb_days_training = len(zen)/get_nb_slots_per_day(read_satellite_step(), 1)
         select = temporally_stratified_samples(zen, training_rate, coef_randomization * nb_days_training)
         features = reshape_features(features)
         select = select.flatten()
@@ -117,10 +118,10 @@ def test_models(zen, features, classes, method_learning, meta_method, pca_compon
         if meta_method == 'bagging':
             estimator = create_bagging_estimator(estimator)
 
-        model = fit_model(estimator, training, classes[select])
+        model = fit_model(estimator, training, classes.flatten()[select])
         del training
         t_train = time()
-        print 'time training:', t_train - t_classes
+        print 'time training:', t_train - t_beg
         save_model(path_, model)
         t_save = time()
         print 'time save:', t_save - t_train
@@ -137,13 +138,14 @@ def test_models(zen, features, classes, method_learning, meta_method, pca_compon
     print 'differences', predicted_labels[predicted_labels != predicted_labels[0]]
     if learn_new_model:
         stri = 'accuracy score:' + str(accuracy_score(reshape_features(classes), predicted_labels)) + '\n'
+        print stri
         if return_string:
-            print stri
             return stri
         else:
             visualize_map_time(classes, bbox, vmin=0, vmax=4)
 
     # features_bis = features_bis.reshape((a, b, c, nb_new_features))
+    a, b, c = np.shape(zen)
     predicted_labels = predicted_labels.reshape((a, b, c))
     visualize_map_time(predicted_labels, bbox, vmin=0, vmax=4)
     from bias_checking import comparision_algorithms
@@ -152,84 +154,80 @@ def test_models(zen, features, classes, method_learning, meta_method, pca_compon
         visualize_map_time(comparision_algorithms(reduce_two_classes(predicted_labels), reduce_two_classes(classes)),
                            bbox,
                            vmin=-1, vmax=1)
+    return ''
         # visualize_map_time(features_bis[:,:,:,2:], bbox, vmin=0, vmax=1)
+
+
+def prepare_data(latitude_beginning, latitude_end, longitude_beginning, longitude_end, beginning, ending, output_level):
+    from angles_geom import get_zenith_angle
+    from static_tests import dawn_day_test
+    from utils import get_times_utc
+    from get_data import get_features
+    from read_metadata import read_satellite_step
+    latitudes, longitudes = get_latitudes_longitudes(latitude_beginning, latitude_end,
+                                                     longitude_beginning, longitude_end)
+    times = get_times_utc(beginning, ending, read_satellite_step(), slot_step=1)
+    a, b, c = len(times), len(latitudes), len(longitudes)
+    nb_features_ = 6
+    features = np.empty((a, b, c, nb_features_))
+    print_date_from_dfb(beginning, ending)
+    print beginning, ending
+    print 'NS:', latitude_beginning, latitude_end, ' WE:', longitude_beginning, longitude_end
+    angles = get_zenith_angle(times, latitudes, longitudes)
+    angles[dawn_day_test(angles)] = 0
+    features[:, :, :, :3] = get_features('infrared', latitudes, longitudes, beginning, ending, output_level,
+                                         slot_step=1, gray_scale=False)[:, :, :, :3]
+    features[:, :, :, 3:6] = get_features('visible', latitudes, longitudes, beginning, ending, output_level,
+                                          slot_step=1, gray_scale=False)[:, :, :, :3]
+    del times
+    t_begin = time()
+    from decision_tree import get_classes_v1_point, get_classes_v2_image
+    method_labels = 'static'  # 'on-point', 'otsu-2d', 'otsu-3d', 'watershed-2d', 'watershed-3d', static
+    print method_labels
+    assert method_labels in ['on-point', 'otsu-2d', 'otsu-3d', 'watershed-2d', 'watershed-3d', 'static'], 'unknown label method'
+    if method_labels == 'on-point':
+        classes = get_classes_v1_point(latitudes,
+                                        longitudes,
+                                        beginning,
+                                        ending,
+                                        slot_step,
+                                        )
+    elif method_labels in ['otsu-2d', 'otsu-3d', 'watershed-2d', 'watershed-3d']:
+        classes = get_classes_v2_image(latitudes,
+                                        longitudes,
+                                        beginning,
+                                        ending,
+                                        slot_step,
+                                        method_labels
+                                        )
+    elif method_labels == 'static':
+        from static_tests import typical_static_classifier
+        classes = typical_static_classifier()
+    t_classes = time()
+    print 'time classes:', t_classes - t_begin
+    return angles, features, classes
 
 
 if __name__ == '__main__':
     from utils import *
-    from read_metadata import read_satellite_model_path, read_satellite_step
+    from read_metadata import read_satellite_model_path
     slot_step = 1
-    beginning = 13525
-    nb_days = 8
-    ending = beginning + nb_days - 1
+
     output_level = 'abstract'
 
-    training_rate = 0.06
     coef_randomization = 4
     # method_labels = 'watershed-3d'  # 'on-point', 'otsu-2d', 'otsu-3d', 'watershed-2d', 'watershed-3d'
 
     path_ = read_satellite_model_path()
 
-    from angles_geom import get_zenith_angle
-    from static_tests import dawn_day_test
-    from utils import get_times_utc
-    from get_data import get_features
     from time import time
+    beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end = typical_input()
 
-    latitude_beginning = 35.
-    latitude_end = 45.
-    longitude_beginning = 125.
-    longitude_end = 130.
-    latitudes, longitudes = get_latitudes_longitudes(latitude_beginning, latitude_end,
-                                                     longitude_beginning, longitude_end)
-    times = get_times_utc(beginning, ending, read_satellite_step(), slot_step=1)
+    angles, features, classes = prepare_data(latitude_beginning, latitude_end, longitude_beginning, longitude_end, beginning, ending, output_level)
 
-    a, b, c = len(times), len(latitudes), len(longitudes)
-    nb_features_ = 6
-    features_ = np.empty((a, b, c, nb_features_))
-
-    date_begin, date_end = print_date_from_dfb(beginning, ending)
-    print beginning, ending
-    print 'NS:', latitude_beginning, latitude_end, ' WE:', longitude_beginning, longitude_end
-
-    from quick_visualization import visualize_map_time, get_bbox
-    angles = get_zenith_angle(times, latitudes, longitudes)
-    angles[dawn_day_test(angles)] = 0
-    features_[:, :, :, :3] = get_features('infrared', latitudes, longitudes, beginning, ending, output_level,
-                                          slot_step=1, gray_scale=False)[:, :, :, :3]
-    features_[:, :, :, 3:6] = get_features('visible', latitudes, longitudes, beginning, ending, output_level,
-                                           slot_step=1, gray_scale=False)[:, :, :, :3]
-    # features_[:, :, :, 6] = angles
-    del times
-    t_begin = time()
-    from decision_tree import get_classes_v1_point, get_classes_v2_image, reduce_classes
-    method_labels = 'on-point'  # 'on-point', 'otsu-2d', 'otsu-3d', 'watershed-2d', 'watershed-3d'
-    print method_labels
-
-    if method_labels == 'on-point':
-        classes_ = get_classes_v1_point(latitudes,
-                                       longitudes,
-                                       beginning,
-                                       ending,
-                                       slot_step,
-                                       )
-    elif method_labels in ['otsu-2d', 'otsu-3d', 'watershed-2d', 'watershed-3d']:
-        classes_ = get_classes_v2_image(latitudes,
-                                       longitudes,
-                                       beginning,
-                                       ending,
-                                       slot_step,
-                                       method_labels
-                                       )
-    else:
-        raise Exception('Please choose an implemented cloud classification algorithm!')
-
-    t_classes = time()
-    print 'time classes:', t_classes - t_begin
-
-    METHODS_LEARNING = ['bayes', 'tree', 'mlp', 'forest']
-    META_METHODS = ['bagging','b']
-    PCA_COMPONENTS = [2, None, 3, 4]
+    METHODS_LEARNING = ['tree'] #, 'tree', 'mlp', 'forest']
+    META_METHODS = ['bagging'] #,'b']
+    PCA_COMPONENTS = [3] #2, None, 3, 4]
     learn_new_model = True
     for k in range(len(METHODS_LEARNING)):
         for l in range(len(META_METHODS)):
@@ -237,13 +235,12 @@ if __name__ == '__main__':
                 method_learning_ = METHODS_LEARNING[k]
                 meta_method_ = META_METHODS[l]
                 pca_components_ = PCA_COMPONENTS[m]
-                header = str(method_learning_) + ' ' + str(meta_method_) + ' pca:' + str(pca_components_)
+                header = str(method_learning_) + ' ' + str(meta_method_) + ' pca:' + str(pca_components_) + ' --- '
                 try:
-                    LOGS = header + '\n' + test_models(angles, features_, classes_, method_learning_, meta_method_, pca_components_)
+                    LOGS = header + '\n' + test_models(angles, features, classes, method_learning_, meta_method_, pca_components_, training_rate=0.06, return_string=False)
                 except Exception as e:
                     LOGS = header + str(e)
                     print LOGS
-                    raise e
                 print 'LOGS ready'
                 with open('logs', 'a') as f:
                     f.write(LOGS)
