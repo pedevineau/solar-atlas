@@ -122,14 +122,9 @@ def check_gaussian_hypothesis(latitudes, longitudes, begin, end, method='none'):
 
 
 if __name__ == '__main__':
+    from utils import typical_input
     slot_step = 1
-    beginning = 13525+15
-    nb_days = 15
-    ending = beginning + nb_days - 1
-    latitude_beginning = 35.
-    latitude_end = 45.
-    longitude_beginning = 125.
-    longitude_end = 130.
+    beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end = typical_input()
     lat, lon = get_latitudes_longitudes(latitude_beginning, latitude_end,
                                         longitude_beginning, longitude_end)
     check_gaussian_hypothesis(lat, lon, beginning, ending, 'none')
