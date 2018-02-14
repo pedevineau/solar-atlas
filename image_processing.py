@@ -47,7 +47,7 @@ def segmentation_watershed_2d(feature, thresh_method='otsu', coherence=0.2, stat
     return to_return
 
 
-def segmentation_watershed_3d(feature, thresh_method='otsu', coherence=0.2, static=None):
+def segmentation_watershed_3d(feature, thresh_method='otsu', coherence=0.3, static=None):
     return watershed_3d(feature, coherence, thresh_method, static)
 
 
@@ -58,15 +58,17 @@ def watershed_3d(feature, coherence, thresh_method, static):
     from skimage.filters import threshold_otsu, threshold_minimum
     # kernel = cube(3)  # try other forms
     kernel = octahedron(1)
-    assert thresh_method in ['otsu', 'static', 'binary'], 'threshing method unknown'
+    assert thresh_method in ['otsu', 'static', 'static-inverted', 'binary'], 'threshing method unknown'
     if thresh_method == 'otsu':
         try:
             thresh = feature < threshold_otsu(feature)  # mask=True for background
         except ValueError:
             # if the feature is monochromatic
             return np.zeros_like(feature, dtype=bool)
-    elif thresh_method == 'static':
+    elif thresh_method == 'static-inverted':
         thresh = feature > static
+    elif thresh_method == 'static':
+        thresh = feature < static
     else:  # if the image is already binary
         thresh = (feature == 0)
     opened = opening(thresh, kernel)
