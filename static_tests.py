@@ -428,6 +428,7 @@ def is_lir_available():
 def suspect_snow_classified_pixels(snow, ndsi, mask_input):
     from visible_predictors import get_bright_negative_variability_5d, get_bright_positive_variability_5d
     from get_data import compute_short_variability
+    from utils import typical_time_step
     return ndsi_test(ndsi) & ((get_bright_positive_variability_5d(ndsi, mask_input, typical_time_step(), 1) > 0.2) |
                               (get_bright_negative_variability_5d(ndsi, mask_input, typical_time_step(), 1) > 0.2) |
                               (compute_short_variability(ndsi, mask=mask_input, abs_value=True) > 0.05)) & snow
