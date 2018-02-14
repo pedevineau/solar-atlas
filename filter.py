@@ -24,6 +24,28 @@ def contrast_filter(array):
         return array
 
 
+def local_std(array, mask=None, scope=3):
+    from scipy import ndimage
+    if scope <= 1:
+        return array
+    for k in range(len(array)):
+        array[k] = np.sqrt(ndimage.generic_filter(array[k], np.var, size=scope))
+        if mask is not None:
+            array[k][ndimage.morphology.binary_dilation(mask)] = -10
+    return array
+
+
+def local_max(array, mask=None, scope=3):
+    from scipy import ndimage
+    if scope <= 1:
+        return array
+    for k in range(len(array)):
+        array[k] = ndimage.maximum_filter(array[k], size=scope)
+        if mask is not None:
+            array[k][ndimage.morphology.binary_dilation(mask)] = -10
+    return array
+
+
 # low pass spatial filter case use: NOT ndsi, perhaps CLI or stressed NDSI
 def low_pass_filter_3d(array, cutoff, omega=0):
     from scipy import fftpack
@@ -90,7 +112,6 @@ def time_smoothing(array_3D_to_smoothen):
 
 
 if __name__ == '__main__':
-    frequency_low_cut = 0.03
-    frequency_high_cut = 0.2
-    nb_neighbours_smoothing = 0  # number of neighbours used in right and left to smoothe
-    smoothing = nb_neighbours_smoothing > 0
+    arr = np.ones((2,7,7))
+    arr[:, 3,3] = 3
+    print local_std(arr)
