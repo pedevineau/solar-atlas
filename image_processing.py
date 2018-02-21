@@ -84,7 +84,7 @@ def watershed_3d(feature, coherence, thresh_method, static):
     sure_fg = dist_transform > coherence * dist_transform.max()
 
     # Finding unknown region
-    unknown = (opened - sure_fg > 0)
+    unknown = (opened ^ sure_fg > 0)
 
     # Marker labelling
     markers = label(sure_fg, background=0)
