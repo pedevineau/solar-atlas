@@ -5,7 +5,7 @@
     "start_slot": 1,
     "longitude": 140.7,
     "epsilon_param": 8.5,
-    "channels_name": ["IR124_2000", "IR390_2000", "VIS160_2000", "VIS064_2000"],
+    "channels_name": ["IR124_2000", "IR104_2000", "IR390_2000", "VIS160_2000", "VIS064_2000"],
     "indexes": {
       "visible": {
         "dir": "/data/test_data/computed",
@@ -21,7 +21,7 @@
       }
     },
     "channels": {
-      "dir": "/data/test_data",
+      "dir": ["/data/test_data", "/data/test_data/CHN13"],
       "pattern": "{SATELLITE}LATLON_{CHANNEL}__TMON_{YYYY}_{mm}__SDEG05_r{SDEG5_LATITUDE}_c{SDEG5_LONGITUDE}.nc"
     },
     "model_path": "/data/test_data/models/model_H8"
