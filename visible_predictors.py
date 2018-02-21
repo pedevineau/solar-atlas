@@ -26,21 +26,21 @@ def visible_outputs(times, latitudes, longitudes, is_land, content_visible, sate
 
 
 def visible_abstract_predictors(zen, is_land, vis, mask_input, ndsi, satellite_step, slot_step, gray_scale):
-    from static_tests import dawn_day_test, sea_cloud_test
+    from static_tests import dawn_day_test, sea_coasts_cloud_test
     mask_output = ~dawn_day_test(zen) | mask_input | ~is_land
     (nb_slots, nb_latitudes, nb_longitudes) = np.shape(vis)
 
     nb_features = 4  # snow index, negative variability, positive variability, cloudy sea
     if not gray_scale:
         array_indexes = np.empty(shape=(nb_slots, nb_latitudes, nb_longitudes, nb_features))
-        array_indexes[:, :, :, 3] = sea_cloud_test(zen, is_land, vis)
+        array_indexes[:, :, :, 3] = sea_coasts_cloud_test(zen, is_land, vis)
         array_indexes[:, :, :, 1] = get_bright_negative_variability_5d(ndsi, mask_output, satellite_step, slot_step)
         array_indexes[:, :, :, 2] = get_bright_positive_variability_5d(ndsi, mask_output, satellite_step, slot_step)
         ndsi[mask_output] = -10
         array_indexes[:, :, :, 0] = ndsi
     else:
         array_indexes = np.empty(shape=(nb_slots, nb_latitudes, nb_longitudes, nb_features), dtype=np.uint8)
-        array_indexes[:, :, :, 3] = sea_cloud_test(zen, is_land, vis)
+        array_indexes[:, :, :, 3] = sea_coasts_cloud_test(zen, is_land, vis)
         array_indexes[:, :, :, 2] = normalize(
                 get_bright_negative_variability_5d(ndsi, mask_output, satellite_step, slot_step),
                 mask_output, normalization='gray-scale')
