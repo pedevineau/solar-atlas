@@ -1,58 +1,78 @@
 import numpy as np
+from quick_visualization import visualize_map_time, visualize_map
 
 
-def typical_input():
+def typical_input(seed=0):
     from read_metadata import read_satellite_name
     sat_name = read_satellite_name()
-    if sat_name == 'GOES16':
-        beginning = 13516 + 365 + 10
-        nb_days = 15
-        ending = beginning + nb_days - 1
-        latitude_beginning = 35.
-        latitude_end = 40.
-        longitude_beginning = -115.+35
-        longitude_end = -110.+35
-    elif sat_name == 'H08':
-        beginning = 13525 + 180
-        nb_days = 5
-        ending = beginning + nb_days - 1
-        latitude_beginning = 35.
-        latitude_end = 45.
-        longitude_beginning = 125.
-        longitude_end = 130.
-    return beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end
+    if seed == 0:
+        if sat_name == 'GOES16':
+            beginning = 13516 + 365
+            nb_days = 5
+            ending = beginning + nb_days - 1
+            latitude_beginning = 35.+5+1
+            latitude_end = 40.+5-2
+            longitude_beginning = -115.+35+1
+            longitude_end = -110.+35-2
+        elif sat_name == 'H08':
+            beginning = 13525 + 180
+            nb_days = 5
+            ending = beginning + nb_days - 1
+            latitude_beginning = -10.
+            latitude_end = -5.
+            longitude_beginning = 110.
+            longitude_end = 115.
+        return beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end
+    else:
+        if sat_name == 'GOES16':
+            beginning = 13516 + 365 + 10
+            nb_days = 8
+            ending = beginning + nb_days - 1
+            latitude_beginning = 35.
+            latitude_end = 40.-2
+            longitude_beginning = -115. + 35+2
+            longitude_end = -110. + 35-2
+        elif sat_name == 'H08':
+            beginning = 13525 + 180
+            nb_days = 5
+            ending = beginning + nb_days - 1
+            latitude_beginning = 35.
+            latitude_end = 45.
+            longitude_beginning = 125.
+            longitude_end = 130.
+        return beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end
 
 
-def typical_outputs(type_channels, output_level):
-    beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end = typical_input()
+def typical_outputs(type_channels, output_level, seed=0):
+    beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end = typical_input(seed)
     lats, lons = get_latitudes_longitudes(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
     from get_data import get_features
     return get_features(type_channels, lats, lons, beginning, ending, output_level)
 
 
-def typical_angles():
+def typical_angles(seed=0):
     from angles_geom import get_zenith_angle
     from read_metadata import read_satellite_step
-    beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end = typical_input()
+    beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end = typical_input(seed)
     lats, lons = get_latitudes_longitudes(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
     return get_zenith_angle(get_times_utc(beginning, ending, read_satellite_step, 1), lats, lons)
 
 
-def typical_land_mask():
+def typical_land_mask(seed=0):
     from read_netcdf import read_land_mask
-    beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end = typical_input()
+    beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end = typical_input(seed)
     lats, lons = get_latitudes_longitudes(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
     return read_land_mask(lats, lons)
 
 
-def typical_temperatures_forecast():
-    beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end = typical_input()
+def typical_temperatures_forecast(seed=0):
+    beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end = typical_input(seed)
     lats, lons = get_latitudes_longitudes(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
     return prepare_temperature_mask(lats, lons, beginning, ending)
 
 
-def typical_bbox():
-    beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end = typical_input()
+def typical_bbox(seed=0):
+    beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end = typical_input(seed)
     from quick_visualization import get_bbox
     return get_bbox(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
 
@@ -60,6 +80,69 @@ def typical_bbox():
 def typical_time_step():
     from read_metadata import read_satellite_step
     return read_satellite_step()
+
+
+def chunk_2d(arr, labels, (r, c)):
+    tiles, labels_tiles = [], []
+    row = 0
+    for x in range(0, arr.shape[0], r):
+        row += 1
+        col = 0
+        for y in range(0, arr.shape[1], c):
+            col += 1
+            tiles.append(arr[x:x + r, y:y + c])
+            labels_tiles.append(labels[x+r//2, y+c//2])
+    return tiles, np.reshape(labels_tiles, (row, col))
+
+
+def chunk_2d_high_resolution(arr, (r, c)):
+    lla, llo, feats = arr.shape
+    tiles = np.empty((lla, llo, r, c, feats))
+    for lat in range(0, arr.shape[0]):
+        for lon in range(0, arr.shape[1]):
+            try:
+                tiles[lat, lon] = arr[lat:lat + r, lon:lon + c]
+            except ValueError:
+                tiles[lat, lon] = -1
+    return tiles
+
+
+def chunk_3d(arr, labels, (r, c)):
+    tiles_3d = []
+    labels_reduced = []
+    for slot in range(len(arr)):
+        t, l = chunk_2d(arr[slot], labels[slot], (r,c))
+        tiles_3d.append(t)
+        labels_reduced.append(l)
+    return np.asarray(tiles_3d), np.asarray(labels_reduced)
+
+
+def chunk_3d_high_resolution(arr, (r, c)=(5, 5)):
+    ssl, lla, llo, feats = arr.shape
+    tiles_3d = []
+    for slot in range(len(arr)):
+        tiles_3d.append(chunk_2d_high_resolution(arr[slot], (r, c)))
+    return np.asarray(tiles_3d).reshape((ssl*lla*llo, r, c, feats))
+
+
+def array_to_one_label(arr, base=6):
+    arr = arr.flatten()
+    r = 0
+    for k, x in enumerate(arr):
+        r += x*(base**k)
+    return int(r)
+
+
+def one_label_to_array(lab, shape, base=6):
+    (row, col) = shape
+    to_return = np.zeros(row*col, dtype=int)
+    k = to_return.size-1
+    while k >= 0:
+        coef = lab / base**k
+        to_return[k] = coef
+        lab -= coef*(base**k)
+        k -= 1
+    return to_return.reshape(shape)
 
 
 def print_date_from_dfb(begin, ending):
@@ -86,17 +169,35 @@ def rounding_mean_list(list_1d, window):
     return list_1d
 
 
-def vis_clear_sky_rolling_mean_on_time(array, window=5):
+def rounding_median_list(list_1d, window):
+    from pandas import rolling_apply
+    list_1d[window / 2:-window / 2 + 1] = \
+        rolling_apply(list_1d, window=3, center=True, func=np.nanmedian)[window / 2:-window / 2 + 1]
+    return list_1d
+
+
+def vis_clear_sky_apply_rolling_on_time(array, window=5, method='mean'):
     assert window % 2 == 1, 'please give an uneven window width'
     s = array.shape
     assert len(s) in [1, 3], 'dimension non valid'
-    if len(s) == 1:
-        return rounding_mean_list(array, window)
-    if len(s) == 3:
-        lats, lons = s[1:3]
-        for lat in range(lats):
-            for lon in range(lons):
-                array[:, lat, lon] = rounding_mean_list(array[:, lat, lon], window)
+    assert method in ['mean', 'median'], 'pleas ask for an implemented method'
+    if method == 'mean':
+        if len(s) == 1:
+            return rounding_mean_list(array, window)
+        if len(s) == 3:
+            lats, lons = s[1:3]
+            for lat in range(lats):
+                for lon in range(lons):
+                    array[:, lat, lon] = rounding_mean_list(array[:, lat, lon], window)
+    else:
+        print 'WARNING the median method is much slower than the mean'
+        if len(s) == 1:
+            return rounding_mean_list(array, window)
+        if len(s) == 3:
+            lats, lons = s[1:3]
+            for lat in range(lats):
+                for lon in range(lons):
+                    array[:, lat, lon] = rounding_median_list(array[:, lat, lon], window)
     return array
 
 
@@ -254,5 +355,7 @@ def prepare_temperature_mask(lats, lons, beginning, ending, slot_step=1):
 
 
 if __name__ == '__main__':
-    print rc_to_latlon(10, 12)
-    print latlon_to_rc(35,-115.1)
+    features = typical_outputs('visible', 'channel')
+    # visualize_map_time(features[:,:,:,0], typical_bbox())
+    # tiles = chunk_3d_high_resolution(features, (5, 5))
+
