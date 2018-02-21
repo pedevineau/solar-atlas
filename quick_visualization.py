@@ -1,5 +1,4 @@
 from numpy.random import randint
-from utils import *
 
 
 def output_filters(array):
@@ -60,11 +59,10 @@ def visualize_curves_3d(latitudes, longitudes, array_2d, title=None):
 def visualize_map_time(array_map, bbox, vmin=0, vmax=1, title=None, subplot_titles_list=[], color='jet'):
     # array can be 3d or 4d
     from nclib2.visualization import visualize_map_3d
-
     interpolation_ = None
     ocean_mask_ = False
-    if len(np.shape(array_map)) == 4:
-        (a, b, c, d) = np.shape(array_map)
+    if len(array_map.shape) == 4:
+        (a, b, c, d) = array_map.shape
         for var_index in range(d):
             if title is None:
                 title = 'Input_'+str(var_index)
@@ -78,8 +76,7 @@ def visualize_map_time(array_map, bbox, vmin=0, vmax=1, title=None, subplot_titl
                              subplot_titles_list=subplot_titles_list,
                              ocean_mask=ocean_mask_,
                              color=color)
-    elif len(np.shape(array_map)) == 3:
-        print title
+    elif len(array_map.shape) == 3:
         visualize_map_3d(array_map[:, :, :],
                          bbox,
                          interpolation=interpolation_,
