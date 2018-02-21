@@ -1,3 +1,5 @@
+from quick_visualization import visualize_map_time
+
 def create_neural_network():
     print 'Create neural network'
     from sklearn.neural_network import MLPClassifier
@@ -78,108 +80,110 @@ def reshape_features(features):
         return features.reshape((a * b * c, d))
 
 
-def test_models(zen, features, classes, method_learning, meta_method, pca_components, training_rate, return_string=True):
-    from quick_visualization import visualize_map_time, get_bbox
-    bbox = get_bbox(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
-    if learn_new_model:
-        from decision_tree import reduce_classes
-        classes = reduce_classes(classes)
-        t_beg = time()
-        from choose_training_sample import temporally_stratified_samples
-        from read_metadata import read_satellite_step
-        nb_days_training = len(zen)/get_nb_slots_per_day(read_satellite_step(), 1)
-        select = temporally_stratified_samples(zen, training_rate, coef_randomization * nb_days_training)
-        features = reshape_features(features)
-        select = select.flatten()
-        nb_features = np.shape(features)[-1]
-        if pca_components is not None:
-            nb_features = pca_components
-            features = immediate_pca(features, pca_components)
-        var = features[:, 0][select]
-        training = np.empty((len(var), nb_features))
-        training[:, 0] = var
-        for k in range(1, nb_features):
-            training[:, k] = features[:, k][select]
-        del var
-        # evaluate_randomization(features_[~mask], indexes_to_test=[2, 3])
-        # features_bis = features_.copy()
-        # (features_, labels_) = shuffle(features_, labels_, random_state=0)
-        # training_len = int(training_rate * len(features_))
-        if method_learning == 'knn':
-            estimator = create_knn()
-        elif method_learning == 'bayes':
-            estimator = create_naive_bayes()
-        elif method_learning == 'mlp':
-            estimator = create_neural_network()
-        elif method_learning == 'forest':
-            estimator = create_random_forest()
-        else:
-            estimator = create_decision_tree()
-        if meta_method == 'bagging':
-            estimator = create_bagging_estimator(estimator)
+def score_solar_model(classes, predicted, return_string=True):
+    from quick_visualization import visualize_map_time
+    from utils import typical_bbox
+    from sklearn.metrics import accuracy_score
+    stri = 'accuracy score:' + str(accuracy_score(reshape_features(classes), predicted)) + '\n'
+    print stri
+    if return_string:
+        return stri
+    else:
+        from bias_checking import comparision_algorithms
+        from decision_tree import reduce_two_classes
+        visualize_map_time(comparision_algorithms(reduce_two_classes(predicted), reduce_two_classes(classes)),
+                           typical_bbox(),
+                           vmin=-1, vmax=1)
 
-        model = fit_model(estimator, training, classes.flatten()[select])
-        del training
-        t_train = time()
-        print 'time training:', t_train - t_beg
-        save_model(path_, model)
-        t_save = time()
-        print 'time save:', t_save - t_train
+
+def predict_solar_model(features, pca_components):
+    from time import time
+    a, b, c = features.shape[0:3]
     if pca_components is not None:
         features = immediate_pca(reshape_features(features), pca_components)
+    else:
+        features = reshape_features(features)
     t_save = time()
     model_bis = load_model(path_)
     t_load = time()
     print 'time load:', t_load - t_save
     predicted_labels = predictions_model(model_bis, features)
-    from sklearn.metrics import accuracy_score
     t_testing = time()
     print 'time testing:', t_testing - t_save
     print 'differences', predicted_labels[predicted_labels != predicted_labels[0]]
-    if learn_new_model:
-        stri = 'accuracy score:' + str(accuracy_score(reshape_features(classes), predicted_labels)) + '\n'
-        print stri
-        if return_string:
-            return stri
-        else:
-            visualize_map_time(classes, bbox, vmin=0, vmax=4)
-
-    # features_bis = features_bis.reshape((a, b, c, nb_new_features))
-    a, b, c = np.shape(zen)
     predicted_labels = predicted_labels.reshape((a, b, c))
-    visualize_map_time(predicted_labels, bbox, vmin=0, vmax=4)
-    from bias_checking import comparision_algorithms
-    from decision_tree import reduce_two_classes
-    if learn_new_model:
-        visualize_map_time(comparision_algorithms(reduce_two_classes(predicted_labels), reduce_two_classes(classes)),
-                           bbox,
-                           vmin=-1, vmax=1)
-    return ''
-        # visualize_map_time(features_bis[:,:,:,2:], bbox, vmin=0, vmax=1)
+    from quick_visualization import visualize_map_time
+    from utils import typical_bbox
+    visualize_map_time(predicted_labels, typical_bbox(), vmin=-1, vmax=4)
+    return predicted_labels
 
 
-def prepare_data(latitude_beginning, latitude_end, longitude_beginning, longitude_end, beginning, ending, output_level):
+def train_solar_model(zen, classes, features, method_learning, meta_method, pca_components, training_rate):
+    from time import time
+    t_beg = time()
+    from utils import get_nb_slots_per_day, np
+    from choose_training_sample import mask_temporally_stratified_samples
+    from read_metadata import read_satellite_step
+    nb_days_training = len(zen) / get_nb_slots_per_day(read_satellite_step(), 1)
+    select = mask_temporally_stratified_samples(zen, training_rate, coef_randomization * nb_days_training)
+    features = reshape_features(features)
+    select = select.flatten()
+    nb_features = features.shape[-1]
+    if pca_components is not None:
+        nb_features = pca_components
+        features = immediate_pca(features, pca_components)
+    var = features[:, 0][select]
+    training = np.empty((len(var), nb_features))
+    training[:, 0] = var
+    for k in range(1, nb_features):
+        training[:, k] = features[:, k][select]
+    del var
+    if method_learning == 'knn':
+        estimator = create_knn()
+    elif method_learning == 'bayes':
+        estimator = create_naive_bayes()
+    elif method_learning == 'mlp':
+        estimator = create_neural_network()
+    elif method_learning == 'forest':
+        estimator = create_random_forest()
+    else:
+        estimator = create_decision_tree()
+    if meta_method == 'bagging':
+        estimator = create_bagging_estimator(estimator)
+    model = fit_model(estimator, training, classes.flatten()[select])
+    del training
+    t_train = time()
+    print 'time training:', t_train - t_beg
+    save_model(path_, model)
+    t_save = time()
+    print 'time save:', t_save - t_train
+
+
+def prepare_data(latitude_beginning, latitude_end, longitude_beginning, longitude_end, beginning, ending, output_level, seed=0):
     from angles_geom import get_zenith_angle
     from static_tests import dawn_day_test
-    from utils import get_times_utc
+    from utils import get_times_utc, get_latitudes_longitudes, np, print_date_from_dfb
+    from utils import typical_land_mask
     from get_data import get_features
     from read_metadata import read_satellite_step
     latitudes, longitudes = get_latitudes_longitudes(latitude_beginning, latitude_end,
                                                      longitude_beginning, longitude_end)
     times = get_times_utc(beginning, ending, read_satellite_step(), slot_step=1)
     a, b, c = len(times), len(latitudes), len(longitudes)
-    nb_features_ = 6
+    nb_features_ = 8
     features = np.empty((a, b, c, nb_features_))
     print_date_from_dfb(beginning, ending)
     print beginning, ending
     print 'NS:', latitude_beginning, latitude_end, ' WE:', longitude_beginning, longitude_end
     angles = get_zenith_angle(times, latitudes, longitudes)
-    angles[dawn_day_test(angles)] = 0
     features[:, :, :, :3] = get_features('infrared', latitudes, longitudes, beginning, ending, output_level,
                                          slot_step=1, gray_scale=False)[:, :, :, :3]
     features[:, :, :, 3:6] = get_features('visible', latitudes, longitudes, beginning, ending, output_level,
                                           slot_step=1, gray_scale=False)[:, :, :, :3]
+    features[:, :, :, 6] = dawn_day_test(angles)
+    features[:, :, :, 7] = typical_land_mask(seed)
     del times
+    from time import time
     t_begin = time()
     from decision_tree import get_classes_v1_point, get_classes_v2_image
     method_labels = 'static'  # 'on-point', 'otsu-2d', 'otsu-3d', 'watershed-2d', 'watershed-3d', static
@@ -192,6 +196,8 @@ def prepare_data(latitude_beginning, latitude_end, longitude_beginning, longitud
                                         ending,
                                         slot_step,
                                         )
+        from decision_tree import reduce_classes
+        classes = reduce_classes(classes)
     elif method_labels in ['otsu-2d', 'otsu-3d', 'watershed-2d', 'watershed-3d']:
         classes = get_classes_v2_image(latitudes,
                                         longitudes,
@@ -200,47 +206,68 @@ def prepare_data(latitude_beginning, latitude_end, longitude_beginning, longitud
                                         slot_step,
                                         method_labels
                                         )
+        from decision_tree import reduce_classes
+        classes = reduce_classes(classes)
     elif method_labels == 'static':
         from static_tests import typical_static_classifier
-        classes = typical_static_classifier()
+        classes = typical_static_classifier(seed)
     t_classes = time()
     print 'time classes:', t_classes - t_begin
     return angles, features, classes
 
 
 if __name__ == '__main__':
-    from utils import *
+    from utils import typical_input, typical_bbox
     from read_metadata import read_satellite_model_path
     slot_step = 1
-
-    output_level = 'abstract'
-
     coef_randomization = 4
-    # method_labels = 'watershed-3d'  # 'on-point', 'otsu-2d', 'otsu-3d', 'watershed-2d', 'watershed-3d'
-
     path_ = read_satellite_model_path()
 
-    from time import time
-    beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end = typical_input()
+    beginning_testing, ending_testing, lat_beginning_testing, lat_ending_testing, lon_beginning_testing, lon_ending_testing = typical_input(seed=0)
 
-    angles, features, classes = prepare_data(latitude_beginning, latitude_end, longitude_beginning, longitude_end, beginning, ending, output_level)
+    testing_angles, testing_inputs, testing_classes = prepare_data(lat_beginning_testing, lat_ending_testing,
+                                                                   lon_beginning_testing, lon_ending_testing,
+                                                                   beginning_testing, ending_testing, 'abstract')
+    from choose_training_sample import restrict_pools
 
-    METHODS_LEARNING = ['tree'] #, 'tree', 'mlp', 'forest']
-    META_METHODS = ['bagging'] #,'b']
-    PCA_COMPONENTS = [3] #2, None, 3, 4]
+    inputs, labs = restrict_pools(testing_angles, testing_inputs, testing_classes)
+    sl, la, lo, fe = testing_inputs.shape
+    inputs = inputs.reshape((len(inputs)/la/lo, la, lo, fe))
+    # print (inputs[:, 15, 15, 4]>0).mean()
+    # print (testing_inputs[:, 15, 15, 4]>0).mean()
+    print (inputs[:, 15, 15, 3]>-10).mean()
+    print (testing_inputs[:, 15, 15, 3]>-10).mean()
+    visualize_map_time(inputs, typical_bbox())
+
     learn_new_model = True
-    for k in range(len(METHODS_LEARNING)):
-        for l in range(len(META_METHODS)):
-            for m in range(len(PCA_COMPONENTS)):
-                method_learning_ = METHODS_LEARNING[k]
-                meta_method_ = META_METHODS[l]
-                pca_components_ = PCA_COMPONENTS[m]
-                header = str(method_learning_) + ' ' + str(meta_method_) + ' pca:' + str(pca_components_) + ' --- '
-                try:
-                    LOGS = header + '\n' + test_models(angles, features, classes, method_learning_, meta_method_, pca_components_, training_rate=0.06, return_string=False)
-                except Exception as e:
-                    LOGS = header + str(e)
-                    print LOGS
-                print 'LOGS ready'
-                with open('logs', 'a') as f:
-                    f.write(LOGS)
+    pca_components = None
+
+    if learn_new_model:
+        METHODS_LEARNING = ['keras']  # , 'tree', 'mlp', 'forest']
+        META_METHODS = ['bagging']  # ,'b']
+        PCA_COMPONENTS = [None]  # 2, None, 3, 4
+        beginning_training, ending_training, lat_beginning_training, lat_ending_training, lon_beginning_training, lon_ending_training = typical_input(seed=1)
+        training_angles, training_inputs, training_classes = prepare_data(lat_beginning_training, lat_ending_training,
+                                                                          lon_beginning_training, lon_ending_training,
+                                                                          beginning_training, ending_training,  'abstract',
+                                                                          seed=1)
+        for k in range(len(METHODS_LEARNING)):
+            for l in range(len(META_METHODS)):
+                for m in range(len(PCA_COMPONENTS)):
+                    if learn_new_model:
+                        method_learning_ = METHODS_LEARNING[k]
+                        meta_method_ = META_METHODS[l]
+                        pca_components_ = PCA_COMPONENTS[m]
+                        header = str(method_learning_) + ' ' + str(meta_method_) + ' pca:' + str(pca_components_) + ' --- '
+                        try:
+                            train_solar_model(training_angles, training_classes, training_inputs, method_learning_, meta_method_, pca_components_, training_rate=0.06)
+                            predictions = predict_solar_model(testing_inputs, pca_components_)
+                            LOGS = header + '\n' + score_solar_model(testing_classes, predictions, return_string=False)
+                        except Exception as e:
+                            LOGS = header + str(e)
+                            print LOGS
+                        print 'LOGS ready'
+                        with open('logs', 'a') as f:
+                            f.write(LOGS)
+    else:
+        predict_solar_model(testing_inputs, pca_components)
