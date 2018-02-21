@@ -31,7 +31,7 @@ def local_std(array, mask=None, scope=3):
     for k in range(len(array)):
         array[k] = np.sqrt(ndimage.generic_filter(array[k], np.var, size=scope))
         if mask is not None:
-            array[k][ndimage.morphology.binary_dilation(mask)] = -10
+            array[k][ndimage.morphology.binary_dilation(mask[k])] = -10
     return array
 
 
@@ -42,7 +42,7 @@ def local_max(array, mask=None, scope=3):
     for k in range(len(array)):
         array[k] = ndimage.maximum_filter(array[k], size=scope)
         if mask is not None:
-            array[k][ndimage.morphology.binary_dilation(mask)] = -10
+            array[k][ndimage.morphology.binary_dilation(mask[k])] = -10
     return array
 
 
@@ -96,7 +96,8 @@ def digital_low_cut_filtering_time(array, mask, satellite_step):
 
 
 # unused. relevant??
-def time_smoothing(array_3D_to_smoothen):
+def time_smoothing(array_3D_to_smoothen, nb_neighbours_smoothing=5):
+    smoothing = nb_neighbours_smoothing > 0
     if smoothing:
         import time
         time_start_smoothing = time.time()
