@@ -31,6 +31,14 @@ def compute_vis_snow_threshold():
     return 0.25
 
 
+def compute_broad_vis_snow_threshold():
+    return 0.2
+
+
+def compute_broad_ndsi_snow_threshold():
+    return 0.25
+
+
 def compute_epsilon_maximal_lir_threshold():
     return 303.15
 
@@ -69,12 +77,20 @@ def expected_brightness_temperature_only_emissivity(forecast_temperature, lw_nm,
     return 1. / (1 / (K * nu) * log(1 + (exp(K * nu / forecast_temperature) - 1) / eps))
 
 
-def compute_vis_sea_cloud_all_thresholds(zen):
+def compute_vis_sea_coasts_cloud_factors(zen):
     from numpy import cos, power
     cos_zen = cos(zen)
     cos_zen[cos_zen < 0.03] = 0.03
     cos_zen = power(cos_zen, 0.3)
-    return 0.2/cos_zen
+    return 1/cos_zen
+
+
+def compute_vis_coasts_cloud_all_coefficient():
+    return 0.3
+
+
+def compute_vis_sea_cloud_all_coefficient():
+    return 0.15
 
 
 def compute_snow_ndsi_threshold():
