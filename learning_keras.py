@@ -43,9 +43,14 @@ class WeatherCNN:
         model.compile(loss="categorical_crossentropy", optimizer=opt, metrics=["accuracy"])
         self.model = model
 
-    def fit(self, inputs, labels):
+    def fit(self, inputs, labels, fit_excluding=None):
         from keras.utils import np_utils
+        from utils import chunk_3d_high_resolution
         labels = np_utils.to_categorical(labels)
+        inputs = chunk_3d_high_resolution(np.asarray(inputs))
+        if fit_excluding is not None and type(fit_excluding) is [int, list, np.ndarray]:
+            from utils import remove_some_label_from_training_pool
+            inputs, labels = remove_some_label_from_training_pool(inputs, labels, fit_excluding)
         from sklearn.model_selection import train_test_split
         (trainX, testX, trainY, testY) = train_test_split(inputs, labels, test_size=0.95, random_state=42)
         EPOCHS = 25
@@ -94,7 +99,7 @@ class WeatherCNN:
     def deterministic_predictions(predictions, nb_classes):
         from numpy import ones, zeros, max
         slots, lats, lons = predictions.shape[0:3]
-        determ_classification = -1*ones((slots, lats, lons, nb_classes))
+        determ_classification = -1*ones((slots, lats, lons))
         for k in range(nb_classes):
             determ_classification[predictions[:, :, :, k] > 0.5] = k
         confidence = max(predictions, axis=3)
@@ -174,7 +179,7 @@ def keras_predict(model, inputs):
     return model.predict(reshape_features(inputs))
 
 
-def learn_new_model(nb_classes):
+def learn_new_model(nb_classes, class_to_exclude=None):
     use_keras_cnn = True
     if use_keras_cnn:
         beginning_training, ending_training, lat_beginning_training, lat_ending_training, lon_beginning_training, lon_ending_training = typical_input(
@@ -190,7 +195,7 @@ def learn_new_model(nb_classes):
         from utils import chunk_3d_high_resolution
         training_inputs = chunk_3d_high_resolution(training_inputs, (res, res))
         weather = WeatherCNN(WeatherCNN.build(res, res, nb_feats, nb_classes), res)
-        weather.fit(training_inputs, training_classes)
+        weather.fit(training_inputs, training_classes, fit_excluding=class_to_exclude)
         # model = keras_cnn_fit(keras_cnn(res, res, nb_feats, nb_classes), training_inputs, training_classes.flatten())
         weather.save(path)
 
@@ -215,8 +220,10 @@ if __name__ == '__main__':
     should_learn_new_model = True
     pca_components = None
 
+    # visualize_map_time(testing_inputs, typical_bbox(), vmin=0, vmax=5, title='inputs')
+
     if should_learn_new_model:
-        learn_new_model(nb_classes_)
+        learn_new_model(nb_classes_, class_to_exclude=3)
     else:
         from keras.models import load_model
         # model_ = load_model(path)
