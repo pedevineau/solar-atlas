@@ -536,4 +536,4 @@ def typical_static_classifier(seed=0):
 if __name__ == '__main__':
     from utils import *
     from quick_visualization import visualize_map_time
-    visualize_map_time(typical_static_classifier(), typical_bbox(), vmin=-1, vmax=4)
+    visualize_map_time(typical_static_classifier(), typical_bbox(), vmin=0, vmax=5)
