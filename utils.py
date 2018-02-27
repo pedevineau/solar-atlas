@@ -29,9 +29,9 @@ def typical_input(seed=0):
             nb_days = 3
             ending = beginning + nb_days - 1
             latitude_beginning = 35.+1
-            latitude_end = 40.-2
-            longitude_beginning = -115. + 35+2
-            longitude_end = -110. + 35-2
+            latitude_end = 40.-3
+            longitude_beginning = -115. + 35+1
+            longitude_end = -110. + 35-3
         elif sat_name == 'H08':
             beginning = 13525 + 180+110
             nb_days = 5
@@ -127,13 +127,13 @@ def chunk_3d_high_resolution(arr, (r, c)=(5, 5)):
 
 def chunk_5d_high_resolution(arr, (r, c)=(5, 5)):
     ssl, lla, llo, feats = arr.shape
-    tiles = np.empty((ssl, r, c))
+    tiles = np.empty((ssl, lla, llo, r, c, feats))
     for lat in range(0, lla):
         for lon in range(0, llo):
             try:
                 tiles[:, lat, lon] = arr[:, lat:lat + r, lon:lon + c]
             except ValueError:
-                tiles[:, lat, lon] = -1
+                tiles[:, lat, lon] = -1*np.ones((ssl, r, c, feats))
     # expected array dims :
     return tiles.transpose((1, 2, 0, 3, 4, 5)).reshape((lla*llo, ssl, r, c, feats))
 
