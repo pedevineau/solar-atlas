@@ -250,6 +250,9 @@ class WeatherConvLSTM(WeatherLearning):
                                  validation_data=(asarray(testX), asarray(testY)), steps_per_epoch=len(trainX) // BS,
                                  epochs=EPOCHS, verbose=1)
 
+    def predict(self, inputs):
+        from utils import chunk_5d_high_resolution
+        return self.model.predict(chunk_5d_high_resolution(np.asarray(inputs), (self.res, self.res)))
 #
 # class WeatherConvSeries(WeatherLearning):
 #     def __init__(self):
