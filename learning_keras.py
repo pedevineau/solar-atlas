@@ -4,10 +4,11 @@ class WeatherLearning:
         self.res = resolution
         self.pca = pca
 
-    def save(self, path_model, path_pca):
+    def save(self, path_model, path_pca, path_res):
         self.model.save(path_model)
         import utils
         utils.save(path_pca, self.pca)
+        utils.save(path_res, self.res)
 
     @staticmethod
     def build(height, width, depth, nb_classes):
@@ -33,10 +34,10 @@ class WeatherLearning:
         return self.pca.transform(inputs)
 
     @classmethod
-    def load(cls, path_model, path_pca):
+    def load(cls, path_model, path_pca, path_res):
         from keras.models import load_model
         import utils
-        return cls(model=load_model(path_model), pca=utils.load(path_pca))
+        return cls(model=load_model(path_model), pca=utils.load(path_pca), resolution=utils.load(path_res))
 
     @staticmethod
     def deterministic_predictions(predicted, nb_classes):
@@ -302,6 +303,7 @@ def keras_predict(model, inputs):
 def learn_new_model(nb_classes, class_to_exclude=None, method='cnn'):
     use_keras_cnn = (method == 'cnn')
     use_mlp = (method == 'mlp')
+    use_lstm = (method == 'lstm')
     beginning_training, ending_training, lat_beginning_training, lat_ending_training, lon_beginning_training, lon_ending_training = typical_input(
         seed=1)
     training_angles, training_inputs, training_classes = prepare_data(lat_beginning_training, lat_ending_training,
@@ -323,6 +325,11 @@ def learn_new_model(nb_classes, class_to_exclude=None, method='cnn'):
         weather.compile(pca_components, nb_classes)
         from learning import reshape_features
         weather.fit_pca(reshape_features(training_inputs), pca_components)
+        weather.fit(training_inputs, training_classes, nb_classes, fit_excluding=class_to_exclude)
+        weather.save(path_model, path_pca)
+    elif use_lstm:
+        weather = WeatherCNN(resolution=res)
+        weather.compile(res, res, nb_feats, nb_classes)
         weather.fit(training_inputs, training_classes, nb_classes, fit_excluding=class_to_exclude)
         weather.save(path_model, path_pca)
 
@@ -347,7 +354,7 @@ if __name__ == '__main__':
 
     should_learn_new_model = False
     pca_components = None
-    meth = 'cnn'
+    meth = 'lstm'
     # visualize_map_time(testing_inputs, typical_bbox(), vmin=0, vmax=5, title='inputs')
 
     if should_learn_new_model:
@@ -359,9 +366,11 @@ if __name__ == '__main__':
     sl, la, lo, fe = testing_inputs.shape
 
     if meth == 'cnn':
-        weath = WeatherCNN.load(path_model, path_pca)
+        weath = WeatherCNN.load(path_model, path_pca, path_res)
     elif meth == 'mlp':
         weath = WeatherMLP.load(path_model, path_pca)
+    elif meth == 'lstm':
+        weath = WeatherConvLSTM.load(path_model, path_pca, path_res)
 
     # weath.score(testing_inputs, testing_classes, nb_classes_)
     #

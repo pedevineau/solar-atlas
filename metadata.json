@@ -25,7 +25,8 @@
       "pattern": "{SATELLITE}LATLON_{CHANNEL}__TMON_{YYYY}_{mm}__SDEG05_r{SDEG5_LATITUDE}_c{SDEG5_LONGITUDE}.nc"
     },
     "model_path": "/data/test_data/models/model_H08",
-    "pca_path": "/data/test_data/models/pca_H08"
+    "pca_path": "/data/test_data/models/pca_H08",
+    "path_res": "/data/test_data/models/res_H08"
   },
   "GOES16": {
     "time_step": 15,
@@ -52,7 +53,8 @@
       "pattern": "{SATELLITE}_{CHANNEL}_{YYYY}_{mm}_c{SDEG5_LONGITUDE}_r{SDEG5_LATITUDE}_east_calibrated.nc"
     },
     "model_path": "/data/test_data/models/model_GOES16",
-    "pca_path": "/data/test_data/models/pca_GOES16"
+    "pca_path": "/data/test_data/models/pca_GOES16",
+    "path_res": "/data/test_data/models/res_GOES16"
   },
 
   "masks": {
