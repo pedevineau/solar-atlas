@@ -318,7 +318,7 @@ def learn_new_model(nb_classes, class_to_exclude=None, method='cnn'):
         weather = WeatherCNN(resolution=res)
         weather.compile(res, res, nb_feats, nb_classes)
         weather.fit(training_inputs, training_classes, nb_classes, fit_excluding=class_to_exclude)
-        weather.save(path_model, path_pca)
+        weather.save(path_model, path_pca, path_res)
     elif use_mlp:
         weather = WeatherMLP()
         pca_components = 5
@@ -326,12 +326,12 @@ def learn_new_model(nb_classes, class_to_exclude=None, method='cnn'):
         from learning import reshape_features
         weather.fit_pca(reshape_features(training_inputs), pca_components)
         weather.fit(training_inputs, training_classes, nb_classes, fit_excluding=class_to_exclude)
-        weather.save(path_model, path_pca)
+        weather.save(path_model, path_pca, path_res)
     elif use_lstm:
         weather = WeatherCNN(resolution=res)
         weather.compile(res, res, nb_feats, nb_classes)
         weather.fit(training_inputs, training_classes, nb_classes, fit_excluding=class_to_exclude)
-        weather.save(path_model, path_pca)
+        weather.save(path_model, path_pca, path_res)
 
 
 if __name__ == '__main__':
