@@ -38,6 +38,14 @@ def read_satellite_pca_path():
     return satellite_pca_path
 
 
+def read_satellite_resolution_path():
+    from json import load
+    metadata = load(open('metadata.json'))
+    satellite = metadata["satellite"]
+    satellite_resolution_path = metadata[satellite]["res_path"]
+    return satellite_resolution_path
+
+
 def read_indexes_dir_and_pattern(type_chan):
     import json
     metadata = json.load(open('metadata.json'))

@@ -342,9 +342,10 @@ if __name__ == '__main__':
     nb_classes_ = 6
     res = 11
 
-    from read_metadata import read_satellite_model_path, read_satellite_pca_path
+    from read_metadata import read_satellite_model_path, read_satellite_pca_path, read_satellite_resolution_path
     path_model = read_satellite_model_path()
     path_pca = read_satellite_pca_path()
+    path_res = read_satellite_resolution_path()
 
     beginning_testing, ending_testing, lat_beginning_testing, lat_ending_testing, lon_beginning_testing, lon_ending_testing = typical_input(seed=0)
 
