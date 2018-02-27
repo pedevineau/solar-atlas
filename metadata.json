@@ -26,7 +26,7 @@
     },
     "model_path": "/data/test_data/models/model_H08",
     "pca_path": "/data/test_data/models/pca_H08",
-    "path_res": "/data/test_data/models/res_H08"
+    "res_path": "/data/test_data/models/res_H08"
   },
   "GOES16": {
     "time_step": 15,
@@ -54,7 +54,7 @@
     },
     "model_path": "/data/test_data/models/model_GOES16",
     "pca_path": "/data/test_data/models/pca_GOES16",
-    "path_res": "/data/test_data/models/res_GOES16"
+    "res_path": "/data/test_data/models/res_GOES16"
   },
 
   "masks": {
