@@ -6,3 +6,5 @@ matplotlib
 keras==2.1.4
 scikit-image
 opencv-python
+tensorflow
+h5py

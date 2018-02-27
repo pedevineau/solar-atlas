@@ -5,9 +5,9 @@ def get_tomas_outputs(dfb_begin, dfb_end, lat_begin, lat_end, lon_begin, lon_end
     from general_utils import daytimeconv
     from general_utils import latlon
     r_end, c_begin = latlon_to_rc(lat_begin, lon_begin)
-    r_begin, c_end = latlon_to_rc(lat_end, lon_end)
-    r_begin += 1
-    c_end -= 1
+    r_begin, c_end = latlon_to_rc(lat_end-0.01, lon_end-0.01)
+    # r_begin += 1
+    # c_end -= 1
     print [c_begin, c_end, r_begin, r_end]
     himawari_slot_min = 1
     himawari_slot_max = 144
@@ -16,7 +16,7 @@ def get_tomas_outputs(dfb_begin, dfb_end, lat_begin, lat_end, lon_begin, lon_end
     segments_to_calculate = latlon.expand_segments([[c_begin, c_end, r_begin, r_end]])
     nc_var_name = 'GHI'
     nc_var_name = 'LBclass'
-    data_path_pool = ["/data/model_data_himawari/data_output/v20b/"]
+    data_path_pool = ["/data/model_data_himawari/data_output/v20b/", "/data/test_data_goesr/model_output/"]
     file_time_segmentation = "month"
     skip_empty = False
     vmin = 0
@@ -60,11 +60,9 @@ def reduce_tomas_2_classes(classes):
 
 if __name__ == '__main__':
     print 'tomas reader'
-    dfb_begin = 13525+180
-    nb_days = 3
-    dfb_end = dfb_begin + nb_days - 1
-    latitude_begin = 40.
-    latitude_end = 45.
-    longitude_begin = 120.
-    longitude_end = 125.
-    print get_tomas_outputs(dfb_begin, dfb_end, latitude_begin, latitude_end, longitude_begin, longitude_end)
+    from utils import typical_input, typical_bbox
+    from quick_visualization import visualize_map_time
+    dfb_begin, dfb_end, latitude_begin, latitude_end, longitude_begin, longitude_end = typical_input()
+    classes = get_tomas_outputs(dfb_begin, dfb_end, latitude_begin, latitude_end,
+                                                                longitude_begin, longitude_end)
+    visualize_map_time(classes, typical_bbox(), vmin=0, vmax=7)

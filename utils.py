@@ -8,12 +8,12 @@ def typical_input(seed=0):
     if seed == 0:
         if sat_name == 'GOES16':
             beginning = 13516 + 365
-            nb_days = 5
+            nb_days = 3
             ending = beginning + nb_days - 1
             latitude_beginning = 35.+5
-            latitude_end = 40.+5
+            latitude_end = 40.+4
             longitude_beginning = -115.+35
-            longitude_end = -110.+35
+            longitude_end = -110.+34
         elif sat_name == 'H08':
             beginning = 13525 + 180
             nb_days = 5
@@ -26,9 +26,9 @@ def typical_input(seed=0):
     else:
         if sat_name == 'GOES16':
             beginning = 13516 + 365 + 10
-            nb_days = 8
+            nb_days = 3
             ending = beginning + nb_days - 1
-            latitude_beginning = 35.
+            latitude_beginning = 35.+1
             latitude_end = 40.-2
             longitude_beginning = -115. + 35+2
             longitude_end = -110. + 35-2
@@ -125,11 +125,32 @@ def chunk_3d_high_resolution(arr, (r, c)=(5, 5)):
     return np.asarray(tiles_3d).reshape((ssl*lla*llo, r, c, feats))
 
 
+def chunk_5d_high_resolution(arr, (r, c)=(5, 5)):
+    ssl, lla, llo, feats = arr.shape
+    tiles = np.empty((ssl, r, c))
+    for lat in range(0, lla):
+        for lon in range(0, llo):
+            try:
+                tiles[:, lat, lon] = arr[:, lat:lat + r, lon:lon + c]
+            except ValueError:
+                tiles[:, lat, lon] = -1
+    # expected array dims :
+    return tiles.transpose((1, 2, 0, 3, 4, 5)).reshape((lla*llo, ssl, r, c, feats))
+
+
 def remove_some_label_from_training_pool(inputs, labels, labels_to_remove):
     if type(labels_to_remove) == int:
         labels_to_remove = [labels_to_remove]
-    mask = (labels in labels_to_remove)
-    return inputs[~mask], labels[~mask]
+    if len(labels_to_remove) == 0:
+        return inputs, labels
+    mask = (labels == labels_to_remove[0])
+    for k in range(1, len(labels_to_remove)):
+        mask = mask | (labels == labels_to_remove[k])
+    to_return = []
+    for k in range(len(mask)):
+        if not mask[k]:
+            to_return.append(inputs[k])
+    return to_return, np.asarray(labels)[~mask]
 
 
 def array_to_one_label(arr, base=6):
@@ -258,6 +279,16 @@ def get_dfbs_slots(dfb_beginning, dfb_ending, satellite_timestep, slot_step):
     dfbs = np.arange(dfb_beginning, dfb_ending+1, step=1)
     slots = np.arange(0, 60 * 24 / satellite_timestep, step=slot_step)
     return dfbs, slots
+
+
+def save(path, to_be_saved):
+    from pickle import dump
+    dump(to_be_saved, open(path, 'wb'))
+
+
+def load(path):
+    from pickle import load
+    return load(open(path, 'rb'))
 
 
 def upper_divisor_slot_step(slot_step, nb_slots_per_day):

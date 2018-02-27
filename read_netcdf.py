@@ -4,7 +4,7 @@ from utils import *
 
 def read_channels(channels, latitudes, longitudes, dfb_beginning, dfb_ending, slot_step=1):
     from read_metadata import read_channels_dir_and_pattern, read_satellite_name, read_satellite_step, read_start_slot
-    dir, pattern, = read_channels_dir_and_pattern()
+    dir, pattern = read_channels_dir_and_pattern()
     satellite = read_satellite_name()
     satellite_step = read_satellite_step()
     nb_slots = get_nb_slots_per_day(satellite_step, slot_step)

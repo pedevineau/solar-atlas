@@ -1480,7 +1480,6 @@ class DataSet(object):
         dataset_axis_limits = file_data_c()  # ensure dataset_extent has valid enforce start, end, include_start, include_end = we have defined limits in it and SURPASS just dataset_axis_limits
         if not self.file_table:
             logger.debug("3 Going to fill in the file table /w %s", self.file_pattern)
-
             # find all files in all dirs and give them into the file_table
             for file_path in self.iterate_over_dataset_files(self.dirs, self.file_pattern):
                 # get the axes limits from the pattern scanning

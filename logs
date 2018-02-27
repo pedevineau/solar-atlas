@@ -1,0 +1,47 @@
+bayes bagging pca:2
+accuracy score:0.962060185185
+bayes bagging pca:None
+accuracy score:0.962106481481
+bayes bagging pca:3
+accuracy score:0.329976851852
+bayes bagging pca:4
+accuracy score:0.962152777778
+bayes b pca:2
+accuracy score:0.331766975309
+bayes b pca:None
+accuracy score:0.96212191358
+bayes b pca:3
+accuracy score:0.961265432099
+bayes b pca:4
+accuracy score:0.957685185185
+tree bagging pca:2
+accuracy score:0.326959876543
+tree bagging pca:None
+accuracy score:0.954236111111
+tree bagging pca:3
+accuracy score:0.955077160494
+tree bagging pca:4
+accuracy score:0.955216049383
+tree b pca:2
+accuracy score:0.952137345679
+tree b pca:None
+accuracy score:0.329992283951
+tree b pca:3
+accuracy score:0.955162037037
+tree b pca:4
+accuracy score:0.959614197531
+mlp bagging pca:2
+accuracy score:0.961952160494
+mlp bagging pca:None
+accuracy score:0.959706790123
+mlp bagging pca:3
+accuracy score:0.962029320988
+mlp bagging pca:4
+accuracy score:0.961080246914
+bayes bagging pca:3
+accuracy score:0.962137345679
+tree bagging pca:3 --- 
+accuracy score:0.957978395062
+tree bagging pca:3 --- 
+accuracy score:0.971120493827
+tree bagging pca:3 --- tree bagging pca:None --- too many indices for arraytree bagging pca:None --- too many indices for arraytree bagging pca:None --- too many indices for arraytree bagging pca:None --- too many indices for arraytree bagging pca:None --- too many indices for arraytree bagging pca:None --- too many indices for arraytree bagging pca:None --- Found array with dim 4. Estimator expected <= 2.tree bagging pca:None --- Found array with dim 4. Estimator expected <= 2.mlp bagging pca:None --- cannot reshape array of size 16200000 into shape (720,300,150)mlp bagging pca:None --- [Errno 2] No such file or directory: u'/data/test_data/models/model_GOES16'keras bagging pca:None --- Found input variables with inconsistent numbers of samples: [10800000, 480]mlp bagging pca:None --- Found input variables with inconsistent numbers of samples: [10800000, 480]mlp bagging pca:None --- Found input variables with inconsistent numbers of samples: [10800000, 480]keras bagging pca:None --- invalid syntax (learning_keras.py, line 44)keras bagging pca:None --- global name 'np' is not definedkeras bagging pca:None --- Error when checking target: expected dense_3 to have shape (6,) but got array with shape (1,)tree bagging pca:None --- Found input variables with inconsistent numbers of samples: [10800000, 480]keras bagging pca:None --- Found input variables with inconsistent numbers of samples: [2160000, 96]keras bagging pca:None --- Found input variables with inconsistent numbers of samples: [432000, 480]keras bagging pca:None --- Found input variables with inconsistent numbers of samples: [432000, 480]

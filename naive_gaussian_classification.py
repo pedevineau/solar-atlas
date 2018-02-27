@@ -274,7 +274,7 @@ def training(beginning, ending, latitudes, longitudes, process, compute_indexes,
 
     print 'TRAINING'
     time_start_training = time.time()
-    from choose_training_sample import temporally_stratified_samples, evaluate_randomization
+    from choose_training_sample import mask_temporally_stratified_samples, evaluate_randomization
 
     infrared_samples_for_training = get_features(
         'infrared',
@@ -311,8 +311,8 @@ def training(beginning, ending, latitudes, longitudes, process, compute_indexes,
 
     if randomization:
         t_randomization = time.time()
-        data_training = temporally_stratified_samples(infrared_samples_for_training, training_rate,
-                                                      coef_randomization * nb_days_testing)
+        data_training = mask_temporally_stratified_samples(infrared_samples_for_training, training_rate,
+                                                           coef_randomization * nb_days_testing)
         evaluate_randomization(data_training)
         print 'time for ramdomization', time.time() - t_randomization
 

@@ -30,6 +30,14 @@ def read_satellite_model_path():
     return satellite_model_path
 
 
+def read_satellite_pca_path():
+    from json import load
+    metadata = load(open('metadata.json'))
+    satellite = metadata["satellite"]
+    satellite_pca_path = metadata[satellite]["pca_path"]
+    return satellite_pca_path
+
+
 def read_indexes_dir_and_pattern(type_chan):
     import json
     metadata = json.load(open('metadata.json'))

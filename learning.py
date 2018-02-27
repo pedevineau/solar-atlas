@@ -47,16 +47,6 @@ def fit_model(model, training, labels):
     return model
 
 
-def save_model(path, model):
-    from pickle import dump
-    dump(model, open(path, 'wb'))
-
-
-def load_model(path):
-    from pickle import load
-    return load(open(path, 'rb'))
-
-
 def predictions_model(model, testing):
     return model.predict(testing)
 
@@ -104,7 +94,8 @@ def predict_solar_model(features, pca_components):
     else:
         features = reshape_features(features)
     t_save = time()
-    model_bis = load_model(path_)
+    from utils import load
+    model_bis = load(path_)
     t_load = time()
     print 'time load:', t_load - t_save
     predicted_labels = predictions_model(model_bis, features)
@@ -121,7 +112,7 @@ def predict_solar_model(features, pca_components):
 def train_solar_model(zen, classes, features, method_learning, meta_method, pca_components, training_rate):
     from time import time
     t_beg = time()
-    from utils import get_nb_slots_per_day, np
+    from utils import get_nb_slots_per_day, np, save
     from choose_training_sample import mask_temporally_stratified_samples
     from read_metadata import read_satellite_step
     nb_days_training = len(zen) / get_nb_slots_per_day(read_satellite_step(), 1)
@@ -154,7 +145,7 @@ def train_solar_model(zen, classes, features, method_learning, meta_method, pca_
     del training
     t_train = time()
     print 'time training:', t_train - t_beg
-    save_model(path_, model)
+    save(path_, model)
     t_save = time()
     print 'time save:', t_save - t_train
 
