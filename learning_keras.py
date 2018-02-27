@@ -4,7 +4,7 @@ class WeatherLearning:
         self.res = resolution
         self.pca = pca
 
-    def save(self, path_model, path_pca, path_res):
+    def save(self, path_model, path_pca, path_res=None):
         self.model.save(path_model)
         import utils
         utils.save(path_pca, self.pca)
