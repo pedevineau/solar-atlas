@@ -11,7 +11,7 @@ class WeatherLearning:
         utils.save(path_res, self.res)
 
     @staticmethod
-    def build(height, width, depth, nb_classes):
+    def build(height, width, depth, nb_classes, time):
         raise Exception('Method not implemented in super-class WeatherLearning')
 
     def fit(self, inputs, labels, nb_classes, fit_excluding=None):
@@ -64,7 +64,7 @@ class WeatherCNN(WeatherLearning):
         self.model = model
 
     @staticmethod
-    def build(height, width, depth, nb_classes):
+    def build(height, width, depth, nb_classes, time=0):
         from keras.models import Sequential
         from keras.layers.convolutional import Conv2D, MaxPooling2D
         from keras.layers.core import Activation, Flatten, Dense, Dropout
@@ -151,7 +151,7 @@ class WeatherMLP(WeatherLearning):
         WeatherLearning.__init__(self, model=model, pca=pca)
 
     @staticmethod
-    def build(depth, nb_classes, height=0, width=0):
+    def build(depth, nb_classes, height=0, width=0, time=0):
         from keras import Sequential
         from keras.layers import Dense, Dropout, Flatten
         model = Sequential()
@@ -195,7 +195,7 @@ class WeatherConvLSTM(WeatherLearning):
         WeatherLearning.__init__(self, model=model, resolution=resolution, pca=pca)
 
     @staticmethod
-    def build(height, width, depth, nb_classes):
+    def build(height, width, depth, nb_classes, time):
         from keras.models import Sequential
         from keras.layers import ConvLSTM2D, MaxPooling2D, Dropout, Flatten, Dense, BatchNormalization
         model = Sequential()
@@ -203,7 +203,7 @@ class WeatherConvLSTM(WeatherLearning):
                              activation='tanh',
                              return_sequences=True,
                              padding='same',
-                             input_shape=(height, width, depth),
+                             input_shape=(time, height, width, depth),
                              name='FirstCLSTMv2'))
         model.add(BatchNormalization())
         model.add(ConvLSTM2D(64, (3, 3), activation='tanh', name='secondLSTM'))
