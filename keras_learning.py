@@ -249,14 +249,7 @@ class WeatherConvLSTM(WeatherLearning):
         testY = np_utils.to_categorical(testY, nb_classes)
         EPOCHS = 25
         BS = 32
-        from keras.preprocessing.image import ImageDataGenerator
-        # construct the image generator for data augmentation
-        aug = ImageDataGenerator(rotation_range=30, width_shift_range=0.1,
-                                 height_shift_range=0.1, shear_range=0.2, zoom_range=0,
-                                 horizontal_flip=True, fill_mode="nearest")
-        self.model.fit_generator(aug.flow(asarray(trainX), asarray(trainY), batch_size=BS),
-                                 validation_data=(asarray(testX), asarray(testY)), steps_per_epoch=len(trainX) // BS,
-                                 epochs=EPOCHS, verbose=1)
+        self.model.fit(asarray(trainX), asarray(trainY), epochs=EPOCHS, batch_size=BS)
 
     def predict(self, inputs):
         from utils import chunk_5d_high_resolution
