@@ -215,7 +215,7 @@ class WeatherConvLSTM(WeatherLearning):
         model.add(Flatten())
         model.add(Dense(128, activation='tanh'))
         model.add(Dropout(0.5))
-        model.add(Dense(nb_classes, activation='softmax'))
+        model.add(Dense((time, nb_classes), activation='softmax'))
 
         print(model.summary())
         return model
