@@ -148,6 +148,10 @@ class WeatherCNN(WeatherLearning):
         print results
         # print("Baseline: %.2f%% (%.2f%%)" % (results.mean() * 100, results.std() * 100))
 
+    @staticmethod
+    def reshape_outputs(outputs, shape):
+        return outputs.reshape(shape)
+
 
 class WeatherMLP(WeatherLearning):
     def __init__(self, model=None, pca=None):
@@ -192,13 +196,17 @@ class WeatherMLP(WeatherLearning):
             inputs = self.apply_pca(inputs)
         return self.model.predict(inputs)
 
+    @staticmethod
+    def reshape_outputs(outputs, shape):
+        return outputs.reshape(shape)
+
 
 class WeatherConvLSTM(WeatherLearning):
     def __init__(self, model=None, resolution=9, pca=None):
         WeatherLearning.__init__(self, model=model, resolution=resolution, pca=pca)
 
     @staticmethod
-    def build(height, width, depth, nb_classes, time):
+    def build(height, width, depth, nb_classes, nb_slots):
         from keras.models import Sequential
         from keras.layers import ConvLSTM2D, MaxPooling2D, Dropout, Flatten, Dense, BatchNormalization
         model = Sequential()
@@ -206,7 +214,7 @@ class WeatherConvLSTM(WeatherLearning):
                              activation='tanh',
                              return_sequences=True,
                              padding='same',
-                             input_shape=(time, height, width, depth),
+                             input_shape=(nb_slots, height, width, depth),
                              name='FirstCLSTMv2'))
         model.add(BatchNormalization())
         model.add(ConvLSTM2D(64, (3, 3), activation='tanh', name='secondLSTM'))
@@ -215,7 +223,7 @@ class WeatherConvLSTM(WeatherLearning):
         model.add(Flatten())
         model.add(Dense(128, activation='tanh'))
         model.add(Dropout(0.5))
-        model.add(Dense((time, nb_classes), activation='softmax'))
+        model.add(Dense((nb_slots, nb_classes), activation='softmax'))
 
         print(model.summary())
         return model
@@ -246,15 +254,20 @@ class WeatherConvLSTM(WeatherLearning):
         from sklearn.model_selection import train_test_split
         (trainX, testX, trainY, testY) = train_test_split(inputs, labels, test_size=0.5, random_state=42)
         trainY = np_utils.to_categorical(trainY, nb_classes)
-        testY = np_utils.to_categorical(testY, nb_classes)
         EPOCHS = 25
         BS = 32
         self.model.fit(asarray(trainX), asarray(trainY), epochs=EPOCHS, batch_size=BS)
+        print self.model.evaluate(testX, testY, verbose=0)
 
     def predict(self, inputs):
         from utils import chunk_5d_high_resolution
         from numpy import asarray
         return self.model.predict(chunk_5d_high_resolution(asarray(inputs), (self.res, self.res)))
+
+    @staticmethod
+    def reshape_outputs(outputs, shape):
+        from numpy import transpose
+        return transpose(outputs, (1, 0, 2)).reshape(shape)
 #
 # class WeatherConvSeries(WeatherLearning):
 #     def __init__(self):
@@ -264,28 +277,6 @@ class WeatherConvLSTM(WeatherLearning):
 #     def build(self):
 #
 #
-
-def keras_mlp():
-    from keras.models import Sequential
-    from keras.layers import Dense
-    model = Sequential()
-    model.add(Dense(12, input_dim=8, activation='relu'))
-    model.add(Dense(6))
-    model.add(Dense(1, activation='softmax'))
-    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
-    return model
-
-
-def keras_fit(model, inputs, labels):
-    from learning import reshape_features
-    from sklearn.model_selection import train_test_split
-    (trainX, testX, trainY, testY) = train_test_split(inputs, labels, test_size=0.95, random_state=42)
-    trainX = reshape_features(trainX)
-    trainY = reshape_features(trainY)
-    BS = 32
-    model.fit(trainX, trainY, epochs=15, batch_size=BS)
-    return model
-
 
 def keras_cnn_score(model, inputs, labels):
     from sklearn.model_selection import cross_val_score
@@ -298,11 +289,6 @@ def keras_cnn_score(model, inputs, labels):
     results = cross_val_score(estimator, chunk_4d_high_resolution(inputs, (res, res)),
                               np_utils.to_categorical(labels.flatten(), nb_classes_), cv=kfold)
     print("Baseline: %.2f%% (%.2f%%)" % (results.mean() * 100, results.std() * 100))
-
-
-def keras_predict(model, inputs):
-    from learning import reshape_features
-    return model.predict(reshape_features(inputs))
 
 
 def learn_new_model(nb_classes, class_to_exclude=None, method='cnn'):
@@ -374,16 +360,19 @@ if __name__ == '__main__':
 
     if meth == 'cnn':
         weath = WeatherCNN.load(path_model, path_pca, path_res)
+        predictions = WeatherCNN.reshape_outputs(weath.predict(testing_inputs), (sl, la, lo, nb_classes_))
     elif meth == 'mlp':
         weath = WeatherMLP.load(path_model, path_pca)
+        predictions = WeatherMLP.reshape_outputs(weath.predict(testing_inputs), (sl, la, lo, nb_classes_))
+
     elif meth == 'lstm':
         weath = WeatherConvLSTM.load(path_model, path_pca, path_res)
+        predictions = WeatherConvLSTM.reshape_outputs(weath.predict(testing_inputs), (sl, la, lo, nb_classes_))
 
     # weath.score(testing_inputs, testing_classes, nb_classes_)
     #
     # predictions = keras_cnn_predict(model_, testing_inputs)
     # predictions = predictions.reshape((sl, la, lo, nb_classes_))
-    predictions = weath.predict(testing_inputs).reshape((sl, la, lo, nb_classes_))
 
     # visualize_map_time(predictions, typical_bbox(), vmin=0, vmax=1, title='probabilistic predictions')
     predictions, confidence = WeatherLearning.deterministic_predictions(predictions, nb_classes_)
