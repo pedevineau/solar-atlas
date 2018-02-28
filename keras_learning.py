@@ -235,7 +235,7 @@ class WeatherConvLSTM(WeatherLearning):
         from time import time
         nb_slots, nb_lats, nb_lons, nb_feats = inputs.shape
         inputs = chunk_5d_high_resolution(asarray(inputs), (self.res, self.res))
-        labels = labels.reshape((nb_slots, nb_lats*nb_lons))
+        labels = labels.reshape((nb_lats*nb_lons, nb_slots))
         t_exclude = time()
         # following block not adapted to convlstm
         # if fit_excluding is not None:
