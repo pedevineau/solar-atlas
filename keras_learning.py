@@ -233,12 +233,14 @@ class WeatherConvLSTM(WeatherLearning):
         from utils import chunk_5d_high_resolution
         from numpy import asarray
         from time import time
+        nb_slots, nb_lats, nb_lons, nb_feats = inputs.shape
         inputs = chunk_5d_high_resolution(asarray(inputs), (self.res, self.res))
-        labels = labels.flatten()
+        labels = labels.reshape((nb_slots, nb_lats*nb_lons))
         t_exclude = time()
-        if fit_excluding is not None:
-            from utils import remove_some_label_from_training_pool
-            inputs, labels = remove_some_label_from_training_pool(inputs, labels, fit_excluding)
+        # following block not adapted to convlstm
+        # if fit_excluding is not None:
+        #     from utils import remove_some_label_from_training_pool
+        #     inputs, labels = remove_some_label_from_training_pool(inputs, labels, fit_excluding)
         print 'time exclude:', time()-t_exclude
 
         from sklearn.model_selection import train_test_split
