@@ -14,6 +14,9 @@ class WeatherLearning:
     def build(height, width, depth, nb_classes, time):
         raise Exception('Method not implemented in super-class WeatherLearning')
 
+    def compile(self, height, width, depth, nb_classes, time):
+        raise Exception('Method not implemented in super-class WeatherLearning')
+
     def fit(self, inputs, labels, nb_classes, fit_excluding=None):
         raise Exception('Method not implemented in super-class WeatherLearning')
 
@@ -54,7 +57,7 @@ class WeatherCNN(WeatherLearning):
     def __init__(self, model=None, resolution=9, pca=None):
         WeatherLearning.__init__(self, model=model, resolution=resolution)
 
-    def compile(self, nb_lats, nb_lons, nb_features, nb_classes):
+    def compile(self, nb_lats, nb_lons, nb_features, nb_classes, nb_slots=0):
         EPOCHS = 25
         INIT_LR = 1e-3
         from keras.optimizers import Adam
@@ -96,10 +99,10 @@ class WeatherCNN(WeatherLearning):
 
     def fit(self, inputs, labels, nb_classes, fit_excluding=None):
         from keras.utils import np_utils
-        from utils import chunk_3d_high_resolution
+        from utils import chunk_4d_high_resolution
         from numpy import asarray
         from time import time
-        inputs = chunk_3d_high_resolution(asarray(inputs), (self.res, self.res))
+        inputs = chunk_4d_high_resolution(asarray(inputs), (self.res, self.res))
         labels = labels.flatten()
         t_exclude = time()
         if fit_excluding is not None:
@@ -123,12 +126,12 @@ class WeatherCNN(WeatherLearning):
                                  epochs=EPOCHS, verbose=1)
 
     def predict(self, inputs):
-        from utils import chunk_3d_high_resolution
-        return self.model.predict(chunk_3d_high_resolution(np.asarray(inputs), (self.res, self.res)))
+        from utils import chunk_4d_high_resolution
+        return self.model.predict(chunk_4d_high_resolution(np.asarray(inputs), (self.res, self.res)))
 
     def score(self, inputs, labels, nb_classes):
         from keras.utils import np_utils
-        inputs = chunk_3d_high_resolution(np.asarray(inputs), (self.res, self.res))
+        inputs = chunk_4d_high_resolution(np.asarray(inputs), (self.res, self.res))
         labels = np_utils.to_categorical(np.asarray(labels).flatten(), nb_classes)
         results = self.model.evaluate(inputs, labels, verbose=0)
         # from sklearn.model_selection import cross_val_score
@@ -162,7 +165,7 @@ class WeatherMLP(WeatherLearning):
         model.add(Dense(nb_classes, activation='softmax'))
         return model
 
-    def compile(self, nb_features, nb_classes, nb_lats=0, nb_lons=0):
+    def compile(self, nb_features, nb_classes, nb_lats=0, nb_lons=0, nb_slots=0):
         from keras.optimizers import SGD
         model = self.build(nb_features, nb_classes)
         sgd = SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=True)
@@ -215,12 +218,15 @@ class WeatherConvLSTM(WeatherLearning):
         model.add(Dense(nb_classes, activation='softmax'))
 
         print(model.summary())
+        return model
 
-    def compile(self, nb_lats=0, nb_lons=0, nb_features=0, nb_classes=0):
+    def compile(self, nb_lats=0, nb_lons=0, nb_features=0, nb_classes=0, nb_slots=0):
         from keras.optimizers import Adadelta
-        self.model.compile(loss='categorical_crossentropy',
+        model = WeatherConvLSTM.build(nb_lats, nb_lons, nb_features, nb_classes, nb_slots)
+        model.compile(loss='categorical_crossentropy',
                            optimizer=Adadelta(),
                            metrics=['accuracy'])
+        self.model = model
 
     def fit(self, inputs, labels, nb_classes, fit_excluding=None):
         from keras.utils import np_utils
@@ -252,7 +258,8 @@ class WeatherConvLSTM(WeatherLearning):
 
     def predict(self, inputs):
         from utils import chunk_5d_high_resolution
-        return self.model.predict(chunk_5d_high_resolution(np.asarray(inputs), (self.res, self.res)))
+        from numpy import asarray
+        return self.model.predict(chunk_5d_high_resolution(asarray(inputs), (self.res, self.res)))
 #
 # class WeatherConvSeries(WeatherLearning):
 #     def __init__(self):
@@ -289,11 +296,11 @@ def keras_cnn_score(model, inputs, labels):
     from sklearn.model_selection import cross_val_score
     from sklearn.model_selection import KFold
     from keras.utils import np_utils
-    from utils import chunk_3d_high_resolution
+    from utils import chunk_4d_high_resolution
     from keras.wrappers.scikit_learn import KerasClassifier
     estimator = KerasClassifier(build_fn=model, epochs=25, batch_size=32, verbose=0)
     kfold = KFold(n_splits=10, shuffle=True, random_state=42)
-    results = cross_val_score(estimator, chunk_3d_high_resolution(inputs, (res, res)),
+    results = cross_val_score(estimator, chunk_4d_high_resolution(inputs, (res, res)),
                               np_utils.to_categorical(labels.flatten(), nb_classes_), cv=kfold)
     print("Baseline: %.2f%% (%.2f%%)" % (results.mean() * 100, results.std() * 100))
 
@@ -331,7 +338,7 @@ def learn_new_model(nb_classes, class_to_exclude=None, method='cnn'):
         weather.fit(training_inputs, training_classes, nb_classes, fit_excluding=class_to_exclude)
         weather.save(path_model, path_pca, path_res)
     elif use_lstm:
-        weather = WeatherCNN(resolution=res)
+        weather = WeatherConvLSTM(resolution=res)
         weather.compile(res, res, nb_feats, nb_classes)
         weather.fit(training_inputs, training_classes, nb_classes, fit_excluding=class_to_exclude)
         weather.save(path_model, path_pca, path_res)

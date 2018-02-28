@@ -82,7 +82,7 @@ def typical_time_step():
     return read_satellite_step()
 
 
-def chunk_2d(arr, labels, (r, c)):
+def chunk_spatial(arr, labels, (r, c)):
     tiles, labels_tiles = [], []
     row = 0
     for x in range(0, arr.shape[0], r):
@@ -95,7 +95,7 @@ def chunk_2d(arr, labels, (r, c)):
     return tiles, np.reshape(labels_tiles, (row, col))
 
 
-def chunk_2d_high_resolution(arr, (r, c)):
+def chunk_spatial_high_resolution(arr, (r, c)):
     lla, llo, feats = arr.shape
     tiles = np.empty((lla, llo, r, c, feats))
     for lat in range(0, arr.shape[0]):
@@ -107,21 +107,21 @@ def chunk_2d_high_resolution(arr, (r, c)):
     return tiles
 
 
-def chunk_3d(arr, labels, (r, c)):
+def chunk_4d(arr, labels, (r, c)):
     tiles_3d = []
     labels_reduced = []
     for slot in range(len(arr)):
-        t, l = chunk_2d(arr[slot], labels[slot], (r,c))
+        t, l = chunk_spatial(arr[slot], labels[slot], (r, c))
         tiles_3d.append(t)
         labels_reduced.append(l)
     return np.asarray(tiles_3d), np.asarray(labels_reduced)
 
 
-def chunk_3d_high_resolution(arr, (r, c)=(5, 5)):
+def chunk_4d_high_resolution(arr, (r, c)=(5, 5)):
     ssl, lla, llo, feats = arr.shape
     tiles_3d = []
     for slot in range(len(arr)):
-        tiles_3d.append(chunk_2d_high_resolution(arr[slot], (r, c)))
+        tiles_3d.append(chunk_spatial_high_resolution(arr[slot], (r, c)))
     return np.asarray(tiles_3d).reshape((ssl*lla*llo, r, c, feats))
 
 
