@@ -93,6 +93,7 @@ class WeatherCNN(WeatherLearning):
         # softmax classifier
         model.add(Dense(nb_classes))
         model.add(Activation("softmax"))
+        print model.summary()
 
         # return the constructed network architecture
         return model
@@ -167,6 +168,7 @@ class WeatherMLP(WeatherLearning):
         model.add(Dense(64, activation='relu'))
         model.add(Dropout(0.5))
         model.add(Dense(nb_classes, activation='softmax'))
+        print model.summary()
         return model
 
     def compile(self, nb_features, nb_classes, nb_lats=0, nb_lons=0, nb_slots=0):
@@ -208,6 +210,7 @@ class WeatherConvLSTM(WeatherLearning):
     @staticmethod
     def build(height, width, depth, nb_classes, nb_slots):
         from keras.models import Sequential
+        from keras.layers import TimeDistributed
         from keras.layers import ConvLSTM2D, MaxPooling2D, Dropout, Flatten, Dense, BatchNormalization
         model = Sequential()
         model.add(ConvLSTM2D(filters=32, kernel_size=(3, 3),
@@ -217,15 +220,17 @@ class WeatherConvLSTM(WeatherLearning):
                              input_shape=(nb_slots, height, width, depth),
                              name='FirstCLSTMv2'))
         model.add(BatchNormalization())
-        model.add(ConvLSTM2D(64, (3, 3), activation='tanh', name='secondLSTM'))
-        model.add(MaxPooling2D(pool_size=(2, 2)))
-        model.add(Dropout(0.25))
-        model.add(Flatten())
-        model.add(Dense(128, activation='tanh'))
-        model.add(Dropout(0.5))
-        model.add(Dense((nb_slots, nb_classes), activation='softmax'))
-
+        model.add(ConvLSTM2D(filters=64, kernel_size=(3, 3), activation='tanh', name='secondLSTM',
+                             return_sequences=True))
+        model.add(TimeDistributed(MaxPooling2D(pool_size=(2, 2))))
+        model.add(TimeDistributed(Flatten()))
+        model.add(TimeDistributed(Dropout(0.25)))
+        # model.add(Flatten())
+        model.add(TimeDistributed(Dense(128, activation='tanh')))
+        model.add(TimeDistributed(Dropout(0.5)))
+        model.add(TimeDistributed(Dense(nb_classes, activation='softmax')))
         print(model.summary())
+
         return model
 
     def compile(self, nb_lats=0, nb_lons=0, nb_features=0, nb_classes=0, nb_slots=0):
