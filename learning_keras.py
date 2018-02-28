@@ -324,6 +324,7 @@ def learn_new_model(nb_classes, class_to_exclude=None, method='cnn'):
     from choose_training_sample import restrict_pools
     training_inputs, training_classes = restrict_pools(training_angles, training_inputs, training_classes, training_rate=0.1)
     nb_feats = training_inputs.shape[-1]
+    nb_slots = training_inputs.shape[0]
     if use_keras_cnn:
         weather = WeatherCNN(resolution=res)
         weather.compile(res, res, nb_feats, nb_classes)
@@ -339,7 +340,7 @@ def learn_new_model(nb_classes, class_to_exclude=None, method='cnn'):
         weather.save(path_model, path_pca, path_res)
     elif use_lstm:
         weather = WeatherConvLSTM(resolution=res)
-        weather.compile(res, res, nb_feats, nb_classes)
+        weather.compile(res, res, nb_feats, nb_classes, nb_slots)
         weather.fit(training_inputs, training_classes, nb_classes, fit_excluding=class_to_exclude)
         weather.save(path_model, path_pca, path_res)
 
@@ -363,7 +364,7 @@ if __name__ == '__main__':
                                                                    lon_beginning_testing, lon_ending_testing,
                                                                    beginning_testing, ending_testing, output_level)
 
-    should_learn_new_model = False
+    should_learn_new_model = True
     pca_components = None
     meth = 'lstm'
     # visualize_map_time(testing_inputs, typical_bbox(), vmin=0, vmax=5, title='inputs')
