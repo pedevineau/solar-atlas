@@ -70,7 +70,8 @@ class WeatherCNN(WeatherLearning):
     def build(height, width, depth, nb_classes, time=0):
         from keras.models import Sequential
         from keras.layers.convolutional import Conv2D, MaxPooling2D
-        from keras.layers.core import Activation, Flatten, Dense, Dropout
+        from keras.layers import Activation, Flatten, Dense, Dropout, BatchNormalization
+
         # initialize the model
         model = Sequential()
         shape = (height, width, depth)
@@ -79,12 +80,13 @@ class WeatherCNN(WeatherLearning):
                          input_shape=shape))
         model.add(Activation("relu"))
         model.add(MaxPooling2D(pool_size=(3, 3), strides=(2, 2)))
+        model.add(BatchNormalization())
         # second set of CONV => RELU => POOL layers
         model.add(Conv2D(50, (4, 4), padding="same"))
         model.add(Activation("relu"))
         model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
         # let's forget some information
-        model.add(Dropout(0.2))
+        # model.add(Dropout(0.2))
         # first (and only) set of FC => RELU layers
         model.add(Flatten())
         model.add(Dense(100))
@@ -224,10 +226,10 @@ class WeatherConvLSTM(WeatherLearning):
                              return_sequences=True))
         model.add(TimeDistributed(MaxPooling2D(pool_size=(2, 2))))
         model.add(TimeDistributed(Flatten()))
-        model.add(TimeDistributed(Dropout(0.25)))
+        # model.add(TimeDistributed(Dropout(0.25)))
         # model.add(Flatten())
         model.add(TimeDistributed(Dense(128, activation='tanh')))
-        model.add(TimeDistributed(Dropout(0.5)))
+        # model.add(TimeDistributed(Dropout(0.5)))
         model.add(TimeDistributed(Dense(nb_classes, activation='softmax')))
         print(model.summary())
 
@@ -307,8 +309,9 @@ def learn_new_model(nb_classes, class_to_exclude=None, method='cnn'):
                                                                       beginning_training, ending_training, output_level,
                                                                       seed=1)
     # ssl, lla, llo = training_inputs.shape[0:3]
-    from choose_training_sample import restrict_pools
-    training_inputs, training_classes = restrict_pools(training_angles, training_inputs, training_classes, training_rate=0.1)
+    if not use_lstm:
+        from choose_training_sample import restrict_pools
+        training_inputs, training_classes = restrict_pools(training_angles, training_inputs, training_classes, training_rate=0.1)
     nb_feats = training_inputs.shape[-1]
     nb_slots = training_inputs.shape[0]
     if use_keras_cnn:
