@@ -261,6 +261,7 @@ class WeatherConvLSTM(WeatherLearning):
         from sklearn.model_selection import train_test_split
         (trainX, testX, trainY, testY) = train_test_split(inputs, labels, test_size=0.5, random_state=42)
         trainY = np_utils.to_categorical(trainY, nb_classes)
+        testY = np_utils.to_categorical(testY, nb_classes)
         EPOCHS = 25
         BS = 32
         self.model.fit(asarray(trainX), asarray(trainY), epochs=EPOCHS, batch_size=BS)
@@ -353,7 +354,7 @@ if __name__ == '__main__':
                                                                    lon_beginning_testing, lon_ending_testing,
                                                                    beginning_testing, ending_testing, output_level)
 
-    should_learn_new_model = True
+    should_learn_new_model = False
     pca_components = None
     meth = 'lstm'
     # visualize_map_time(testing_inputs, typical_bbox(), vmin=0, vmax=5, title='inputs')
