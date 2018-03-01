@@ -262,10 +262,14 @@ class WeatherConvLSTM(WeatherLearning):
         (trainX, testX, trainY, testY) = train_test_split(inputs, labels, test_size=0.5, random_state=42)
         trainY = np_utils.to_categorical(trainY, nb_classes)
         testY = np_utils.to_categorical(testY, nb_classes)
-        EPOCHS = 25
+        EPOCHS = 15
         BS = 32
         self.model.fit(asarray(trainX), asarray(trainY), epochs=EPOCHS, batch_size=BS)
-        print self.model.evaluate(testX, testY, verbose=0)
+        try:
+            print self.model.evaluate(testX, testY, verbose=0)
+        except Exception as e:
+            print e
+            pass
 
     def predict(self, inputs):
         from utils import chunk_5d_high_resolution
@@ -354,7 +358,7 @@ if __name__ == '__main__':
                                                                    lon_beginning_testing, lon_ending_testing,
                                                                    beginning_testing, ending_testing, output_level)
 
-    should_learn_new_model = False
+    should_learn_new_model = True
     pca_components = None
     meth = 'lstm'
     # visualize_map_time(testing_inputs, typical_bbox(), vmin=0, vmax=5, title='inputs')

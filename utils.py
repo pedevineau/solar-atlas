@@ -26,7 +26,7 @@ def typical_input(seed=0):
     else:
         if sat_name == 'GOES16':
             beginning = 13516 + 365 + 10
-            nb_days = 3
+            nb_days = 6
             ending = beginning + nb_days - 1
             latitude_beginning = 35.+1
             latitude_end = 40.-3
