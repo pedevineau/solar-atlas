@@ -51,15 +51,21 @@ if __name__ == '__main__':
             with Dataset(file_path) as ncF:
                 dimensions = ncF.dimensions
                 csp_ = ncF.variables[nc_csp]
+                latitudes = ncF.variables['latitude']
+                longitudes = ncF.variables['longitude']
                 csp_data = csp_[:]
                 if is_range_array(csp_data, bmin=0., bmax=1.):
                     newcsp = Dataset(os.path.join(dir_csp_out, file_.replace('P1S-ABOM_CLD-PRJ_GEOS141_2000', 'CSP_LATLON')), 'w', 'NETCDF4')
                     rectl, rectc = ll2lc(lats, lons, ssp=140.7, gt=(-5500000, 2000, 0, 5500000, 0, -2000))
                     csp_latlon_data = csp_data[0, rectl, rectc]
-                    t=newcsp.createDimension('t', 1)
-                    lat=newcsp.createDimension('lat', csp_latlon_data.shape[0])
-                    lon=newcsp.createDimension('lon', csp_latlon_data.shape[1])
+                    # t = newcsp.createDimension('t', 1)
+                    lat = newcsp.createDimension('lat', csp_latlon_data.shape[0])
+                    lon = newcsp.createDimension('lon', csp_latlon_data.shape[1])
+                    newcsp.createVariable('lat', float, 'lat')
+                    newcsp.createVariable('lon', float, 'lon')
                     newcsp.createVariable(nc_csp, float, ('lat', 'lon',))
+                    newcsp.variables['lat'][:] = latitudes
+                    newcsp.variables['lon'][:] = longitudes
                     newcsp.variables[nc_csp][:] = csp_latlon_data
                     newcsp.close()
                 else:
@@ -70,10 +76,14 @@ if __name__ == '__main__':
                     newct = Dataset(os.path.join(dir_ct_out, file_.replace('P1S-ABOM_CLD-PRJ_GEOS141_2000', 'CT_LATLON')), 'w', 'NETCDF4')
                     rectl, rectc = ll2lc(lats, lons, ssp=140.7, gt=(-5500000, 2000, 0, 5500000, 0, -2000))
                     ct_latlon_data = ct_data[0, rectl, rectc]
-                    t=newct.createDimension('t', 1)
-                    lat=newct.createDimension('lat', ct_latlon_data.shape[0])
-                    lon=newct.createDimension('lon', ct_latlon_data.shape[1])
+                    # t = newct.createDimension('t', 1)
+                    lat = newct.createDimension('lat', ct_latlon_data.shape[0])
+                    lon = newct.createDimension('lon', ct_latlon_data.shape[1])
+                    newct.createVariable('lat', float, 'lat')
+                    newct.createVariable('lon', float, 'lon')
                     newct.createVariable(nc_ct, int, ('lat', 'lon',))
+                    newct.variables['lat'][:] = latitudes
+                    newct.variables['lon'][:] = longitudes
                     newct.variables[nc_ct][:] = ct_latlon_data
                     newct.close()
                 else:
