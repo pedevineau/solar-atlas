@@ -37,10 +37,13 @@ class WeatherLearning:
         return self.pca.transform(inputs)
 
     @classmethod
-    def load(cls, path_model, path_pca, path_res):
+    def load(cls, path_model, path_pca, path_res=None):
         from keras.models import load_model
         import utils
-        return cls(model=load_model(path_model), pca=utils.load(path_pca), resolution=utils.load(path_res))
+        if path_res is None:
+            return cls(model=load_model(path_model), pca=utils.load(path_pca))
+        else:
+            return cls(model=load_model(path_model), pca=utils.load(path_pca), resolution=utils.load(path_res))
 
     @staticmethod
     def deterministic_predictions(predicted, nb_classes):
@@ -370,7 +373,7 @@ if __name__ == '__main__':
 
     should_learn_new_model = True
     pca_components = None
-    meth = 'cnn'
+    meth = 'mlp'
     # visualize_map_time(testing_inputs, typical_bbox(), vmin=0, vmax=5, title='inputs')
 
     if should_learn_new_model:
