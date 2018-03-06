@@ -34,7 +34,7 @@ def infrared_outputs(times, latitudes, longitudes, temperatures, content_infrare
     #                       lir=content_infrared[:, :, :, nb_channels - 2], method='mu-normalization')
 
     from read_metadata import read_satellite_name
-    if read_satellite_name() in ['GOES16']:
+    if read_satellite_name() in ['GOES16', 'H08']:
         cli = get_cloud_index(cos_zen=np.cos(angles), mir=content_infrared[:, :, :, 1],
                               lir=content_infrared[:, :, :, 0], method='epsilon')
     else:

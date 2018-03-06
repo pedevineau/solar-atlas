@@ -1,5 +1,5 @@
 # reading data
-from utils import *
+from utils import get_nb_slots_per_day, np
 
 
 def read_channels(channels, latitudes, longitudes, dfb_beginning, dfb_ending, slot_step=1):

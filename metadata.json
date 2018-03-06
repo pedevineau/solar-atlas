@@ -1,5 +1,5 @@
 {
-  "satellite": "GOES16",
+  "satellite": "H08",
   "H08": {
     "time_step": 10,
     "start_slot": 1,
@@ -26,7 +26,11 @@
     },
     "model_path": "/data/test_data/models/model_H08",
     "pca_path": "/data/test_data/models/pca_H08",
-    "res_path": "/data/test_data/models/res_H08"
+    "res_path": "/data/test_data/models/res_H08",
+    "labels": {
+      "csp": "/data/test_data/BOM_clear_mask_latlon",
+      "ct": "/data/test_data/BOM_cloud_type_latlon"
+    }
   },
   "GOES16": {
     "time_step": 15,

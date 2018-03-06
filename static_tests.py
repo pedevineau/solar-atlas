@@ -453,9 +453,9 @@ def suspect_snow_classified_pixels(snow, ndsi, mask_input):
     from visible_predictors import get_bright_negative_variability_5d, get_bright_positive_variability_5d
     from get_data import compute_short_variability
     from utils import typical_time_step
-    return ndsi_test(ndsi) & ((get_bright_positive_variability_5d(ndsi, mask_input, typical_time_step(), 1) > 0.2) |
-                              (get_bright_negative_variability_5d(ndsi, mask_input, typical_time_step(), 1) > 0.2) |
-                              (compute_short_variability(ndsi, mask=mask_input, abs_value=True) > 0.05)) & snow
+    return snow & ((get_bright_positive_variability_5d(ndsi, mask_input, typical_time_step(), 1) > 0.2) |
+                  (get_bright_negative_variability_5d(ndsi, mask_input, typical_time_step(), 1) > 0.2) |
+                  (compute_short_variability(ndsi, mask=mask_input, abs_value=True) > 0.05))
 
 
 # def score(not_flagged_yet, vis):
@@ -463,6 +463,13 @@ def suspect_snow_classified_pixels(snow, ndsi, mask_input):
 #     potential_clouds =
 
 def maybe_cloud_after_all(is_land, is_supposed_free, vis):
+    '''
+    instable albedo test
+    :param is_land:
+    :param is_supposed_free:
+    :param vis:
+    :return:
+    '''
     # apply only for a few consecutive days
     from utils import np, get_nb_slots_per_day, vis_clear_sky_apply_rolling_on_time
     is_supposed_free_for_long = is_supposed_free & np.roll(is_supposed_free, -1) & np.roll(is_supposed_free, 2) &\
@@ -478,7 +485,7 @@ def maybe_cloud_after_all(is_land, is_supposed_free, vis):
     # visualize_map_time(supposed_clear_sky, typical_bbox())
     del vis_copy
     vis = vis.reshape((entire_days, slot_per_day, lats, lons))
-    # visualize_map_time(is_supposed_free & land_visible_test(is_land, vis, supposed_clear_sky).reshape((slots, lats, lons)), typical_bbox())
+    visualize_map_time(is_supposed_free & land_visible_test(is_land, vis, supposed_clear_sky).reshape((slots, lats, lons)), typical_bbox())
     return is_supposed_free & land_visible_test(is_land, vis, supposed_clear_sky).reshape((slots, lats, lons))
 
 

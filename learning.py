@@ -152,28 +152,16 @@ def train_solar_model(zen, classes, features, method_learning, meta_method, pca_
 
 def prepare_data(latitude_beginning, latitude_end, longitude_beginning, longitude_end, beginning, ending, output_level, seed=0):
     from angles_geom import get_zenith_angle
-    from static_tests import dawn_day_test
-    from utils import get_times_utc, get_latitudes_longitudes, np, print_date_from_dfb
-    from utils import typical_land_mask
-    from get_data import get_features
+    from utils import get_latitudes_longitudes, print_date_from_dfb, get_times_utc
     from read_metadata import read_satellite_step
     latitudes, longitudes = get_latitudes_longitudes(latitude_beginning, latitude_end,
                                                      longitude_beginning, longitude_end)
-    times = get_times_utc(beginning, ending, read_satellite_step(), slot_step=1)
-    a, b, c = len(times), len(latitudes), len(longitudes)
-    nb_features_ = 8
-    features = np.empty((a, b, c, nb_features_))
+
     print_date_from_dfb(beginning, ending)
     print beginning, ending
     print 'NS:', latitude_beginning, latitude_end, ' WE:', longitude_beginning, longitude_end
-    angles = get_zenith_angle(times, latitudes, longitudes)
-    features[:, :, :, :3] = get_features('infrared', latitudes, longitudes, beginning, ending, output_level,
-                                         slot_step=1, gray_scale=False)[:, :, :, :3]
-    features[:, :, :, 3:6] = get_features('visible', latitudes, longitudes, beginning, ending, output_level,
-                                          slot_step=1, gray_scale=False)[:, :, :, :3]
-    features[:, :, :, 6] = dawn_day_test(angles)
-    features[:, :, :, 7] = typical_land_mask(seed)
-    del times
+    angles = get_zenith_angle(get_times_utc(beginning, ending, read_satellite_step(), slot_step=1), latitudes, longitudes)
+    features = prepare_features(angles, beginning, ending, latitudes, longitudes, output_level, seed)
     from time import time
     t_begin = time()
     from decision_tree import get_classes_v1_point, get_classes_v2_image
@@ -205,6 +193,30 @@ def prepare_data(latitude_beginning, latitude_end, longitude_beginning, longitud
     t_classes = time()
     print 'time classes:', t_classes - t_begin
     return angles, features, classes
+
+
+def prepare_features(latitude_beginning, latitude_end, longitude_beginning, longitude_end, beginning, ending,
+                     output_level, seed=0):
+    from static_tests import dawn_day_test
+    from utils import typical_land_mask
+    from get_data import get_features
+    from utils import get_times_utc, np, get_latitudes_longitudes
+    from read_metadata import read_satellite_step
+    from angles_geom import get_zenith_angle
+    times = get_times_utc(beginning, ending, read_satellite_step(), slot_step=1)
+    latitudes, longitudes = get_latitudes_longitudes(latitude_beginning, latitude_end,
+                                                     longitude_beginning, longitude_end)
+    angles = get_zenith_angle(times, latitudes, longitudes)
+    a, b, c = len(times), len(latitudes), len(longitudes)
+    nb_features_ = 8
+    features = np.empty((a, b, c, nb_features_))
+    features[:, :, :, :3] = get_features('infrared', latitudes, longitudes, beginning, ending, output_level,
+                                         slot_step=1, gray_scale=False)[:, :, :, :3]
+    features[:, :, :, 3:6] = get_features('visible', latitudes, longitudes, beginning, ending, output_level,
+                                          slot_step=1, gray_scale=False)[:, :, :, :3]
+    features[:, :, :, 6] = dawn_day_test(angles)
+    features[:, :, :, 7] = typical_land_mask(seed)
+    return features
 
 
 if __name__ == '__main__':

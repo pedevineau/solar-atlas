@@ -309,14 +309,18 @@ def learn_new_model(nb_classes, class_to_exclude=None, method='cnn'):
     use_lstm = (method == 'lstm')
     beginning_training, ending_training, lat_beginning_training, lat_ending_training, lon_beginning_training, lon_ending_training = typical_input(
         seed=1)
-    training_angles, training_inputs, training_classes = prepare_data(lat_beginning_training, lat_ending_training,
-                                                                      lon_beginning_training, lon_ending_training,
-                                                                      beginning_training, ending_training, output_level,
-                                                                      seed=1)
-    # ssl, lla, llo = training_inputs.shape[0:3]
-    if not use_lstm:
-        from choose_training_sample import restrict_pools
-        training_inputs, training_classes = restrict_pools(training_angles, training_inputs, training_classes, training_rate=0.1)
+    # training_angles, training_inputs, training_classes = prepare_data(lat_beginning_training, lat_ending_training,
+    #                                                                   lon_beginning_training, lon_ending_training,
+    #                                                                   beginning_training, ending_training, output_level,
+    #                                                                   seed=1)
+    training_inputs = prepare_features(lat_beginning_testing, lat_ending_testing, lon_beginning_testing,
+                                      lon_ending_testing, beginning_testing, ending_testing, output_level)
+    training_classes = read_labels('csp', lat_beginning_testing, lat_ending_testing, lon_beginning_testing,
+                                      lon_ending_testing, beginning_testing, ending_testing)
+
+    # if not use_lstm:
+    #     from choose_training_sample import restrict_pools
+    #     training_inputs, training_classes = restrict_pools(training_angles, training_inputs, training_classes, training_rate=0.1)
     nb_feats = training_inputs.shape[-1]
     nb_slots = training_inputs.shape[0]
     if use_keras_cnn:
@@ -340,7 +344,7 @@ def learn_new_model(nb_classes, class_to_exclude=None, method='cnn'):
 
 
 if __name__ == '__main__':
-    from learning import prepare_data
+    from learning import prepare_data, prepare_features
     from utils import *
     slot_step = 1
     output_level = 'abstract'
@@ -354,17 +358,23 @@ if __name__ == '__main__':
 
     beginning_testing, ending_testing, lat_beginning_testing, lat_ending_testing, lon_beginning_testing, lon_ending_testing = typical_input(seed=0)
 
-    testing_angles, testing_inputs, testing_classes = prepare_data(lat_beginning_testing, lat_ending_testing,
-                                                                   lon_beginning_testing, lon_ending_testing,
-                                                                   beginning_testing, ending_testing, output_level)
+    # testing_angles, testing_inputs, testing_classes = prepare_data(lat_beginning_testing, lat_ending_testing,
+    #                                                                lon_beginning_testing, lon_ending_testing,
+    #                                                                beginning_testing, ending_testing, output_level)
+
+    from read_labels import read_labels
+    testing_inputs = prepare_features(lat_beginning_testing, lat_ending_testing, lon_beginning_testing,
+                                      lon_ending_testing, beginning_testing, ending_testing, output_level)
+    testing_classes = read_labels('csp', lat_beginning_testing, lat_ending_testing, lon_beginning_testing,
+                                      lon_ending_testing, beginning_testing, ending_testing)
 
     should_learn_new_model = True
     pca_components = None
-    meth = 'lstm'
+    meth = 'cnn'
     # visualize_map_time(testing_inputs, typical_bbox(), vmin=0, vmax=5, title='inputs')
 
     if should_learn_new_model:
-        learn_new_model(nb_classes_, class_to_exclude=3, method=meth)
+        learn_new_model(nb_classes_, class_to_exclude=-10, method=meth)
     else:
         from keras.models import load_model
         # model_ = load_model(path)

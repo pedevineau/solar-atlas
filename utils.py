@@ -33,13 +33,13 @@ def typical_input(seed=0):
             longitude_beginning = -115. + 35+1
             longitude_end = -110. + 35-3
         elif sat_name == 'H08':
-            beginning = 13525 + 180+110
+            beginning = 13525 + 195
             nb_days = 5
             ending = beginning + nb_days - 1
             latitude_beginning = 35.
             latitude_end = 40.
-            longitude_beginning = 135.
-            longitude_end = 140.
+            longitude_beginning = 125.
+            longitude_end = 130.
         return beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end
 
 
@@ -394,7 +394,8 @@ def prepare_temperature_mask(lats, lons, beginning, ending, slot_step=1):
 
 if __name__ == '__main__':
     dfb_begin, dfb_end, latitude_begin, latitude_end, longitude_begin, longitude_end = typical_input()
-    print rc_to_latlon(10,63)
+    print rc_to_latlon(10,53)
+    print latlon_to_rc(35,135)
     # features = typical_outputs('visible', 'channel')
     # visualize_map_time(features[:,:,:,0], typical_bbox())
     # tiles = chunk_3d_high_resolution(features, (5, 5))

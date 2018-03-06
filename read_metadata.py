@@ -38,6 +38,14 @@ def read_satellite_pca_path():
     return satellite_pca_path
 
 
+def read_labels_dir(label_type):
+    from json import load
+    metadata = load(open('metadata.json'))
+    satellite = metadata["satellite"]
+    satellite_labels_dir = metadata[satellite]['labels'][label_type.lower()]
+    return satellite_labels_dir
+
+
 def read_satellite_resolution_path():
     from json import load
     metadata = load(open('metadata.json'))
