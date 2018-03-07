@@ -16,12 +16,12 @@ def typical_input(seed=0):
             longitude_end = -110.+34
         elif sat_name == 'H08':
             beginning = 13525 + 180
-            nb_days = 5
+            nb_days = 1
             ending = beginning + nb_days - 1
-            latitude_beginning = 35.
-            latitude_end = 40.
-            longitude_beginning = 135.
-            longitude_end = 140.
+            latitude_beginning = 35-5.
+            latitude_end = 60.
+            longitude_beginning = 135-20.
+            longitude_end = 140
         return beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end
     else:
         if sat_name == 'GOES16':

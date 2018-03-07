@@ -365,11 +365,11 @@ if __name__ == '__main__':
     #                                                                lon_beginning_testing, lon_ending_testing,
     #                                                                beginning_testing, ending_testing, output_level)
 
-    from read_labels import read_labels
+    from read_labels import read_labels, read_labels_remove_holes
     testing_inputs = prepare_features(lat_beginning_testing, lat_ending_testing, lon_beginning_testing,
                                       lon_ending_testing, beginning_testing, ending_testing, output_level)
-    testing_classes = read_labels('csp', lat_beginning_testing, lat_ending_testing, lon_beginning_testing,
-                                      lon_ending_testing, beginning_testing, ending_testing)
+    testing_classes = read_labels_remove_holes('csp', lat_beginning_testing, lat_ending_testing, lon_beginning_testing,
+                                               lon_ending_testing, beginning_testing, ending_testing)
 
     should_learn_new_model = True
     pca_components = None
