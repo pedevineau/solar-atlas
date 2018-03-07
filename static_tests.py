@@ -6,11 +6,29 @@ def threshold_test_positive(observed, forecast, thresh):
 
 
 def gross_cloud_test(lir_observed, lir_forecast):
+    '''
+    Hocking (2011)
+    A strong anomaly between temperature observed by satellite and forecast temperature is nothing but a cloud
+    Warning: here, the observed brightness temperature is most of the time underestimated by
+    "expected brightness temperature" function to avoid false positive. The efficiency of the test depends mostly on
+    the choice of epsilon parameter in the former function and on the choice of the threshold below
+    :param lir_observed: channel "lir" observed by satellite
+    :param lir_forecast: output of "expected brightness temperature" function whose inputs are
+     the forecast temperature in kelvin and the epsilon parameter
+    :return:
+    '''
     thresh = compute_gross_cloud_threshold()
     return threshold_test_positive(lir_forecast, lir_observed, thresh)
 
 
 def lir_fir_test(lir_observed, fir_observed, dlw=12.3-10.3):
+    '''
+    Currently not used (replace by the broad cirrus test)
+    :param lir_observed:
+    :param fir_observed:
+    :param dlw:
+    :return:
+    '''
     # the test can be apply over any type of surface
     # mostly for semi-transparent clouds, like cirrus. Quite blind to opaque thick clouds
     h = 6.626 * 10 ** (-34)
@@ -24,6 +42,7 @@ def lir_fir_test(lir_observed, fir_observed, dlw=12.3-10.3):
 
 
 def perso_cli_test(mir_observed, fir_observed):
+    # unused
     return 1
 
 
@@ -37,6 +56,14 @@ def low_cloud_test_sun_glint(cos_zen, vis, mir, lir, mask):
 
 
 def local_spatial_texture_test(is_land, mir, lir, mask):
+    '''
+    Currently not used, because it is time consuming
+    :param is_land:
+    :param mir:
+    :param lir:
+    :param mask:
+    :return:
+    '''
     # Le Gleau 2006 (simplified)
     # eliminate pixels near sea
     is_land = decrease_connectivity_2(decrease_connectivity_2(is_land))
@@ -450,6 +477,14 @@ def broad_exhaustive_snow_test(angles, is_land, ndsi_observed, vis_observed):
 
 
 def suspect_snow_classified_pixels(snow, ndsi, mask_input):
+    '''
+    the "suspect snow" test flagged as cloud the pixels which were supposed to be snowy
+     - because they pass the adequate test - but whose ndsi is strangely high
+    :param snow:
+    :param ndsi:
+    :param mask_input:
+    :return:
+    '''
     from visible_predictors import get_bright_negative_variability_5d, get_bright_positive_variability_5d
     from get_data import compute_short_variability
     from utils import typical_time_step
@@ -464,7 +499,7 @@ def suspect_snow_classified_pixels(snow, ndsi, mask_input):
 
 def maybe_cloud_after_all(is_land, is_supposed_free, vis):
     '''
-    instable albedo test
+    the "unstable albedo test" classifies as cloud the previously "allegedly cloud-free and snow-free pixels" which are much brighter than normally
     :param is_land:
     :param is_supposed_free:
     :param vis:
@@ -478,6 +513,7 @@ def maybe_cloud_after_all(is_land, is_supposed_free, vis):
     (slots, lats, lons) = vis.shape
     slot_per_day = get_nb_slots_per_day(read_satellite_step(), 1)
     entire_days = slots / slot_per_day
+    assert entire_days < 11, 'please do not apply this test on strictly more than 10 days'
     vis_copy = vis.copy()
     vis_copy[~is_supposed_free_for_long] = 100
     supposed_clear_sky = np.min(vis_clear_sky_apply_rolling_on_time(vis_copy, 5, 'mean').reshape((entire_days, slot_per_day, lats, lons)), axis=0)
@@ -499,9 +535,8 @@ def typical_static_classifier(seed=0, bypass=False):
     if is_exhaustive:
         from read_metadata import read_channels_names
         names = read_channels_names('infrared')
-        print names
-        lw_fir = float(names[0][2:5])/10
-        lw_lir = float(names[1][2:5])/10
+        lw_fir = float(names[0][2:5])/10 * 10**(-6)
+        lw_lir = float(names[1][2:5])/10 * 10**(-6)
         cli_epsilon, mask_input_cli = typical_outputs('infrared', 'cli', seed)
         cli_default = get_cloud_index(np.cos(zen), mir=infrared[:, :, :, 2], lir=infrared[:, :, :, 1], method='default')
         snow = exhaustive_dawn_day_snow_test(zen, lands, ndsi, cli_default, cli_epsilon, vis, infrared[:, :, :, 1],
