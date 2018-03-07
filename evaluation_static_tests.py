@@ -12,7 +12,7 @@ def unique_score_one_array(*args):
     n = len(args)
     common = zeros_like(args[0], dtype=bool)
     for k in range(n):
-        common = (common | (asarray(args[k]).flatten()))
+        common = (common | asarray(args[k]))
     score = []
     for l in range(n):
         score.append(corr2test(common, asarray(args[l]).flatten()))
