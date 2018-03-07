@@ -410,7 +410,7 @@ def seeds_angular_tests(is_land, angles, specular_angles, satellite_angles, glin
 
 
 def exhaustive_dawn_day_cloud_test(angles, is_land, cli_mu_observed, cloud_var_observed, cli_epsilon_observed,
-                                   vis_observed, lir_observed, fir_observed, lir_forecast, fir_forecast, mask_input):
+                                   vis_observed, lir_observed, fir_observed, lir_forecast, fir_forecast):
     return dawn_day_test(angles) & ((cli_water_cloud_test(cli_mu_observed) & cli_stability(cloud_var_observed)) |
                                     cli_thin_water_cloud_test(cli_epsilon_observed) |
                                     sea_coasts_cloud_test(angles, is_land, vis_observed) |
@@ -489,7 +489,7 @@ def maybe_cloud_after_all(is_land, is_supposed_free, vis):
     return is_supposed_free & land_visible_test(is_land, vis, supposed_clear_sky).reshape((slots, lats, lons))
 
 
-def typical_static_classifier(seed=0):
+def typical_static_classifier(seed=0, bypass=False):
     from infrared_predictors import get_cloud_index, get_cloud_index_positive_variability_5d
     from utils import typical_outputs, typical_temperatures_forecast, typical_land_mask, np, typical_time_step
     zen, vis, ndsi, mask_input = typical_outputs('visible', 'ndsi', seed)
@@ -497,11 +497,16 @@ def typical_static_classifier(seed=0):
     lands = typical_land_mask(seed)
     is_exhaustive = (np.shape(infrared)[-1] == 3)
     if is_exhaustive:
+        from read_metadata import read_channels_names
+        names = read_channels_names('infrared')
+        print names
+        lw_fir = float(names[0][2:5])/10
+        lw_lir = float(names[1][2:5])/10
         cli_epsilon, mask_input_cli = typical_outputs('infrared', 'cli', seed)
         cli_default = get_cloud_index(np.cos(zen), mir=infrared[:, :, :, 2], lir=infrared[:, :, :, 1], method='default')
         snow = exhaustive_dawn_day_snow_test(zen, lands, ndsi, cli_default, cli_epsilon, vis, infrared[:, :, :, 1],
                                              expected_brightness_temperature_only_emissivity(
-                                                 typical_temperatures_forecast(seed), lw_nm=10.3, eps=0.95))
+                                                 typical_temperatures_forecast(seed), lw_nm=lw_lir, eps=0.95))
         mask_input = mask_input | mask_input_cli
         del mask_input_cli
     else:
@@ -514,11 +519,17 @@ def typical_static_classifier(seed=0):
     if is_exhaustive:
         cli_mu = get_cloud_index(np.cos(zen), mir=infrared[:, :, :, 2], lir=infrared[:, :, :, 1],
                                  method='mu-normalization')
+        if bypass:
+            return zen, lands, cli_mu, cli_var, cli_epsilon, vis, infrared[:, :, :, 1], infrared[:, :, :, 0], \
+                   expected_brightness_temperature_only_emissivity(
+                       typical_temperatures_forecast(seed), lw_nm=lw_lir, eps=0.95), \
+                   expected_brightness_temperature_only_emissivity(
+                       typical_temperatures_forecast(seed), lw_nm=lw_fir, eps=0.95)
         clouds = exhaustive_dawn_day_cloud_test(zen, lands, cli_mu, cli_var, cli_epsilon, vis, infrared[:, :, :, 1],
                                                 infrared[:, :, :, 0], expected_brightness_temperature_only_emissivity(
-                typical_temperatures_forecast(seed), lw_nm=10.3, eps=0.95), expected_brightness_temperature_only_emissivity(
-                typical_temperatures_forecast(seed), lw_nm=12.3, eps=0.95),
-                                                mask_input)
+                typical_temperatures_forecast(seed), lw_nm=lw_lir, eps=0.95), expected_brightness_temperature_only_emissivity(
+                typical_temperatures_forecast(seed), lw_nm=lw_fir, eps=0.95))
+
         del cli_epsilon, cli_mu, cli_var
     else:
         cli_mu = get_cloud_index(np.cos(zen), mir=infrared[:, :, :, 1], lir=infrared[:, :, :, 0],
