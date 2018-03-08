@@ -27,7 +27,7 @@ def prepare_temperature_mask(lats, lons, beginning, ending, slot_step=1):
     return to_return
 
 
-def expected_brightness_temperature_only_emissivity(forecast_temperature, lw_nm, ems):
+def expected_brightness_temperature_only_emissivity(forecast_temperature, lw_nm, eps):
     '''
     Compute the brightness temperature we can reasonably expect from the temperature forecast, the wavelength lw and
         the emissivity parameter ems
@@ -35,7 +35,7 @@ def expected_brightness_temperature_only_emissivity(forecast_temperature, lw_nm,
     NB: this function is designed for clouds recognition (their characteristics are low emissivity & very low reflectance in long infrared)
     :param forecast_temperature:
     :param lw_nm: the wavelength (in nanometers) of the brightness temperature we want compute
-    :param ems: the emissivity parameter (in [0, 1]). EG typical emissivity of snow is up to 0.95
+    :param eps: the emissivity parameter (in [0, 1]). EG typical emissivity of snow is up to 0.95
     :return: the expected brightness
     '''
 
@@ -45,4 +45,4 @@ def expected_brightness_temperature_only_emissivity(forecast_temperature, lw_nm,
     k = 1.38 * 10 ** (-23)
     K = h / k
     nu = c / lw_nm
-    return 1. / (1 / (K * nu) * log(1 + (exp(K * nu / forecast_temperature) - 1) / ems))
+    return 1. / (1 / (K * nu) * log(1 + (exp(K * nu / forecast_temperature) - 1) / eps))
