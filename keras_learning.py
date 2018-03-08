@@ -377,10 +377,10 @@ if __name__ == '__main__':
     #                                                                beginning_testing, ending_testing, output_level)
 
     from read_labels import read_labels, read_labels_remove_holes
-    testing_inputs, selected_slots = prepare_features(lat_beginning_testing, lat_ending_testing, lon_beginning_testing,
-                                      lon_ending_testing, beginning_testing, ending_testing, output_level)
-    testing_classes = read_labels_remove_holes('csp', lat_beginning_testing, lat_ending_testing, lon_beginning_testing,
-                                               lon_ending_testing, beginning_testing, ending_testing, selected_slots)
+    testing_classes, selected_slots = read_labels_remove_holes('csp', lat_beginning_testing, lat_ending_testing, lon_beginning_testing,
+                                               lon_ending_testing, beginning_testing, ending_testing)
+    testing_inputs = prepare_features(lat_beginning_testing, lat_ending_testing, lon_beginning_testing,
+                                      lon_ending_testing, beginning_testing, ending_testing, output_level, selected_slots)
 
     should_learn_new_model = True
     pca_components = None
