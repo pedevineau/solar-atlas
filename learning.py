@@ -208,14 +208,16 @@ def prepare_features(latitude_beginning, latitude_end, longitude_beginning, long
                                                      longitude_beginning, longitude_end)
     angles = get_zenith_angle(times, latitudes, longitudes)
     a, b, c = len(times), len(latitudes), len(longitudes)
-    nb_features_ = 8
+    nb_features_ = 7
     features = np.empty((a, b, c, nb_features_))
     features[:, :, :, :3] = get_features('infrared', latitudes, longitudes, beginning, ending, output_level,
                                          slot_step=1, gray_scale=False)[:, :, :, :3]
-    features[:, :, :, 3:6] = get_features('visible', latitudes, longitudes, beginning, ending, output_level,
-                                          slot_step=1, gray_scale=False)[:, :, :, :3]
-    features[:, :, :, 6] = dawn_day_test(angles)
-    features[:, :, :, 7] = typical_land_mask(seed)
+    features[:, :, :, 3] = get_features('visible', latitudes, longitudes, beginning, ending, output_level,
+                                          slot_step=1, gray_scale=False)[:, :, :, :1]
+    features[:, :, :, 4] = dawn_day_test(angles)
+    features[:, :, :, 5] = typical_land_mask(seed)
+    from static_tests import typical_static_classifier
+    features[:, :, :, 6] = (typical_static_classifier(seed) >= 2)
     return features
 
 

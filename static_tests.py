@@ -394,11 +394,16 @@ def get_local_avg(seeds, channel):
 
 
 def seeds_vis_test(vis, vis_avg):
-    from numpy import minimum
+    '''
+    Devoted to "cloud twilight expansion" which is NOT computed now (probably not useful)
+    '''
     return vis > 1.05*vis_avg
 
 
 def seeds_lir_test(lir, lir_avg):
+    '''
+    Devoted to "cloud twilight expansion" which is NOT computed now (probably not useful)
+    '''
     return ((lir_avg - 5.0) < lir) & (lir < (lir_avg + 0.5))
 
 
@@ -408,6 +413,10 @@ def keep_only_3_3_square(seeds):
 
 
 def grow_seeds(seeds, is_land, angles, specular_angles, satellite_angles, glint_angles, vis, lir):
+    '''
+    Devoted to "cloud twilight expansion" which is NOT computed now (probably not useful)
+    :param seeds: credible clouds which has been identified during the previous "twilight expansion" step
+    '''
     from numpy import array
     try_growing = True
     seeds = keep_only_3_3_square(seeds)
@@ -431,29 +440,58 @@ def broad_ndsi_test(ndsi_observed, cos_scat=None):
 
 
 def seeds_angular_tests(is_land, angles, specular_angles, satellite_angles, glint_angles):
+    '''
+    Devoted to "cloud twilight expansion" which is NOT computed now (probably not useful)
+    '''
     return specular_satellite_test(specular_angles) & solar_angle_temporal_test(angles) & \
            glint_angle_temporal_test(is_land, specular_angles, glint_angles) & \
            satellite_angle_temporal_test(specular_angles, satellite_angles)
 
 
-def exhaustive_dawn_day_cloud_test(angles, is_land, cli_mu_observed, cloud_var_observed, cli_epsilon_observed,
+def exhaustive_dawn_day_cloud_test(angles, is_land, cli_mu_observed, cli_mu_var_observed, cli_epsilon_observed,
                                    vis_observed, lir_observed, fir_observed, lir_forecast, fir_forecast):
-    return dawn_day_test(angles) & ((cli_water_cloud_test(cli_mu_observed) & cli_stability(cloud_var_observed)) |
+    '''
+    Function detecting clouds which should be called when you have 5 channels
+    '''
+    return dawn_day_test(angles) & ((cli_water_cloud_test(cli_mu_observed) & cli_stability(cli_mu_var_observed)) |
                                     cli_thin_water_cloud_test(cli_epsilon_observed) |
                                     sea_coasts_cloud_test(angles, is_land, vis_observed) |
                                     gross_cloud_test(lir_observed, lir_forecast) |
                                     thin_cirrus_test(is_land, lir_observed, fir_observed, lir_forecast, fir_forecast))
 
 
-def partial_dawn_day_cloud_test(angles, is_land, cli_observed, cloud_var_observed, vis_observed, lir_observed,
-                                lir_forecast):
-    return dawn_day_test(angles) & ((cli_water_cloud_test(cli_observed) & cli_stability(cloud_var_observed)) |
+def partial_dawn_day_cloud_test(angles, is_land, cli_mu_observed, cli_mu_var_observed, vis_observed, fir_observed,
+                                fir_forecast):
+    '''
+    Function detecting clouds which should be called when you have only 4 channels
+    :param angles: see below
+    :param is_land: see below
+    :param cli_mu_observed: basic cloud index computed from channels channels mir 390 and lir (~10.4/10.8)
+    :param cli_mu_var_observed: "similar variability of basic cloud index" calculated thanks to seven consecutive days
+    :param vis_observed: see below
+    :param fir_observed: channel fir
+    :param fir_forecast: estimation of expected channel fir from actual temperature forecast
+    :return: cloud mask
+    '''
+    return dawn_day_test(angles) & ((cli_water_cloud_test(cli_mu_observed) & cli_stability(cli_mu_var_observed)) |
                                     sea_coasts_cloud_test(angles, is_land, vis_observed)
-                                    | gross_cloud_test(lir_observed, lir_forecast))
+                                    | gross_cloud_test(fir_observed, fir_forecast))
 
 
 def exhaustive_dawn_day_snow_test(angles, is_land, ndsi_observed, cli_mu_observed, cli_epsilon_observed, vis_observed,
                                   lir_observed, lir_forecast):
+    '''
+    Function detecting snow which should be called when you have 5 channels
+    :param angles: matrix time*lat*lon filled with solar zenith angles
+    :param is_land: mask where big lakes or sea = False, and lands = True
+    :param ndsi_observed:
+    :param cli_mu_observed: basic cloud index computed from channels channels mir 390 and lir (~10.4/10.8)
+    :param cli_epsilon_observed: epsilon cloud index computed from channels lir (~10.4/10.8) and fir (~12.3/12.5)
+    :param vis_observed: visible channel 064
+    :param lir_observed: channel lir
+    :param lir_forecast: estimation of expected  channel lir from actual temperature forecast
+    :return: snow mask
+    '''
     # from quick_visualization import visualize_map_time
     # visualize_map_time(broad_cirrus_snow_test(cli_epsilon_observed), typical_bbox())
     snow_dawn_day = (dawn_day_test(angles) & is_land & ndsi_test(ndsi_observed) & cli_snow_test(cli_mu_observed) &
@@ -463,6 +501,15 @@ def exhaustive_dawn_day_snow_test(angles, is_land, ndsi_observed, cli_mu_observe
 
 
 def partial_dawn_day_snow_test(angles, is_land, ndsi_observed, cli_observed, vis_observed):
+    '''
+    Function detecting snow which should be called when you have only 4 channels
+    :param angles: matrix time*lat*lon filled with solar zenith angles
+    :param is_land: mask where big lakes or sea = False, and lands = True
+    :param ndsi_observed: snow index computed from channels vis (064) and nir (160)
+    :param cli_observed: basic cloud index computed from channels channels fir 124 (or lir 108 if available) and mir 390
+    :param vis_observed: visible channel 064
+    :return: snow mask
+    '''
     snow_dawn_day = (dawn_day_test(angles) & is_land & ndsi_test(ndsi_observed) & cli_snow_test(cli_observed) &
                      visible_snow_test(vis_observed))
     return snow_dawn_day

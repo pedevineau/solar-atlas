@@ -47,11 +47,11 @@ class WeatherLearning:
 
     @staticmethod
     def deterministic_predictions(predicted, nb_classes):
-        from numpy import ones, zeros, max
+        from numpy import ones, zeros, max, argmax
         slots, lats, lons = predicted.shape[0:3]
-        determ_classification = -1*ones((slots, lats, lons))
-        for k in range(nb_classes):
-            determ_classification[predicted[:, :, :, k] > 0.5] = k
+        # determ_classification = -1*ones((slots, lats, lons))
+        # for k in range(nb_classes):
+        determ_classification = argmax(predictions, axis=3)
         confidence = max(predicted, axis=3)
         return determ_classification, confidence
 
@@ -117,7 +117,7 @@ class WeatherCNN(WeatherLearning):
         print 'time exclude:', time()-t_exclude
 
         from sklearn.model_selection import train_test_split
-        (trainX, testX, trainY, testY) = train_test_split(inputs, labels, test_size=0.95, random_state=42)
+        (trainX, testX, trainY, testY) = train_test_split(inputs, labels, test_size=0.5, random_state=42)
         trainY = np_utils.to_categorical(trainY, nb_classes)
         testY = np_utils.to_categorical(testY, nb_classes)
         EPOCHS = 25
@@ -194,7 +194,7 @@ class WeatherMLP(WeatherLearning):
             inputs, labels = remove_some_label_from_training_pool(inputs, labels.flatten(),
                                                                   fit_excluding)
         labels = np_utils.to_categorical(labels, nb_classes)
-        self.model.fit(np.asarray(inputs), labels, epochs=20, batch_size=64)
+        self.model.fit(np.asarray(inputs), labels, epochs=20, batch_size=32)
 
     def predict(self, inputs):
         from learning import reshape_features
@@ -317,9 +317,9 @@ def learn_new_model(nb_classes, class_to_exclude=None, method='cnn'):
     #                                                                   beginning_training, ending_training, output_level,
     #                                                                   seed=1)
     training_inputs = prepare_features(lat_beginning_testing, lat_ending_testing, lon_beginning_testing,
-                                      lon_ending_testing, beginning_testing, ending_testing, output_level)
-    training_classes = read_labels('csp', lat_beginning_testing, lat_ending_testing, lon_beginning_testing,
-                                      lon_ending_testing, beginning_testing, ending_testing)
+                                       lon_ending_testing, beginning_testing, ending_testing, output_level)
+    training_classes = read_labels_remove_holes('csp', lat_beginning_testing, lat_ending_testing, lon_beginning_testing,
+                                                lon_ending_testing, beginning_testing, ending_testing)
 
     # if not use_lstm:
     #     from choose_training_sample import restrict_pools
