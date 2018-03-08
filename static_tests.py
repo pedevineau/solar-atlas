@@ -1,3 +1,8 @@
+'''
+author: Pierre-Etienne Devineau
+SOLARGIS S.R.O.
+'''
+
 from thresholds import *
 
 
@@ -23,7 +28,7 @@ def gross_cloud_test(lir_observed, lir_forecast):
 
 def lir_fir_test(lir_observed, fir_observed, dlw=12.3-10.3):
     '''
-    Currently not used (replace by the broad cirrus test)
+    Currently not used (replaced by the cloud epsilon test)
     :param lir_observed:
     :param fir_observed:
     :param dlw:
@@ -152,7 +157,12 @@ def cli_stability(cloud_var):
     return cloud_var > thresh
 
 
-def cli_thin_water_cloud_test(cloud_epsilon):
+def epsilon_transparent_cloud_test(cloud_epsilon):
+    '''
+    epsilon test (PED 2018)
+    :param cloud_epsilon:
+    :return:
+    '''
     # epsilon test (PED 2018)
     thresh = compute_cloud_epsilon_threshold()
     return cloud_epsilon > thresh
@@ -454,7 +464,7 @@ def exhaustive_dawn_day_cloud_test(angles, is_land, cli_mu_observed, cli_mu_var_
     Function detecting clouds which should be called when you have 5 channels
     '''
     return dawn_day_test(angles) & ((cli_water_cloud_test(cli_mu_observed) & cli_stability(cli_mu_var_observed)) |
-                                    cli_thin_water_cloud_test(cli_epsilon_observed) |
+                                    epsilon_transparent_cloud_test(cli_epsilon_observed) |
                                     sea_coasts_cloud_test(angles, is_land, vis_observed) |
                                     gross_cloud_test(lir_observed, lir_forecast) |
                                     thin_cirrus_test(is_land, lir_observed, fir_observed, lir_forecast, fir_forecast))
@@ -492,8 +502,6 @@ def exhaustive_dawn_day_snow_test(angles, is_land, ndsi_observed, cli_mu_observe
     :param lir_forecast: estimation of expected  channel lir from actual temperature forecast
     :return: snow mask
     '''
-    # from quick_visualization import visualize_map_time
-    # visualize_map_time(broad_cirrus_snow_test(cli_epsilon_observed), typical_bbox())
     snow_dawn_day = (dawn_day_test(angles) & is_land & ndsi_test(ndsi_observed) & cli_snow_test(cli_mu_observed) &
                      gross_snow_test(lir_observed, lir_forecast) & broad_cirrus_snow_test(cli_epsilon_observed) &
                      visible_snow_test(vis_observed))
