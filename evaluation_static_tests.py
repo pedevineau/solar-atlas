@@ -62,6 +62,10 @@ def visualize_regular_cloud_tests():
     to_return[epsilon_condition] = 3
     to_return[thin_condition] = 4
     visualize_map_time(to_return, typical_bbox(), vmin=0, vmax=4)
+    visualize_map_time(gross_condition, typical_bbox(), vmin=0, vmax=1)
+    visualize_map_time(cli_condition, typical_bbox(), vmin=0, vmax=1)
+    visualize_map_time(epsilon_condition, typical_bbox(), vmin=0, vmax=1)
+    visualize_map_time(thin_condition, typical_bbox(), vmin=0, vmax=1)
 
 
 if __name__ == '__main__':
