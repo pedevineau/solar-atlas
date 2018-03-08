@@ -568,7 +568,7 @@ def maybe_cloud_after_all(is_land, is_supposed_free, vis):
     # visualize_map_time(supposed_clear_sky, typical_bbox())
     del vis_copy
     vis = vis.reshape((entire_days, slot_per_day, lats, lons))
-    visualize_map_time(is_supposed_free & land_visible_test(is_land, vis, supposed_clear_sky).reshape((slots, lats, lons)), typical_bbox())
+    # visualize_map_time(is_supposed_free & land_visible_test(is_land, vis, supposed_clear_sky).reshape((slots, lats, lons)), typical_bbox())
     return is_supposed_free & land_visible_test(is_land, vis, supposed_clear_sky).reshape((slots, lats, lons))
 
 
