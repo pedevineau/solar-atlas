@@ -55,7 +55,7 @@ def typical_angles(seed=0):
     from read_metadata import read_satellite_step
     beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end = typical_input(seed)
     lats, lons = get_latitudes_longitudes(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
-    return get_zenith_angle(get_times_utc(beginning, ending, read_satellite_step, 1), lats, lons)
+    return get_zenith_angle(get_times_utc(beginning, ending, read_satellite_step(), 1), lats, lons)
 
 
 def typical_land_mask(seed=0):

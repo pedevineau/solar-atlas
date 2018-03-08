@@ -227,7 +227,7 @@ def prepare_features(latitude_beginning, latitude_end, longitude_beginning, long
     from static_tests import typical_static_classifier
     features[:, :, :, 6] = (typical_static_classifier(seed) >= 2)
     if selected_slots is not None:
-        selected_features = np.empty(len(selected_slots), b, c, nb_features_)
+        selected_features = np.empty((len(selected_slots), b, c, nb_features_))
         for k in range(len(selected_slots)):
             selected_features[k] = features[selected_slots[k]]
         return selected_features
