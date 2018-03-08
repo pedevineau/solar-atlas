@@ -213,7 +213,7 @@ def prepare_features(latitude_beginning, latitude_end, longitude_beginning, long
     features[:, :, :, :3] = get_features('infrared', latitudes, longitudes, beginning, ending, output_level,
                                          slot_step=1, gray_scale=False)[:, :, :, :3]
     features[:, :, :, 3] = get_features('visible', latitudes, longitudes, beginning, ending, output_level,
-                                          slot_step=1, gray_scale=False)[:, :, :, :1]
+                                          slot_step=1, gray_scale=False)[:, :, :, 1]
     features[:, :, :, 4] = dawn_day_test(angles)
     features[:, :, :, 5] = typical_land_mask(seed)
     from static_tests import typical_static_classifier
