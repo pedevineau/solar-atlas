@@ -1,3 +1,10 @@
+'''
+author: Pierre-Etienne Devineau
+SOLARGIS S.R.O.
+
+To measure the relative efficiency of each cloud test
+'''
+
 def corr2test(test_1, test_2):
     # expect list
     # test_1 = test_1.flatten()

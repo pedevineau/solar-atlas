@@ -1,3 +1,11 @@
+'''
+author: Pierre-Etienne Devineau
+SOLARGIS S.R.O.
+
+Some utils for data preparation, and some sklearn functions (most of them have been replaced by keras models in keras_learning.py)
+'''
+
+
 from quick_visualization import visualize_map_time
 
 def create_neural_network():
@@ -196,7 +204,7 @@ def prepare_data(latitude_beginning, latitude_end, longitude_beginning, longitud
 
 
 def prepare_features(latitude_beginning, latitude_end, longitude_beginning, longitude_end, beginning, ending,
-                     output_level, seed=0):
+                     output_level, selected_slots=None, seed=0):
     from static_tests import dawn_day_test
     from utils import typical_land_mask
     from get_data import get_features
@@ -218,6 +226,11 @@ def prepare_features(latitude_beginning, latitude_end, longitude_beginning, long
     features[:, :, :, 5] = typical_land_mask(seed)
     from static_tests import typical_static_classifier
     features[:, :, :, 6] = (typical_static_classifier(seed) >= 2)
+    if selected_slots is not None:
+        selected_features = np.empty(len(selected_slots), b, c, nb_features_)
+        for k in range(len(selected_slots)):
+            selected_features[k] = features[selected_slots[k]]
+        return selected_features
     return features
 
 

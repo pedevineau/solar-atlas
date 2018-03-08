@@ -1,3 +1,10 @@
+'''
+author: Pierre-Etienne Devineau
+SOLARGIS S.R.O.
+
+Preparation of infrared predictors
+'''
+
 from utils import *
 
 
@@ -368,23 +375,9 @@ def get_cloud_index_total_variability_7d(cloud_index, definition_mask, pre_cloud
     return to_return
 
 
-# def get_cold_mask(mir, satellite_step, slot_step, threshold_median):
-#     # compute median temperature around noon and compare it with a threshold
-#     (nb_slots, nb_latitudes, nb_longitudes) = np.shape(mir)[0:3]
-#     nb_slots_per_day = get_nb_slots_per_day(satellite_step, slot_step)
-#     midnight_array = get_map_next_midnight_slots(satellite_step, slot_step)
-#     nb_days = np.ceil(nb_slots / nb_slots_per_day)
-#     cold_mask = np.zeros_like(mir, dtype=bool)
-#     for day in range(nb_days):
-#         slice_mir = mir[day * nb_slots_per_day:(day + 1) * nb_slots_per_day, :, :]
-#         median_array_including_clouds = np.median(slice_mir, axis=0)
-#         cold_mask[day * nb_slots_per_day:(day + 1) * nb_slots_per_day, :, :] = \
-#             (median_array_including_clouds < threshold_median)
-#     return cold_mask
-
-
 def get_warm(mir, cos_zen, satellite_step, slot_step, cloudy_mask, threshold_median):
     '''
+    Not used anymore. Mask warm pixels
     :param mir: medium infra-red band (centered on 3890nm for Himawari 8)
     :param cos_zen: cos of zenith angle matrix (shape: slots, latitudes, longitudes)
     :param satellite_step: the satellite characteristic time step between two slots (10 minutes for Himawari 8)
@@ -401,8 +394,9 @@ def get_warm(mir, cos_zen, satellite_step, slot_step, cloudy_mask, threshold_med
 
 def get_cold(fir, mask, threshold):
     '''
-    recognise some high altitudes clouds
-    we are not looking above Antartica... there is no likely risk of temperature inversion at these altitudes
+    Not used anymore. Has been replaced by static tests
+    recognize some high altitudes clouds
+    there is no risk of temperature inversion at these latitudes (it occurs mostly over poles)
     :param fir: medium infra-red band (centered on 12380nm for Himawari 8)
     :param threshold
     :return: a 0-1 integer matrix (shape: slots, latitudes, longitudes)
@@ -462,6 +456,7 @@ def get_warm_array_on_point(mir_point, mu_point, satellite_step, slot_step, clou
 
 def get_lag_high_peak(difference, cos_zen, satellite_step, slot_step):
     '''
+    not used anymore
     function to get high temperature peak, in order to do a proper mu-normalization
     this function seems useless as it appears that clear-sky difference mir-fir has always a peak at noon
     :param difference:

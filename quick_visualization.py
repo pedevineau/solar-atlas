@@ -145,7 +145,7 @@ if __name__ == '__main__':
     output_levels = ['channel', 'ndsi', 'cli', 'abstract']
     types_channel = ['infrared', 'visible']
     level = 0
-    channel_number = 0
+    channel_number = 1
     display_curves = False
     output_level = output_levels[level]
     type_channels = types_channel[channel_number]

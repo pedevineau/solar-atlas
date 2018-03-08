@@ -1,3 +1,10 @@
+'''
+author: Pierre-Etienne Devineau
+SOLARGIS S.R.O.
+
+To measure the relative efficiency of each cloud test
+'''
+
 from utils import *
 
 

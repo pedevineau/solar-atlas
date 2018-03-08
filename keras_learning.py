@@ -1,3 +1,8 @@
+'''
+author: Pierre-Etienne Devineau
+SOLARGIS S.R.O.
+'''
+
 class WeatherLearning:
     def __init__(self, model=None, resolution=9, pca=None):
         self.model = model
@@ -117,10 +122,10 @@ class WeatherCNN(WeatherLearning):
         print 'time exclude:', time()-t_exclude
 
         from sklearn.model_selection import train_test_split
-        (trainX, testX, trainY, testY) = train_test_split(inputs, labels, test_size=0.5, random_state=42)
+        (trainX, testX, trainY, testY) = train_test_split(inputs, labels, test_size=0.7, random_state=42)
         trainY = np_utils.to_categorical(trainY, nb_classes)
         testY = np_utils.to_categorical(testY, nb_classes)
-        EPOCHS = 25
+        EPOCHS = 5
         BS = 32
         from keras.preprocessing.image import ImageDataGenerator
         # construct the image generator for data augmentation
@@ -168,9 +173,9 @@ class WeatherMLP(WeatherLearning):
         from keras import Sequential
         from keras.layers import Dense, Dropout, Flatten
         model = Sequential()
-        model.add(Dense(64, activation='relu', input_dim=depth))
+        model.add(Dense(32, activation='relu', input_dim=depth))
         model.add(Dropout(0.5))
-        model.add(Dense(64, activation='relu'))
+        model.add(Dense(32, activation='relu'))
         model.add(Dropout(0.5))
         model.add(Dense(nb_classes, activation='softmax'))
         print model.summary()
@@ -186,7 +191,7 @@ class WeatherMLP(WeatherLearning):
         self.model = model
 
     def fit(self, inputs, labels, nb_classes, fit_excluding=None):
-        from learning import reshape_features
+        from learning_utils import reshape_features
         from keras.utils import np_utils
         inputs = reshape_features(inputs)
         inputs = self.apply_pca(inputs)
@@ -197,7 +202,7 @@ class WeatherMLP(WeatherLearning):
         self.model.fit(np.asarray(inputs), labels, epochs=20, batch_size=32)
 
     def predict(self, inputs):
-        from learning import reshape_features
+        from learning_utils import reshape_features
         inputs = reshape_features(inputs)
         if self.pca is not None:
             inputs = self.apply_pca(inputs)
@@ -316,14 +321,20 @@ def learn_new_model(nb_classes, class_to_exclude=None, method='cnn'):
     #                                                                   lon_beginning_training, lon_ending_training,
     #                                                                   beginning_training, ending_training, output_level,
     #                                                                   seed=1)
-    training_inputs = prepare_features(lat_beginning_testing, lat_ending_testing, lon_beginning_testing,
-                                       lon_ending_testing, beginning_testing, ending_testing, output_level)
-    training_classes = read_labels_remove_holes('csp', lat_beginning_testing, lat_ending_testing, lon_beginning_testing,
-                                                lon_ending_testing, beginning_testing, ending_testing)
 
-    # if not use_lstm:
-    #     from choose_training_sample import restrict_pools
-    #     training_inputs, training_classes = restrict_pools(training_angles, training_inputs, training_classes, training_rate=0.1)
+    training_classes, selected_slots = read_labels_remove_holes('csp', lat_beginning_testing, lat_ending_testing,
+                                                                lon_beginning_testing, lon_ending_testing,
+                                                                beginning_testing, ending_testing)
+    training_inputs = prepare_features(lat_beginning_testing, lat_ending_testing, lon_beginning_testing,
+                                       lon_ending_testing, beginning_testing, ending_testing, output_level,
+                                       selected_slots)
+
+    if not use_lstm:
+        from utils import typical_angles
+        training_angles = typical_angles(seed=1)
+        from choose_training_sample import restrict_pools
+        training_inputs, training_classes = restrict_pools(training_angles, training_inputs, training_classes, training_rate=0.1)
+        del training_angles
     nb_feats = training_inputs.shape[-1]
     nb_slots = training_inputs.shape[0]
     if use_keras_cnn:
@@ -335,7 +346,7 @@ def learn_new_model(nb_classes, class_to_exclude=None, method='cnn'):
         weather = WeatherMLP()
         pca_components = 5
         weather.compile(pca_components, nb_classes)
-        from learning import reshape_features
+        from learning_utils import reshape_features
         weather.fit_pca(reshape_features(training_inputs), pca_components)
         weather.fit(training_inputs, training_classes, nb_classes, fit_excluding=class_to_exclude)
         weather.save(path_model, path_pca, path_res)
@@ -347,7 +358,7 @@ def learn_new_model(nb_classes, class_to_exclude=None, method='cnn'):
 
 
 if __name__ == '__main__':
-    from learning import prepare_data, prepare_features
+    from learning_utils import prepare_data, prepare_features
     from utils import *
     slot_step = 1
     output_level = 'abstract'
@@ -366,14 +377,14 @@ if __name__ == '__main__':
     #                                                                beginning_testing, ending_testing, output_level)
 
     from read_labels import read_labels, read_labels_remove_holes
-    testing_inputs = prepare_features(lat_beginning_testing, lat_ending_testing, lon_beginning_testing,
+    testing_inputs, selected_slots = prepare_features(lat_beginning_testing, lat_ending_testing, lon_beginning_testing,
                                       lon_ending_testing, beginning_testing, ending_testing, output_level)
     testing_classes = read_labels_remove_holes('csp', lat_beginning_testing, lat_ending_testing, lon_beginning_testing,
-                                               lon_ending_testing, beginning_testing, ending_testing)
+                                               lon_ending_testing, beginning_testing, ending_testing, selected_slots)
 
     should_learn_new_model = True
     pca_components = None
-    meth = 'mlp'
+    meth = 'cnn'
     # visualize_map_time(testing_inputs, typical_bbox(), vmin=0, vmax=5, title='inputs')
 
     if should_learn_new_model:

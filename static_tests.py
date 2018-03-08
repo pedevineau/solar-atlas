@@ -108,7 +108,7 @@ def dynamic_temperature_test(lir_observed, temperature_mask, satellite_step, slo
     from numpy import shape, empty_like
     s = shape(lir_observed)
     to_return = empty_like(lir_observed, dtype=bool)
-    from thresholds import expected_brightness_temperature_only_emissivity
+    from temperature_forecast import expected_brightness_temperature_only_emissivity
     from read_metadata import read_satellite_name
     lw_nm = {
         'GOES16': 10.3*10**(-6),
@@ -561,7 +561,7 @@ def maybe_cloud_after_all(is_land, is_supposed_free, vis):
     :return:
     '''
     # apply only for a few consecutive days
-    from utils import np, get_nb_slots_per_day, vis_clear_sky_apply_rolling_on_time
+    from utils import np, get_nb_slots_per_day, apply_rolling_on_time
     is_supposed_free_for_long = is_supposed_free & np.roll(is_supposed_free, -1) & np.roll(is_supposed_free, 2) &\
                        is_supposed_free & np.roll(is_supposed_free, -2) & np.roll(is_supposed_free, 2)
     from read_metadata import read_satellite_step
@@ -571,7 +571,7 @@ def maybe_cloud_after_all(is_land, is_supposed_free, vis):
     assert entire_days < 11, 'please do not apply this test on strictly more than 10 days'
     vis_copy = vis.copy()
     vis_copy[~is_supposed_free_for_long] = 100
-    supposed_clear_sky = np.min(vis_clear_sky_apply_rolling_on_time(vis_copy, 5, 'mean').reshape((entire_days, slot_per_day, lats, lons)), axis=0)
+    supposed_clear_sky = np.min(apply_rolling_on_time(vis_copy, 5, 'mean').reshape((entire_days, slot_per_day, lats, lons)), axis=0)
     # from quick_visualization import visualize_map_time
     # visualize_map_time(supposed_clear_sky, typical_bbox())
     del vis_copy
@@ -583,6 +583,7 @@ def maybe_cloud_after_all(is_land, is_supposed_free, vis):
 def typical_static_classifier(seed=0, bypass=False):
     from infrared_predictors import get_cloud_index, get_cloud_index_positive_variability_5d
     from utils import typical_outputs, typical_temperatures_forecast, typical_land_mask, np, typical_time_step
+    from temperature_forecast import expected_brightness_temperature_only_emissivity
     zen, vis, ndsi, mask_input = typical_outputs('visible', 'ndsi', seed)
     infrared = typical_outputs('infrared', 'channel', seed)
     lands = typical_land_mask(seed)

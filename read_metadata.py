@@ -1,3 +1,11 @@
+'''
+author: Pierre-Etienne Devineau
+SOLARGIS S.R.O.
+
+Parsing all useful information from metadata.json
+'''
+
+
 def read_satellite_step():
     from json import load
     metadata = load(open('metadata.json'))

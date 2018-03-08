@@ -1,7 +1,7 @@
 import numpy as np
 from quick_visualization import visualize_map_time, visualize_map
 
-
+### THESE "typical inputs/outputs/etc" functions avoid to define the same values in every classes ###
 def typical_input(seed=0):
     from read_metadata import read_satellite_name
     sat_name = read_satellite_name()
@@ -16,12 +16,12 @@ def typical_input(seed=0):
             longitude_end = -110.+34
         elif sat_name == 'H08':
             beginning = 13525 + 180
-            nb_days = 1
+            nb_days = 3
             ending = beginning + nb_days - 1
-            latitude_beginning = 35-5.
-            latitude_end = 60.
-            longitude_beginning = 135-20.
-            longitude_end = 140
+            latitude_beginning = 40.
+            latitude_end = 45.
+            longitude_beginning = 115.
+            longitude_end = 120.
         return beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end
     else:
         if sat_name == 'GOES16':
@@ -66,6 +66,7 @@ def typical_land_mask(seed=0):
 
 
 def typical_temperatures_forecast(seed=0):
+    from temperature_forecast import prepare_temperature_mask
     beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end = typical_input(seed)
     lats, lons = get_latitudes_longitudes(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
     return prepare_temperature_mask(lats, lons, beginning, ending)
@@ -82,7 +83,9 @@ def typical_time_step():
     return read_satellite_step()
 
 
+### functions to shape the inputs and the labels for deep-learning (convolutionnal neural network, etc.) ###
 def chunk_spatial(arr, labels, (r, c)):
+    # pre-processing for deep-learning
     tiles, labels_tiles = [], []
     row = 0
     for x in range(0, arr.shape[0], r):
@@ -96,6 +99,7 @@ def chunk_spatial(arr, labels, (r, c)):
 
 
 def chunk_spatial_high_resolution(arr, (r, c)):
+    # pre-processing for deep-learning
     lla, llo, feats = arr.shape
     tiles = np.empty((lla, llo, r, c, feats))
     for lat in range(0, arr.shape[0]):
@@ -108,6 +112,7 @@ def chunk_spatial_high_resolution(arr, (r, c)):
 
 
 def chunk_4d(arr, labels, (r, c)):
+    # pre-processing for deep-learning
     tiles_3d = []
     labels_reduced = []
     for slot in range(len(arr)):
@@ -118,6 +123,7 @@ def chunk_4d(arr, labels, (r, c)):
 
 
 def chunk_4d_high_resolution(arr, (r, c)=(5, 5)):
+    # pre-processing for deep-learning
     ssl, lla, llo, feats = arr.shape
     tiles_3d = []
     for slot in range(len(arr)):
@@ -126,6 +132,7 @@ def chunk_4d_high_resolution(arr, (r, c)=(5, 5)):
 
 
 def chunk_5d_high_resolution(arr, (r, c)=(5, 5)):
+    # pre-processing for deep-learning
     ssl, lla, llo, feats = arr.shape
     tiles = np.empty((ssl, lla, llo, r, c, feats))
     for lat in range(0, lla):
@@ -173,24 +180,7 @@ def one_label_to_array(lab, shape, base=6):
     return to_return.reshape(shape)
 
 
-def print_date_from_dfb(begin, ending):
-    from datetime import datetime, timedelta
-    d_beginning = datetime(1980, 1, 1) + timedelta(days=begin-1, seconds=1)
-    d_ending = datetime(1980, 1, 1) + timedelta(days=ending + 1 -1, seconds=-1)
-    print 'Dates from ', str(d_beginning), ' till ', str(d_ending)
-    return d_beginning, d_ending
-
-
-def get_nb_slots_per_day(satellite_step, slot_step):
-    '''
-
-    :param satellite_step: the satellite characteristic time step between two slots (10 minutes for Himawari 8)
-    :param slot_step: the chosen sampling of slots. if slot_step = n, the sampled slots are s[0], s[n], s[2*n]...
-    :return: number of slots per day for this satellite and the chosen sampling step
-    '''
-    return int(24 * 60 / (satellite_step * slot_step))
-
-
+### compute rolling mean or median to smooth the albedo (for albedo-based cloud test) ###
 def rounding_mean_list(list_1d, window):
     cumsum = np.cumsum(np.insert(list_1d, 0, 0))
     list_1d[window/2:-window/2+1] = (cumsum[window:] - cumsum[:-window]) / float(window)
@@ -198,13 +188,21 @@ def rounding_mean_list(list_1d, window):
 
 
 def rounding_median_list(list_1d, window):
+    # not used practically because it is too resources-consuming
     from pandas import rolling_apply
     list_1d[window / 2:-window / 2 + 1] = \
         rolling_apply(list_1d, window=3, center=True, func=np.nanmedian)[window / 2:-window / 2 + 1]
     return list_1d
 
 
-def vis_clear_sky_apply_rolling_on_time(array, window=5, method='mean'):
+def apply_rolling_on_time(array, window=5, method='mean'):
+    '''
+
+    :param array:
+    :param window:
+    :param method:
+    :return:
+    '''
     assert window % 2 == 1, 'please give an uneven window width'
     s = array.shape
     assert len(s) in [1, 3], 'dimension non valid'
@@ -230,12 +228,14 @@ def vis_clear_sky_apply_rolling_on_time(array, window=5, method='mean'):
 
 
 def looks_like_night(point, indexes_to_test):
+    # unused
     for k in indexes_to_test:
         if (point[k]+1) != 0:
             return False
     return True
 
 
+### utilities ###
 def rc_to_latlon(r, c, size_tile=5):
     if r >= 0 and c >= 0:
         lat = 90 - size_tile*int(1+r)
@@ -281,14 +281,22 @@ def get_dfbs_slots(dfb_beginning, dfb_ending, satellite_timestep, slot_step):
     return dfbs, slots
 
 
-def save(path, to_be_saved):
-    from pickle import dump
-    dump(to_be_saved, open(path, 'wb'))
+def print_date_from_dfb(begin, ending):
+    from datetime import datetime, timedelta
+    d_beginning = datetime(1980, 1, 1) + timedelta(days=begin-1, seconds=1)
+    d_ending = datetime(1980, 1, 1) + timedelta(days=ending + 1 -1, seconds=-1)
+    print 'Dates from ', str(d_beginning), ' till ', str(d_ending)
+    return d_beginning, d_ending
 
 
-def load(path):
-    from pickle import load
-    return load(open(path, 'rb'))
+def get_nb_slots_per_day(satellite_step, slot_step):
+    '''
+
+    :param satellite_step: the satellite characteristic time step between two slots (10 minutes for Himawari 8)
+    :param slot_step: the chosen sampling of slots. if slot_step = n, the sampled slots are s[0], s[n], s[2*n]...
+    :return: number of slots per day for this satellite and the chosen sampling step
+    '''
+    return int(24 * 60 / (satellite_step * slot_step))
 
 
 def upper_divisor_slot_step(slot_step, nb_slots_per_day):
@@ -349,6 +357,7 @@ def normalize(array, mask=None, normalization='max', return_m_s=False):
 
 
 def get_centers(model, process):
+    # for gaussian mixture (not used now)
     if process in ['gaussian', 'bayesian']:
         return model.means_
     elif process == 'kmeans':
@@ -358,6 +367,7 @@ def get_centers(model, process):
 
 
 def get_std(model, process, index):
+    # for gaussian mixture (not used now)
     if process in ['gaussian', 'bayesian']:
         return np.sqrt(model.covariances_[index, 0, 0])
     elif process == 'kmeans':
@@ -366,37 +376,17 @@ def get_std(model, process, index):
         raise Exception('not implemented classifier')
 
 
-def prepare_temperature_mask(lats, lons, beginning, ending, slot_step=1):
-    '''
-    Create a temperature mask which has the same temporal sampling than spectral channels
-    :param lats: latitudes array
-    :param lons: longitudes array
-    :param beginning: dfb beginning sampling
-    :param ending: dfb ending sampling
-    :param slot_step: slot sampling chosen by the user (probably 1)
-    :return:
-    '''
-    from read_netcdf import read_temperature_forecast
-    from read_metadata import read_satellite_step
-    satellite_step = read_satellite_step()
-    nb_slots = get_nb_slots_per_day(satellite_step, slot_step)*(ending-beginning+1)
-    temperatures = read_temperature_forecast(lats, lons, beginning, ending)
-    to_return = np.empty((nb_slots, len(lats), len(lons)))
-    for slot in range(nb_slots):
-        try:
-            nearest_temp_meas = int(0.5+satellite_step*slot_step*slot/60)
-            to_return[slot] = temperatures[nearest_temp_meas] + 273.15
-        except IndexError:
-            nearest_temp_meas = int(satellite_step*slot_step*slot/60)
-            to_return[slot] = temperatures[nearest_temp_meas] + 273.15
-    return to_return
+def save(path, to_be_saved):
+    from pickle import dump
+    dump(to_be_saved, open(path, 'wb'))
+
+
+def load(path):
+    from pickle import load
+    return load(open(path, 'rb'))
 
 
 if __name__ == '__main__':
     dfb_begin, dfb_end, latitude_begin, latitude_end, longitude_begin, longitude_end = typical_input()
     print rc_to_latlon(10,53)
     print latlon_to_rc(35,135)
-    # features = typical_outputs('visible', 'channel')
-    # visualize_map_time(features[:,:,:,0], typical_bbox())
-    # tiles = chunk_3d_high_resolution(features, (5, 5))
-

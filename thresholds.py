@@ -65,19 +65,8 @@ def compute_mir_lir_texture_land():
     return 2
 
 
-def expected_brightness_temperature_only_emissivity(forecast_temperature, lw_nm, eps):
-    # if there is also infrared reflectance, the observed brightness temperature will be higher
-    # this function is designed for clouds recognition (their characteristics are low emissivity & very low reflectance in long infrared)
-    from numpy import log, exp
-    c = 3.0 * 10 ** 8
-    h = 6.626 * 10 ** (-34)
-    k = 1.38 * 10 ** (-23)
-    K = h / k
-    nu = c / lw_nm
-    return 1. / (1 / (K * nu) * log(1 + (exp(K * nu / forecast_temperature) - 1) / eps))
-
-
 def compute_vis_sea_coasts_cloud_factors(zen):
+    # Inspired from Hocking (2011)
     from numpy import cos, power
     cos_zen = cos(zen)
     cos_zen[cos_zen < 0.03] = 0.03

@@ -1,11 +1,22 @@
+'''
+author: Pierre-Etienne Devineau
+SOLARGIS S.R.O.
+'''
+
 def read_labels_keep_holes(label_type, lat_beginning, lat_ending, lon_beginning,  lon_ending,
                 dfb_beginning, dfb_ending, slot_step=1):
+    '''
+    :return: labels where missing data is tagged with a fill_value (by default equal to -10)
+    '''
     return read_labels(label_type, lat_beginning, lat_ending, lon_beginning, lon_ending,
-                dfb_beginning, dfb_ending, slot_step, keep_holes=True)
+                dfb_beginning, dfb_ending, slot_step, keep_holes=True)[0], None
 
 
 def read_labels_remove_holes(label_type, lat_beginning, lat_ending, lon_beginning,  lon_ending,
                 dfb_beginning, dfb_ending, slot_step=1):
+    '''
+    :return: tuple with: labels skipping missing data, list of slots where we have labels
+    '''
     return read_labels(label_type, lat_beginning, lat_ending, lon_beginning, lon_ending,
                 dfb_beginning, dfb_ending, slot_step, keep_holes=False)
 
@@ -40,13 +51,14 @@ def read_labels(label_type, lat_beginning, lat_ending, lon_beginning,  lon_endin
         lonmin = 115.
         latmax = 60
     if read_satellite_name() == 'GOES16':
-        raise Exception('no labels available for GOES16')
+        raise Exception('no labels available for GOES16 yet')
 
     lat_beginning_ind = int((latmax-lat_ending)/res)
     lat_ending_ind = int((latmax-lat_beginning)/res)
     lon_beginning_ind = int((lon_beginning-lonmin)/res)
     lon_ending_ind = int((lon_ending-lonmin)/res)
 
+    selected_slots = []
     from numpy import asarray
     if keep_holes:
         from numpy import ones
@@ -58,9 +70,10 @@ def read_labels(label_type, lat_beginning, lat_ending, lon_beginning,  lon_endin
     from general_utils.daytimeconv import dfb2yyyymmdd
     for dfb in range(dfb_beginning, dfb_ending+1):
         pre_pattern = dfb2yyyymmdd(dfb)
-        for slot in range(nb_slots_per_day):
+        for slot_of_the_day in range(nb_slots_per_day):
             try:
-                total_minutes = satellite_step*slot_step*slot
+                real_slot = slot_of_the_day + (dfb-dfb_beginning) * nb_slots_per_day
+                total_minutes = satellite_step*slot_step*slot_of_the_day
                 hours, minutes = total_minutes / 60 , total_minutes % 60
                 if len(str(hours)) == 1:
                     hours = '0' + str(hours)
@@ -69,14 +82,15 @@ def read_labels(label_type, lat_beginning, lat_ending, lon_beginning,  lon_endin
                 filename = pre_pattern + str(hours) + str(minutes) + '00-' + label_type + '_LATLON-HIMAWARI8-AHI.nc'
                 content = Dataset(str(os.path.join(dir_, filename)))
                 if keep_holes:
-                    to_return[slot + (dfb-dfb_beginning) * nb_slots_per_day] = \
+                    to_return[real_slot] = \
                         content.variables[var_][lat_beginning_ind: lat_ending_ind, lon_beginning_ind:lon_ending_ind]
                 else:
                     to_return.append(content.variables[var_][lat_beginning_ind: lat_ending_ind, lon_beginning_ind:lon_ending_ind])
+                selected_slots.append(real_slot)
             except Exception as e:
-                # print e
+                # the data for this slot does not exist or has not been load
                 pass
-    return asarray(to_return)
+    return asarray(to_return), selected_slots
 
 
 if __name__ == '__main__':
