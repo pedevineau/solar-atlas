@@ -214,6 +214,16 @@ def prepare_angles_features_classes_ped(seed=0, keep_holes=True, method_labels='
         classes = reduce_classes(classes)
     t_classes = time()
     print 'time classes:', t_classes - t_begin
+
+    if selected_slots is not None:
+        restricted_classes_in_time = classes[selected_slots, :, :, :]
+        print 'SELECTED SLOTS'
+        dict = {}
+        for k, slot in enumerate(selected_slots):
+            dict[str(k)] = slot
+        print dict
+        return angles, features, restricted_classes_in_time
+
     return angles, features, classes
 
 
@@ -255,8 +265,8 @@ def prepare_angles_features_bom_labels(seed, selected_slots):
     land_mask = typical_land_mask(seed)
     mask = ((test_angles | land_mask) | mask)
     ndsi[mask] = -10
-    features[:, :, :, 3] = test_angles
-    features[:, :, :, 4] = land_mask
+    features[:, :, :, 5] = test_angles
+    features[:, :, :, 6] = land_mask
     del test_angles, land_mask, mask
     features[:, :, :, 3] = vis
     features[:, :, :, 4] = ndsi
@@ -266,12 +276,7 @@ def prepare_angles_features_bom_labels(seed, selected_slots):
     from static_tests import typical_static_classifier
     features[:, :, :, 7] = (typical_static_classifier(seed) >= 2)
     if selected_slots is not None:
-        features_restricted_in_time = np.empty((len(selected_slots), b, c))
-        angles_restricted_in_time = np.empty((len(selected_slots), b, c, nb_features_))
-        for k in range(len(selected_slots)):
-            features_restricted_in_time[k] = features[selected_slots[k]]
-            angles_restricted_in_time[k] = angles[selected_slots[k]]
-        return angles_restricted_in_time, features_restricted_in_time, selected_slots
+        return angles[selected_slots], features[selected_slots], selected_slots
     return angles, features, selected_slots
 
 
@@ -315,8 +320,8 @@ def prepare_angles_features_ped_labels(seed, keep_holes=True):
     land_mask = typical_land_mask(seed)
     mask = ((test_angles | land_mask) | mask)
     ndsi[mask] = -10
-    features[:, :, :, 3] = test_angles
-    features[:, :, :, 4] = land_mask
+    features[:, :, :, 5] = test_angles
+    features[:, :, :, 6] = land_mask
     del test_angles, land_mask, mask
     features[:, :, :, 3] = vis
     features[:, :, :, 4] = ndsi
@@ -326,12 +331,8 @@ def prepare_angles_features_ped_labels(seed, keep_holes=True):
     features = np.empty((a, b, c, nb_features_))
 
     if selected_slots is not None:
-        features_restricted_in_time = np.empty((len(selected_slots), b, c, nb_features_))
-        angles_restricted_in_time = np.empty((len(selected_slots), b, c))
-        for k in range(len(selected_slots)):
-            features_restricted_in_time[k, :, :, 0:7] = features[selected_slots[k], :, :, 0:7]
-            angles_restricted_in_time[k] = angles[selected_slots[k]]
-        return angles_restricted_in_time, features_restricted_in_time, selected_slots
+        features[selected_slots, :, :, 7] = labels
+        return angles[selected_slots], features[selected_slots], selected_slots
     else:
         features[:, :, :, 7] = labels
         return angles, features, selected_slots
