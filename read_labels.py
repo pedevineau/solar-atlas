@@ -99,4 +99,4 @@ if __name__ == '__main__':
     print dfb_begin, dfb_end
     print_date_from_dfb(dfb_begin, dfb_end)
     visualize_map_time(read_labels('CSP', latitude_begin, latitude_end, longitude_begin, longitude_end,
-                                   dfb_begin, dfb_end), typical_bbox())
+                                   dfb_begin, dfb_end)[0], typical_bbox())

@@ -158,80 +158,181 @@ def train_solar_model(zen, classes, features, method_learning, meta_method, pca_
     print 'time save:', t_save - t_train
 
 
-def prepare_data(latitude_beginning, latitude_end, longitude_beginning, longitude_end, beginning, ending, output_level, seed=0):
-    from angles_geom import get_zenith_angle
-    from utils import get_latitudes_longitudes, print_date_from_dfb, get_times_utc
-    from read_metadata import read_satellite_step
+def prepare_angles_features_classes_ped(seed=0, keep_holes=True, method_labels='static'):
+    '''
+
+    :param seed:
+    :param keep_holes:
+    :param method_labels: 'static' [recommended], 'on-point', 'otsu-2d', 'otsu-3d', 'watershed-2d', 'watershed-3d'
+    :return:
+    '''
+
+    angles, features, selected_slots = prepare_angles_features_ped_labels(seed, keep_holes)
+    if selected_slots is not None:
+        print 'SELECTED SLOTS'
+        dict = {}
+        for k, slot in enumerate(selected_slots):
+            dict[str(k)] = slot
+        print dict
+
+    from utils import get_latitudes_longitudes, print_date_from_dfb, typical_input
+    beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end = typical_input(seed)
     latitudes, longitudes = get_latitudes_longitudes(latitude_beginning, latitude_end,
                                                      longitude_beginning, longitude_end)
-
     print_date_from_dfb(beginning, ending)
     print beginning, ending
     print 'NS:', latitude_beginning, latitude_end, ' WE:', longitude_beginning, longitude_end
-    angles = get_zenith_angle(get_times_utc(beginning, ending, read_satellite_step(), slot_step=1), latitudes, longitudes)
-    features = prepare_features(angles, beginning, ending, latitudes, longitudes, output_level, seed)
     from time import time
     t_begin = time()
-    from decision_tree import get_classes_v1_point, get_classes_v2_image
-    method_labels = 'static'  # 'on-point', 'otsu-2d', 'otsu-3d', 'watershed-2d', 'watershed-3d', static
     print method_labels
     assert method_labels in ['on-point', 'otsu-2d', 'otsu-3d', 'watershed-2d', 'watershed-3d', 'static'], 'unknown label method'
-    if method_labels == 'on-point':
+    if method_labels == 'static':
+        from static_tests import typical_static_classifier
+        classes = typical_static_classifier(seed)
+    elif method_labels == 'on-point':
+        # not really used anymore
+        from decision_tree import get_classes_v1_point
         classes = get_classes_v1_point(latitudes,
-                                        longitudes,
-                                        beginning,
-                                        ending,
-                                        slot_step,
-                                        )
+                                       longitudes,
+                                       beginning,
+                                       ending,
+                                       slot_step,
+                                       )
         from decision_tree import reduce_classes
         classes = reduce_classes(classes)
     elif method_labels in ['otsu-2d', 'otsu-3d', 'watershed-2d', 'watershed-3d']:
+        # not really used anymore
+        from decision_tree import get_classes_v2_image
         classes = get_classes_v2_image(latitudes,
-                                        longitudes,
-                                        beginning,
-                                        ending,
-                                        slot_step,
-                                        method_labels
+                                       longitudes,
+                                       beginning,
+                                       ending,
+                                       slot_step,
+                                       method_labels
                                         )
         from decision_tree import reduce_classes
         classes = reduce_classes(classes)
-    elif method_labels == 'static':
-        from static_tests import typical_static_classifier
-        classes = typical_static_classifier(seed)
     t_classes = time()
     print 'time classes:', t_classes - t_begin
     return angles, features, classes
 
 
-def prepare_features(latitude_beginning, latitude_end, longitude_beginning, longitude_end, beginning, ending,
-                     output_level, selected_slots=None, seed=0):
+def prepare_angles_features_classes_bom(seed=0, keep_holes=True):
+    from utils import typical_input
+    beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end = typical_input(seed)
+
+    from read_labels import read_labels_keep_holes, read_labels_remove_holes
+
+    if keep_holes:
+        classes, selected_slots = read_labels_keep_holes('csp',latitude_beginning, latitude_end, longitude_beginning,
+                                                         longitude_end, beginning, ending)
+    else:
+        classes, selected_slots = read_labels_remove_holes('csp', latitude_beginning, latitude_end, longitude_beginning,
+                                                           longitude_end, beginning, ending)
+
+    # the folowing function returns a tuple (angles, features, selected slots)
+    angles, features, selected_slots = prepare_angles_features_bom_labels(seed, selected_slots)
+    return angles, features, classes
+
+
+def prepare_angles_features_bom_labels(seed, selected_slots):
     from static_tests import dawn_day_test
     from utils import typical_land_mask
     from get_data import get_features
-    from utils import get_times_utc, np, get_latitudes_longitudes
+    from utils import get_times_utc, np, get_latitudes_longitudes, typical_input
     from read_metadata import read_satellite_step
-    from angles_geom import get_zenith_angle
+
+    beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end = typical_input(seed)
     times = get_times_utc(beginning, ending, read_satellite_step(), slot_step=1)
     latitudes, longitudes = get_latitudes_longitudes(latitude_beginning, latitude_end,
                                                      longitude_beginning, longitude_end)
-    angles = get_zenith_angle(times, latitudes, longitudes)
     a, b, c = len(times), len(latitudes), len(longitudes)
-    nb_features_ = 7
+    nb_features_ = 8
     features = np.empty((a, b, c, nb_features_))
-    features[:, :, :, :3] = get_features('infrared', latitudes, longitudes, beginning, ending, output_level,
+    angles, vis, ndsi, mask = get_features('visible', latitudes, longitudes, beginning, ending, output_level='ndsi',
+                                          slot_step=1, gray_scale=False)
+    features[:, :, :, 5] = dawn_day_test(angles)
+    features[:, :, :, 6] = typical_land_mask(seed)
+    mask = (features[:, :, :, 5] | features[:, :, :, 6] | mask)
+    ndsi[mask] = -10
+
+    features[:, :, :, 3] = vis
+    features[:, :, :, 4] = ndsi
+    del vis, ndsi, mask
+    features[:, :, :, :3] = get_features('infrared', latitudes, longitudes, beginning, ending, output_level='abstract',
                                          slot_step=1, gray_scale=False)[:, :, :, :3]
-    features[:, :, :, 3] = get_features('visible', latitudes, longitudes, beginning, ending, output_level,
-                                          slot_step=1, gray_scale=False)[:, :, :, 1]
-    features[:, :, :, 4] = dawn_day_test(angles)
-    features[:, :, :, 5] = typical_land_mask(seed)
     from static_tests import typical_static_classifier
-    features[:, :, :, 6] = (typical_static_classifier(seed) >= 2)
+    features[:, :, :, 7] = (typical_static_classifier(seed) >= 2)
     if selected_slots is not None:
-        selected_features = np.empty((len(selected_slots), b, c, nb_features_))
+        features_restricted_in_time = np.empty((len(selected_slots), b, c))
+        angles_restricted_in_time = np.empty((len(selected_slots), b, c, nb_features_))
         for k in range(len(selected_slots)):
-            selected_features[k] = features[selected_slots[k]]
-        return selected_features
-    return features
+            features_restricted_in_time[k] = features[selected_slots[k]]
+            angles_restricted_in_time[k] = angles[selected_slots[k]]
+        return angles_restricted_in_time, features_restricted_in_time, selected_slots
+    return angles, features, selected_slots
+
+
+def prepare_angles_features_ped_labels(seed, keep_holes=True):
+    '''
+
+    :param latitude_beginning:
+    :param latitude_end:
+    :param longitude_beginning:
+    :param longitude_end:
+    :param beginning:
+    :param ending:
+    :param output_level:
+    :param seed:
+    :param keep_holes:
+    :return:
+    '''
+    from static_tests import dawn_day_test
+    from utils import typical_land_mask
+    from get_data import get_features
+    from utils import get_times_utc, np, get_latitudes_longitudes, typical_input
+    from read_metadata import read_satellite_step
+
+    beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end = typical_input(seed)
+
+    times = get_times_utc(beginning, ending, read_satellite_step(), slot_step=1)
+    latitudes, longitudes = get_latitudes_longitudes(latitude_beginning, latitude_end,
+                                                     longitude_beginning, longitude_end)
+    from read_labels import read_labels_remove_holes, read_labels_keep_holes
+    if keep_holes:
+        labels, selected_slots = read_labels_keep_holes('csp', lat_beginning_testing, lat_ending_testing, lon_beginning_testing,
+                                                        lon_ending_testing, beginning_testing, ending_testing)
+    else:
+        labels, selected_slots = read_labels_remove_holes('csp', lat_beginning_testing, lat_ending_testing, lon_beginning_testing,
+                                                          lon_ending_testing, beginning_testing, ending_testing)
+
+    a, b, c = len(times), len(latitudes), len(longitudes)
+    nb_features_ = 8
+    features = np.empty((a, b, c, nb_features_))
+    angles, vis, ndsi, mask = get_features('visible', latitudes, longitudes, beginning, ending, output_level='ndsi',
+                                           slot_step=1, gray_scale=False)
+    features[:, :, :, 5] = dawn_day_test(angles)
+    features[:, :, :, 6] = typical_land_mask(seed)
+    mask = (features[:, :, :, 5] | features[:, :, :, 6] | mask)
+    ndsi[mask] = -10
+
+    features[:, :, :, 3] = vis
+    features[:, :, :, 4] = ndsi
+    del vis, ndsi, mask
+    features[:, :, :, :3] = get_features('infrared', latitudes, longitudes, beginning, ending, output_level='abstract',
+                                         slot_step=1, gray_scale=False)[:, :, :, :3]
+    features = np.empty((a, b, c, nb_features_))
+
+    if selected_slots is not None:
+        features_restricted_in_time = np.empty((len(selected_slots), b, c, nb_features_))
+        angles_restricted_in_time = np.empty((len(selected_slots), b, c))
+        for k in range(len(selected_slots)):
+            features_restricted_in_time[k, :, :, 0:7] = features[selected_slots[k], :, :, 0:7]
+            angles_restricted_in_time[k] = angles[selected_slots[k]]
+        return angles_restricted_in_time, features_restricted_in_time, selected_slots
+    else:
+        features[:, :, :, 7] = labels
+        return angles, features, selected_slots
 
 
 if __name__ == '__main__':
@@ -243,9 +344,7 @@ if __name__ == '__main__':
 
     beginning_testing, ending_testing, lat_beginning_testing, lat_ending_testing, lon_beginning_testing, lon_ending_testing = typical_input(seed=0)
 
-    testing_angles, testing_inputs, testing_classes = prepare_data(lat_beginning_testing, lat_ending_testing,
-                                                                   lon_beginning_testing, lon_ending_testing,
-                                                                   beginning_testing, ending_testing, 'abstract')
+    testing_angles, testing_inputs, testing_classes = prepare_angles_features_classes_ped(seed=0, keep_holes=True)
     from choose_training_sample import restrict_pools
 
     inputs, labs = restrict_pools(testing_angles, testing_inputs, testing_classes)
@@ -265,10 +364,10 @@ if __name__ == '__main__':
         META_METHODS = ['bagging']  # ,'b']
         PCA_COMPONENTS = [None]  # 2, None, 3, 4
         beginning_training, ending_training, lat_beginning_training, lat_ending_training, lon_beginning_training, lon_ending_training = typical_input(seed=1)
-        training_angles, training_inputs, training_classes = prepare_data(lat_beginning_training, lat_ending_training,
-                                                                          lon_beginning_training, lon_ending_training,
-                                                                          beginning_training, ending_training,  'abstract',
-                                                                          seed=1)
+        training_angles, training_inputs, training_classes = prepare_angles_features_classes_ped(lat_beginning_training, lat_ending_training,
+                                                                                                 lon_beginning_training, lon_ending_training,
+                                                                                                 beginning_training, ending_training,  'abstract',
+                                                                                                 seed=1)
         for k in range(len(METHODS_LEARNING)):
             for l in range(len(META_METHODS)):
                 for m in range(len(PCA_COMPONENTS)):

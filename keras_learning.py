@@ -315,28 +315,20 @@ def learn_new_model(nb_classes, class_to_exclude=None, method='cnn'):
     use_keras_cnn = (method == 'cnn')
     use_mlp = (method == 'mlp')
     use_lstm = (method == 'lstm')
+    seed_training = 1
     beginning_training, ending_training, lat_beginning_training, lat_ending_training, lon_beginning_training, lon_ending_training = typical_input(
-        seed=1)
-    # training_angles, training_inputs, training_classes = prepare_data(lat_beginning_training, lat_ending_training,
-    #                                                                   lon_beginning_training, lon_ending_training,
-    #                                                                   beginning_training, ending_training, output_level,
-    #                                                                   seed=1)
+        seed=seed_training)
 
-    training_classes, selected_slots = read_labels_remove_holes('csp', lat_beginning_testing, lat_ending_testing,
-                                                                lon_beginning_testing, lon_ending_testing,
-                                                                beginning_testing, ending_testing)
-    training_inputs = prepare_features(lat_beginning_testing, lat_ending_testing, lon_beginning_testing,
-                                       lon_ending_testing, beginning_testing, ending_testing, output_level,
-                                       selected_slots)
+    from learning_utils import prepare_angles_features_classes_ped
+    # the two parameters (seed, keep_holes) are critical
+    angles, training_inputs, training_classes = prepare_angles_features_classes_ped(seed=seed_training, keep_holes=True)
 
-    if not use_lstm:
-        from utils import typical_angles
-        training_angles = typical_angles(seed=1)
+    if False and not use_lstm:
         from choose_training_sample import restrict_pools
-        training_inputs, training_classes = restrict_pools(training_angles, training_inputs, training_classes, training_rate=0.1)
-        del training_angles
+        angles, training_inputs, training_classes = restrict_pools(angles, training_inputs, training_classes, training_rate=0.1)
     nb_feats = training_inputs.shape[-1]
     nb_slots = training_inputs.shape[0]
+    del angles
     if use_keras_cnn:
         weather = WeatherCNN(resolution=res)
         weather.compile(res, res, nb_feats, nb_classes)
@@ -358,7 +350,7 @@ def learn_new_model(nb_classes, class_to_exclude=None, method='cnn'):
 
 
 if __name__ == '__main__':
-    from learning_utils import prepare_data, prepare_features
+    from learning_utils import prepare_angles_features_classes_ped, prepare_angles_features_bom_labels
     from utils import *
     slot_step = 1
     output_level = 'abstract'
@@ -370,17 +362,9 @@ if __name__ == '__main__':
     path_pca = read_satellite_pca_path()
     path_res = read_satellite_resolution_path()
 
-    beginning_testing, ending_testing, lat_beginning_testing, lat_ending_testing, lon_beginning_testing, lon_ending_testing = typical_input(seed=0)
-
-    # testing_angles, testing_inputs, testing_classes = prepare_data(lat_beginning_testing, lat_ending_testing,
-    #                                                                lon_beginning_testing, lon_ending_testing,
-    #                                                                beginning_testing, ending_testing, output_level)
-
-    from read_labels import read_labels, read_labels_remove_holes, read_labels_keep_holes
-    testing_classes, selected_slots = read_labels_keep_holes('csp', lat_beginning_testing, lat_ending_testing, lon_beginning_testing,
-                                               lon_ending_testing, beginning_testing, ending_testing)
-    testing_inputs = prepare_features(lat_beginning_testing, lat_ending_testing, lon_beginning_testing,
-                                      lon_ending_testing, beginning_testing, ending_testing, output_level, None)
+    seed_testing = 0
+    testing_angles, testing_inputs, testing_classes = prepare_angles_features_classes_ped(seed=seed_testing, keep_holes=True)
+    #     testing_angles, testing_inputs, testing_classes = prepare_angles_features_classes_bom(seed=seed_testing)
 
     should_learn_new_model = False
     pca_components = None

@@ -42,7 +42,6 @@ def mask_temporally_stratified_samples(zen, training_rate, number_of_layers):
 
 def restrict_pools(zen, training_pool, labels_pool, training_rate=0.1, number_of_layers=8):
     select = mask_temporally_stratified_samples(zen, training_rate, number_of_layers)
-    nb_feats = training_pool.shape[-1]
     inp, lab = [], []
     for slot in range(len(select)):
         if select[slot]:
