@@ -250,15 +250,17 @@ def prepare_angles_features_bom_labels(seed, selected_slots):
     nb_features_ = 8
     features = np.empty((a, b, c, nb_features_))
     angles, vis, ndsi, mask = get_features('visible', latitudes, longitudes, beginning, ending, output_level='ndsi',
-                                          slot_step=1, gray_scale=False)
-    features[:, :, :, 5] = dawn_day_test(angles)
-    features[:, :, :, 6] = typical_land_mask(seed)
-    mask = (features[:, :, :, 5] | features[:, :, :, 6] | mask)
+                                           slot_step=1, gray_scale=False)
+    test_angles = dawn_day_test(angles)
+    land_mask = typical_land_mask(seed)
+    mask = ((test_angles | land_mask) | mask)
     ndsi[mask] = -10
-
+    features[:, :, :, 3] = test_angles
+    features[:, :, :, 4] = land_mask
+    del test_angles, land_mask, mask
     features[:, :, :, 3] = vis
     features[:, :, :, 4] = ndsi
-    del vis, ndsi, mask
+    del vis, ndsi
     features[:, :, :, :3] = get_features('infrared', latitudes, longitudes, beginning, ending, output_level='abstract',
                                          slot_step=1, gray_scale=False)[:, :, :, :3]
     from static_tests import typical_static_classifier
@@ -309,14 +311,16 @@ def prepare_angles_features_ped_labels(seed, keep_holes=True):
     features = np.empty((a, b, c, nb_features_))
     angles, vis, ndsi, mask = get_features('visible', latitudes, longitudes, beginning, ending, output_level='ndsi',
                                            slot_step=1, gray_scale=False)
-    features[:, :, :, 5] = dawn_day_test(angles)
-    features[:, :, :, 6] = typical_land_mask(seed)
-    mask = (features[:, :, :, 5] | features[:, :, :, 6] | mask)
+    test_angles = dawn_day_test(angles)
+    land_mask = typical_land_mask(seed)
+    mask = ((test_angles | land_mask) | mask)
     ndsi[mask] = -10
-
+    features[:, :, :, 3] = test_angles
+    features[:, :, :, 4] = land_mask
+    del test_angles, land_mask, mask
     features[:, :, :, 3] = vis
     features[:, :, :, 4] = ndsi
-    del vis, ndsi, mask
+    del vis, ndsi
     features[:, :, :, :3] = get_features('infrared', latitudes, longitudes, beginning, ending, output_level='abstract',
                                          slot_step=1, gray_scale=False)[:, :, :, :3]
     features = np.empty((a, b, c, nb_features_))
@@ -362,10 +366,7 @@ if __name__ == '__main__':
         META_METHODS = ['bagging']  # ,'b']
         PCA_COMPONENTS = [None]  # 2, None, 3, 4
         beginning_training, ending_training, lat_beginning_training, lat_ending_training, lon_beginning_training, lon_ending_training = typical_input(seed=1)
-        training_angles, training_inputs, training_classes = prepare_angles_features_classes_ped(lat_beginning_training, lat_ending_training,
-                                                                                                 lon_beginning_training, lon_ending_training,
-                                                                                                 beginning_training, ending_training,  'abstract',
-                                                                                                 seed=1)
+        training_angles, training_inputs, training_classes = prepare_angles_features_classes_ped(seed=1)
         for k in range(len(METHODS_LEARNING)):
             for l in range(len(META_METHODS)):
                 for m in range(len(PCA_COMPONENTS)):
