@@ -5,6 +5,7 @@ SOLARGIS S.R.O.
 To measure the relative efficiency of each cloud test
 '''
 
+
 def corr2test(test_1, test_2):
     # expect list
     # test_1 = test_1.flatten()
@@ -14,7 +15,7 @@ def corr2test(test_1, test_2):
     return score
 
 
-def common_scores(*args):
+def compute_common_scores(*args):
     # expect list
     n = len(args)
     common = args[0]
@@ -24,6 +25,23 @@ def common_scores(*args):
     for l in range(n):
         score.append(corr2test(common, args[l]))
     return score
+
+
+def compute_unique_scores(*args):
+    # expect list
+    n = len(args)
+    from numpy import zeros
+    common = args[0]
+    for k in range(1, n):
+        common = (args[k] | common)
+    scores = []
+    for k in range(n):
+        for l in range(n):
+            diff = zeros(len(args[0]))
+            if k != l:
+                diff = diff | (args[k] ^ args[l])
+        scores.append(corr2test(diff, common))
+    return scores
 
 
 def visualize_regular_cloud_tests():
@@ -44,15 +62,22 @@ def visualize_regular_cloud_tests():
     epsilon_condition = epsilon_transparent_cloud_test(cli_epsilon)
     gross_condition = gross_cloud_test(lir, lir_forecast)
     thin_condition = thin_cirrus_test(lands, lir, fir, lir_forecast, fir_forecast)
-    scores = common_scores(
+
+    print 'CONDITIONS: GROSS, CLI, EPSILON, THIN'
+    print 'COMMON SCORES FOR LAND DAWN-DAY PRIMARY CLOUD CLASSIFICATION'
+    print compute_common_scores(
         gross_condition[common_condition],
         cli_condition[common_condition],
         epsilon_condition[common_condition],
         thin_condition[common_condition],
     )
-    print 'SCORES FOR LAND DAWN-DAY PRIMARY CLOUD CLASSIFICATION'
-    print 'CONDITIONS: CLI, EPSILON, GROSS, THIN'
-    print scores
+    print 'INDIVIDUAL SCORES FOR LAND DAWN-DAY PRIMARY CLOUD CLASSIFICATION'
+    print compute_unique_scores(
+        gross_condition[common_condition],
+        cli_condition[common_condition],
+        epsilon_condition[common_condition],
+        thin_condition[common_condition],
+    )
     to_return = zeros_like(cli_condition)
     to_return[gross_condition] = 1
     to_return[cli_condition] = 2
