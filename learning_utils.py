@@ -300,11 +300,9 @@ def prepare_angles_features_ped_labels(seed, keep_holes=True):
                                                      longitude_beginning, longitude_end)
     from read_labels import read_labels_remove_holes, read_labels_keep_holes
     if keep_holes:
-        labels, selected_slots = read_labels_keep_holes('csp', lat_beginning_testing, lat_ending_testing, lon_beginning_testing,
-                                                        lon_ending_testing, beginning_testing, ending_testing)
+        labels, selected_slots = read_labels_keep_holes('csp', latitude_beginning, latitude_end, longitude_beginning, longitude_end, beginning, ending)
     else:
-        labels, selected_slots = read_labels_remove_holes('csp', lat_beginning_testing, lat_ending_testing, lon_beginning_testing,
-                                                          lon_ending_testing, beginning_testing, ending_testing)
+        labels, selected_slots = read_labels_remove_holes('csp', latitude_beginning, latitude_end, longitude_beginning, longitude_end, beginning, ending)
 
     a, b, c = len(times), len(latitudes), len(longitudes)
     nb_features_ = 8
