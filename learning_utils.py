@@ -222,6 +222,10 @@ def prepare_angles_features_classes_ped(seed=0, keep_holes=True, method_labels='
         for k, slot in enumerate(selected_slots):
             dict[str(k)] = slot
         print dict
+        from quick_visualization import visualize_map_time, get_bbox
+        bbox = get_bbox(latitudes[0], latitudes[-1], longitudes[0], longitudes[-1])
+        visualize_map_time(restricted_classes_in_time, bbox)
+        visualize_map_time(features, bbox)
         return angles, features, restricted_classes_in_time
 
     return angles, features, classes

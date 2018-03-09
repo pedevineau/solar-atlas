@@ -366,7 +366,7 @@ if __name__ == '__main__':
     testing_angles, testing_inputs, testing_classes = prepare_angles_features_classes_ped(seed=seed_testing, keep_holes=False)
     #     testing_angles, testing_inputs, testing_classes = prepare_angles_features_classes_bom(seed=seed_testing)
 
-    should_learn_new_model = True
+    should_learn_new_model = False
     pca_components = None
     meth = 'cnn'
     # visualize_map_time(testing_inputs, typical_bbox(), vmin=0, vmax=5, title='inputs')
