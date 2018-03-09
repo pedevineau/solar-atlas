@@ -351,7 +351,7 @@ if __name__ == '__main__':
 
     inputs, labs = restrict_pools(testing_angles, testing_inputs, testing_classes)
     sl, la, lo, fe = testing_inputs.shape
-    inputs = inputs.reshape((len(inputs)/la/lo, la, lo, fe))
+    inputs = inputs.reshape(((1.*len(inputs))/la/lo, la, lo, fe))
     # print (inputs[:, 15, 15, 4]>0).mean()
     # print (testing_inputs[:, 15, 15, 4]>0).mean()
     print (inputs[:, 15, 15, 3]>-10).mean()

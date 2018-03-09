@@ -321,7 +321,7 @@ def learn_new_model(nb_classes, class_to_exclude=None, method='cnn'):
 
     from learning_utils import prepare_angles_features_classes_ped
     # the two parameters (seed, keep_holes) are critical
-    angles, training_inputs, training_classes = prepare_angles_features_classes_ped(seed=seed_training, keep_holes=True)
+    angles, training_inputs, training_classes = prepare_angles_features_classes_ped(seed=seed_training, keep_holes=False)
 
     if False and not use_lstm:
         from choose_training_sample import restrict_pools
@@ -363,7 +363,7 @@ if __name__ == '__main__':
     path_res = read_satellite_resolution_path()
 
     seed_testing = 0
-    testing_angles, testing_inputs, testing_classes = prepare_angles_features_classes_ped(seed=seed_testing, keep_holes=True)
+    testing_angles, testing_inputs, testing_classes = prepare_angles_features_classes_ped(seed=seed_testing, keep_holes=False)
     #     testing_angles, testing_inputs, testing_classes = prepare_angles_features_classes_bom(seed=seed_testing)
 
     should_learn_new_model = False
