@@ -216,7 +216,7 @@ def prepare_angles_features_classes_ped(seed=0, keep_holes=True, method_labels='
     print 'time classes:', t_classes - t_begin
 
     if selected_slots is not None:
-        restricted_classes_in_time = classes[selected_slots, :, :, :]
+        restricted_classes_in_time = classes[selected_slots, :, :]
         print 'SELECTED SLOTS'
         dict = {}
         for k, slot in enumerate(selected_slots):
