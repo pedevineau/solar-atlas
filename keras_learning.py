@@ -376,13 +376,13 @@ if __name__ == '__main__':
     #                                                                lon_beginning_testing, lon_ending_testing,
     #                                                                beginning_testing, ending_testing, output_level)
 
-    from read_labels import read_labels, read_labels_remove_holes
-    testing_classes, selected_slots = read_labels_remove_holes('csp', lat_beginning_testing, lat_ending_testing, lon_beginning_testing,
+    from read_labels import read_labels, read_labels_remove_holes, read_labels_keep_holes
+    testing_classes, selected_slots = read_labels_keep_holes('csp', lat_beginning_testing, lat_ending_testing, lon_beginning_testing,
                                                lon_ending_testing, beginning_testing, ending_testing)
     testing_inputs = prepare_features(lat_beginning_testing, lat_ending_testing, lon_beginning_testing,
-                                      lon_ending_testing, beginning_testing, ending_testing, output_level, selected_slots)
+                                      lon_ending_testing, beginning_testing, ending_testing, output_level, None)
 
-    should_learn_new_model = True
+    should_learn_new_model = False
     pca_components = None
     meth = 'cnn'
     # visualize_map_time(testing_inputs, typical_bbox(), vmin=0, vmax=5, title='inputs')
