@@ -37,7 +37,7 @@ def compute_unique_scores(*args):
     scores = []
     for k in range(n):
         for l in range(n):
-            diff = zeros(len(args[0]))
+            diff = zeros(len(args[0]), dtype=bool)
             if k != l:
                 diff = diff | (args[k] ^ args[l])
         scores.append(corr2test(diff, common))
