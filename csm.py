@@ -124,8 +124,8 @@ if __name__ == '__main__':
                 with Dataset(file_path) as ncF:
                     dimensions = ncF.dimensions
                     csp_ = ncF.variables[nc_csp]
-                    csp_data = csp_[:]
-                    if is_range_array(csp_data, bmin=0., bmax=1.):
+                    csp_data = csp_[:].data
+                    if is_range_array(csp_data, bmin=-1., bmax=1.):
                         rad = file_.replace('OR_ABI-L2-ACMF-M3_G16_s', '')
                         year = rad[:4]
                         doy = rad[4:7]
@@ -135,7 +135,7 @@ if __name__ == '__main__':
                         str_date = str_date + '-CSP_LATLON-GOES16.nc'
                         newcsp = Dataset(os.path.join(dir_csp_out, str_date), 'w', 'NETCDF4')
                         rectl, rectc = abi_navigation.ll2lc(lats, lons, lon0=lon0, res_km=2)
-                        csp_latlon_data = csp_data[0, rectl, rectc]
+                        csp_latlon_data = csp_data[rectl, rectc]
                         lat = newcsp.createDimension('lat', csp_latlon_data.shape[0])
                         lon = newcsp.createDimension('lon', csp_latlon_data.shape[1])
                         newcsp.createVariable('clear_sky_probability', float, ('lat', 'lon',))
