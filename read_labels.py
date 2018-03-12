@@ -51,8 +51,8 @@ def read_labels(label_type, lat_beginning, lat_ending, lon_beginning,  lon_endin
         lonmin = 115.
         latmax = 60
     if read_satellite_name() == 'GOES16':
-
-        raise Exception('no labels available for GOES16 yet')
+        lonmin = -10.
+        latmax = 60
 
     lat_beginning_ind = int((latmax-lat_ending)/res)
     lat_ending_ind = int((latmax-lat_beginning)/res)
@@ -70,7 +70,7 @@ def read_labels(label_type, lat_beginning, lat_ending, lon_beginning,  lon_endin
 
     sat_name = read_satellite_name()
     if sat_name == 'GOES16':
-        suffixe = '_LATLON-GOES16-AHI.nc'
+        suffixe = '_LATLON-GOES16.nc'
     elif sat_name == 'H08':
         suffixe = '_LATLON-HIMAWARI8-AHI.nc'
 
@@ -96,7 +96,9 @@ def read_labels(label_type, lat_beginning, lat_ending, lon_beginning,  lon_endin
                 selected_slots.append(real_slot)
             except Exception as e:
                 # the data for this slot does not exist or has not been load
+                print e
                 pass
+    print to_return[to_return!=-10]
     return asarray(to_return), selected_slots
 
 
