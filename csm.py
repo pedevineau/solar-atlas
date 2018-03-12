@@ -21,7 +21,7 @@ except Exception as e:
 
 if __name__ == '__main__':
 
-    name = 'H08'
+    name = 'GOES16'
 
     if name == 'H08':
         ### Himawari08
@@ -30,7 +30,7 @@ if __name__ == '__main__':
         lonmax = 155.
         latmin = -30
         latmax = 60
-        scp = 140.7
+        ssp = 140.7
 
     elif name == 'GOES16':
         ### GOES16
@@ -41,8 +41,8 @@ if __name__ == '__main__':
         llres = 1 / 33.
         lon0 = 75.2
 
-    w = round(lonmax - lonmin / llres)
-    h = round(latmax - latmin / llres)
+    w = round((lonmax - lonmin) / llres)
+    h = round((latmax - latmin) / llres)
     bb = latlon.bounding_box(lonmin, lonmax, latmin, latmax, w, h, llres)
 
     lats = bb.latitudes(array2d=True)
@@ -72,7 +72,7 @@ if __name__ == '__main__':
                     csp_data = csp_[:]
                     if is_range_array(csp_data, bmin=0., bmax=1.):
                         newcsp = Dataset(os.path.join(dir_csp_out, file_.replace('P1S-ABOM_CLD-PRJ_GEOS141_2000', 'CSP_LATLON')), 'w', 'NETCDF4')
-                        rectl, rectc = proj4_navigation.ll2lc(lats, lons, ssp=scp, gt=(-5500000, 2000, 0, 5500000, 0, -2000))
+                        rectl, rectc = proj4_navigation.ll2lc(lats, lons, ssp=ssp, gt=(-5500000, 2000, 0, 5500000, 0, -2000))
                         csp_latlon_data = csp_data[0, rectl, rectc]
                         # t = newcsp.createDimension('t', 1)
                         lat = newcsp.createDimension('lat', csp_latlon_data.shape[0])
@@ -128,7 +128,7 @@ if __name__ == '__main__':
                         doy = rad[4:7]
                         hour = rad[7:9]
                         minu = rad[9:11]
-                        str_date = doyy2yyyymmdd(doy, year) + hour + minu + '00'
+                        str_date = doyy2yyyymmdd(int(doy), int(year)) + hour + minu + '00'
                         str_date = str_date + '-CSP_LATLON-GOES16.nc'
                         newcsp = Dataset(os.path.join(dir_csp_out, str_date), 'w', 'NETCDF4')
                         rectl, rectc = abi_navigation.ll2lc(lats, lons, lon0=lon0)
