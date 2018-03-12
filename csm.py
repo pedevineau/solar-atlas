@@ -31,6 +31,11 @@ if __name__ == '__main__':
         latmin = -30
         latmax = 60
         ssp = 140.7
+        w = round((lonmax - lonmin) / llres)
+        h = round((latmax - latmin) / llres)
+        bb = latlon.bounding_box(lonmin, lonmax, latmin, latmax, w, h, llres)
+        lats = bb.latitudes(array2d=True)
+        lons = bb.longitudes(array2d=True)
 
     elif name == 'GOES16':
         ### GOES16
@@ -40,13 +45,11 @@ if __name__ == '__main__':
         lonmax = -10
         llres = 1 / 33.
         lon0 = 75.2
-
-    w = round((lonmax - lonmin) / llres)
-    h = round((latmax - latmin) / llres)
-    bb = latlon.bounding_box(lonmin, lonmax, latmin, latmax, w, h, llres)
-
-    lats = bb.latitudes(array2d=True)
-    lons = bb.longitudes(array2d=True)
+        w = round((lonmax - lonmin) / llres)
+        h = round((latmax - latmin) / llres)
+        bb = latlon.bounding_box(lonmin, lonmax, latmin, latmax, w, h, llres)
+        lats = bb.latitudes(array2d=False)
+        lons = bb.longitudes(array2d=False)
 
     if name == 'H08':
         dir_in = '/data/test_data/BOM_cloud_data'
