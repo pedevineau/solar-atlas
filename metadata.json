@@ -58,7 +58,10 @@
     },
     "model_path": "/data/test_data/models/model_GOES16",
     "pca_path": "/data/test_data/models/pca_GOES16",
-    "res_path": "/data/test_data/models/res_GOES16"
+    "res_path": "/data/test_data/models/res_GOES16",
+    "labels": {
+      "csp": "/data/test_data/GOES_clear_mask_latlon"
+    }
   },
 
   "masks": {
