@@ -134,7 +134,7 @@ if __name__ == '__main__':
                         str_date = doyy2yyyymmdd(int(doy), int(year)) + hour + minu + '00'
                         str_date = str_date + '-CSP_LATLON-GOES16.nc'
                         newcsp = Dataset(os.path.join(dir_csp_out, str_date), 'w', 'NETCDF4')
-                        rectl, rectc = abi_navigation.ll2lc(lats, lons, lon0=lon0)
+                        rectl, rectc = abi_navigation.ll2lc(lats, lons, lon0=lon0, res_km=2)
                         csp_latlon_data = csp_data[0, rectl, rectc]
                         lat = newcsp.createDimension('lat', csp_latlon_data.shape[0])
                         lon = newcsp.createDimension('lon', csp_latlon_data.shape[1])
