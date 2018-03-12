@@ -24,7 +24,7 @@ if __name__ == '__main__':
     name = 'H08'
 
     if name == 'H08':
-        ### Himawari
+        ### Himawari08
         llres = 1 / 33.
         lonmin = 115.
         lonmax = 155.
@@ -128,8 +128,8 @@ if __name__ == '__main__':
                         doy = rad[4:7]
                         hour = rad[7:9]
                         minu = rad[9:11]
-                        str_date = doyy2yyyymmdd(doy, year) + hour + minu
-                        str_date = str_date + 'CSP_LATLON-GOES16.nc'
+                        str_date = doyy2yyyymmdd(doy, year) + hour + minu + '00'
+                        str_date = str_date + '-CSP_LATLON-GOES16.nc'
                         newcsp = Dataset(os.path.join(dir_csp_out, str_date), 'w', 'NETCDF4')
                         rectl, rectc = abi_navigation.ll2lc(lats, lons, lon0=lon0)
                         csp_latlon_data = csp_data[0, rectl, rectc]
