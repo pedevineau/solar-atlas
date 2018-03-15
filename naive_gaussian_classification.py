@@ -1,6 +1,6 @@
 import time
 from sklearn import mixture, cluster
-from quick_visualization import *
+from visualize import *
 from get_data import *
 import numpy as np
 

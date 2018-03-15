@@ -1,5 +1,5 @@
 import numpy as np
-from quick_visualization import visualize_map_time, visualize_map
+from visualize import visualize_map_time, visualize_map
 
 ### THESE "typical inputs/outputs/etc" functions avoid to define the same values in every classes ###
 def typical_input(seed=0):
@@ -7,21 +7,21 @@ def typical_input(seed=0):
     sat_name = read_satellite_name()
     if seed == 0:
         if sat_name == 'GOES16':
-            beginning = 13516 + 365
+            beginning = 13516 + 365+30+16
             nb_days = 3
             ending = beginning + nb_days - 1
-            latitude_beginning = 35.+5
-            latitude_end = 40.+4
-            longitude_beginning = -115.+35
-            longitude_end = -110.+34
+            latitude_beginning = 35.
+            latitude_end = 60.
+            longitude_beginning = -80.
+            longitude_end = -70.
         elif sat_name == 'H08':
             beginning = 13525 + 180
             nb_days = 3
             ending = beginning + nb_days - 1
-            latitude_beginning = 40.
-            latitude_end = 45.
-            longitude_beginning = 115.
-            longitude_end = 120.
+            latitude_beginning = -10.
+            latitude_end = -5.
+            longitude_beginning = 110.
+            longitude_end = 115.
         return beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end
     else:
         if sat_name == 'GOES16':
@@ -33,13 +33,13 @@ def typical_input(seed=0):
             longitude_beginning = -115. + 35+1
             longitude_end = -110. + 35-3
         elif sat_name == 'H08':
-            beginning = 13525 + 195
+            beginning = 13525 + 180
             nb_days = 5
             ending = beginning + nb_days - 1
-            latitude_beginning = 35.
-            latitude_end = 40.
-            longitude_beginning = 125.
-            longitude_end = 130.
+            latitude_beginning = 40.
+            latitude_end = 45.
+            longitude_beginning = 110.
+            longitude_end = 115.
         return beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end
 
 
@@ -74,90 +74,13 @@ def typical_temperatures_forecast(seed=0):
 
 def typical_bbox(seed=0):
     beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end = typical_input(seed)
-    from quick_visualization import get_bbox
+    from visualize import get_bbox
     return get_bbox(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
 
 
 def typical_time_step():
     from read_metadata import read_satellite_step
     return read_satellite_step()
-
-
-### functions to shape the inputs and the labels for deep-learning (convolutionnal neural network, etc.) ###
-def chunk_spatial(arr, labels, (r, c)):
-    # pre-processing for deep-learning
-    tiles, labels_tiles = [], []
-    row = 0
-    for x in range(0, arr.shape[0], r):
-        row += 1
-        col = 0
-        for y in range(0, arr.shape[1], c):
-            col += 1
-            tiles.append(arr[x:x + r, y:y + c])
-            labels_tiles.append(labels[x+r//2, y+c//2])
-    return tiles, np.reshape(labels_tiles, (row, col))
-
-
-def chunk_spatial_high_resolution(arr, (r, c)):
-    # pre-processing for deep-learning
-    lla, llo, feats = arr.shape
-    tiles = np.empty((lla, llo, r, c, feats))
-    for lat in range(0, arr.shape[0]):
-        for lon in range(0, arr.shape[1]):
-            try:
-                tiles[lat, lon] = arr[lat:lat + r, lon:lon + c]
-            except ValueError:
-                tiles[lat, lon] = -1
-    return tiles
-
-
-def chunk_4d(arr, labels, (r, c)):
-    # pre-processing for deep-learning
-    tiles_3d = []
-    labels_reduced = []
-    for slot in range(len(arr)):
-        t, l = chunk_spatial(arr[slot], labels[slot], (r, c))
-        tiles_3d.append(t)
-        labels_reduced.append(l)
-    return np.asarray(tiles_3d), np.asarray(labels_reduced)
-
-
-def chunk_4d_high_resolution(arr, (r, c)=(5, 5)):
-    # pre-processing for deep-learning
-    ssl, lla, llo, feats = arr.shape
-    tiles_3d = []
-    for slot in range(len(arr)):
-        tiles_3d.append(chunk_spatial_high_resolution(arr[slot], (r, c)))
-    return np.asarray(tiles_3d).reshape((ssl*lla*llo, r, c, feats))
-
-
-def chunk_5d_high_resolution(arr, (r, c)=(5, 5)):
-    # pre-processing for deep-learning
-    ssl, lla, llo, feats = arr.shape
-    tiles = np.empty((ssl, lla, llo, r, c, feats))
-    for lat in range(0, lla):
-        for lon in range(0, llo):
-            try:
-                tiles[:, lat, lon] = arr[:, lat:lat + r, lon:lon + c]
-            except ValueError:
-                tiles[:, lat, lon] = -1*np.ones((ssl, r, c, feats))
-    # expected array dims :
-    return tiles.transpose((1, 2, 0, 3, 4, 5)).reshape((lla*llo, ssl, r, c, feats))
-
-
-def remove_some_label_from_training_pool(inputs, labels, labels_to_remove):
-    if type(labels_to_remove) == int:
-        labels_to_remove = [labels_to_remove]
-    if len(labels_to_remove) == 0:
-        return inputs, labels
-    mask = (labels == labels_to_remove[0])
-    for k in range(1, len(labels_to_remove)):
-        mask = mask | (labels == labels_to_remove[k])
-    to_return = []
-    for k in range(len(mask)):
-        if not mask[k]:
-            to_return.append(inputs[k])
-    return to_return, np.asarray(labels)[~mask]
 
 
 def array_to_one_label(arr, base=6):
@@ -183,15 +106,15 @@ def one_label_to_array(lab, shape, base=6):
 ### compute rolling mean or median to smooth the albedo (for albedo-based cloud test) ###
 def rounding_mean_list(list_1d, window):
     cumsum = np.cumsum(np.insert(list_1d, 0, 0))
-    list_1d[window/2:-window/2+1] = (cumsum[window:] - cumsum[:-window]) / float(window)
+    list_1d[window-1:] = (cumsum[window:] - cumsum[:-window]) / float(window)
     return list_1d
 
 
 def rounding_median_list(list_1d, window):
     # not used practically because it is too resources-consuming
     from pandas import rolling_apply
-    list_1d[window / 2:-window / 2 + 1] = \
-        rolling_apply(list_1d, window=3, center=True, func=np.nanmedian)[window / 2:-window / 2 + 1]
+    list_1d[window:] = \
+        rolling_apply(list_1d, window=window, center=False, func=np.nanmedian)[window:]
     return list_1d
 
 
@@ -387,6 +310,11 @@ def load(path):
 
 
 if __name__ == '__main__':
+
+    arr = np.asarray([10,2,3,8,9,9,2,4.])
+    print arr
+    print rounding_mean_list(arr, window=3)
+
     dfb_begin, dfb_end, latitude_begin, latitude_end, longitude_begin, longitude_end = typical_input()
     print rc_to_latlon(10,53)
     print latlon_to_rc(35,135)

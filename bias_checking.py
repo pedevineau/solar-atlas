@@ -86,7 +86,7 @@ if __name__ == '__main__':
         classes
     )
 
-    from quick_visualization import get_bbox, visualize_map_time
+    from visualize import get_bbox, visualize_map_time
     bbox = get_bbox(latitude_beginning,
                     latitude_end,
                     longitude_beginning,

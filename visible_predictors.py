@@ -14,7 +14,7 @@ def visible_outputs(times, latitudes, longitudes, is_land, content_visible, sate
             nb_channels = np.shape(content_visible)[-1]
             for chan in range(nb_channels):
                 content_visible[:, :, :, chan] = normalize(content_visible[:, :, :, chan], mask_input, 'gray-scale')
-            return content_visible
+            return np.asarray(content_visible, dtype=np.uint8)
 
     elif output_level == 'ndsi':
         zen, vis, ndsi = get_zen_vis_ndsi(times, latitudes, longitudes, content_visible)
@@ -65,20 +65,20 @@ def get_zen_vis_ndsi(times, latitudes, longitudes, content_visible):
     '''
     from angles_geom import get_zenith_angle
     zen = get_zenith_angle(times, latitudes, longitudes)
-    ndsi = get_snow_index(vis=content_visible[:, :, :, 1], nir=content_visible[:, :, :, 0],
+    ndsi = get_snow_index(vis=content_visible[:, :, :, 1], sir=content_visible[:, :, :, 0],
                           zen=zen, threshold_denominator=0.02, index='ndsi-zenith')
     return zen, content_visible[:, :, :, 1], ndsi
 
 
-def get_snow_index(vis, nir, zen, threshold_denominator, index):
+def get_snow_index(vis, sir, zen, threshold_denominator, index):
 
     if index == 'ndsi':
-        # nir *= 5
-        ndsi = (vis - nir) / np.maximum(nir + vis, threshold_denominator)
+        # sir *= 5
+        ndsi = (vis - sir) / np.maximum(sir + vis, threshold_denominator)
     elif index == 'ndsi-zenith':
-        ndsi = (vis - nir) / np.maximum(nir + vis, threshold_denominator) + 0.15*np.square(1-np.cos(zen))
+        ndsi = (vis - sir) / np.maximum(sir + vis, threshold_denominator) + 0.15*np.square(1-np.cos(zen))
     else:
-        ndsi = vis / np.maximum(nir, threshold_denominator)
+        ndsi = vis / np.maximum(sir, threshold_denominator)
     return ndsi
 
 
@@ -92,36 +92,36 @@ def get_bright_negative_variability_5d(index, definition_mask, satellite_step, s
     :param slot_step: the chosen sampling of slots. if slot_step = n, the sampled slots are s[0], s[n], s[2*n]...
     :return:
     '''
-    from get_data import compute_short_variability
+    from get_data import compute_variability
     nb_slots_per_day = get_nb_slots_per_day(satellite_step, slot_step)
     nb_days = np.shape(index)[0] / nb_slots_per_day
     to_return = np.full_like(index, -10)
     if nb_days >= 2:
-        var_ndsi_1d_past = compute_short_variability(array=index,
-                                                     mask=definition_mask,
-                                                     step=nb_slots_per_day,
-                                                     negative_variation_only=True,
-                                                     abs_value=False)
+        var_ndsi_1d_past = compute_variability(array=index,
+                                               mask=definition_mask,
+                                               step=nb_slots_per_day,
+                                               negative_variation_only=True,
+                                               abs_value=False)
 
-        var_ndsi_1d_future = compute_short_variability(array=index,
-                                                       mask=definition_mask,
-                                                       step=-nb_slots_per_day,
-                                                       negative_variation_only=True,
-                                                       abs_value=False)
+        var_ndsi_1d_future = compute_variability(array=index,
+                                                 mask=definition_mask,
+                                                 step=-nb_slots_per_day,
+                                                 negative_variation_only=True,
+                                                 abs_value=False)
         if nb_days == 2:
             to_return[:nb_slots_per_day] = var_ndsi_1d_future[:nb_slots_per_day]
             to_return[nb_slots_per_day:] = var_ndsi_1d_past[nb_slots_per_day:]
         else:  # nb_days >=3
-            var_ndsi_2d_past = compute_short_variability(array=index,
-                                                         mask=definition_mask,
-                                                         step=nb_slots_per_day * 2,
-                                                         negative_variation_only=True,
-                                                         abs_value=False)
-            var_ndsi_2d_future = compute_short_variability(array=index,
-                                                           mask=definition_mask,
-                                                           step=-2 * nb_slots_per_day,
-                                                           negative_variation_only=True,
-                                                           abs_value=False)
+            var_ndsi_2d_past = compute_variability(array=index,
+                                                   mask=definition_mask,
+                                                   step=nb_slots_per_day * 2,
+                                                   negative_variation_only=True,
+                                                   abs_value=False)
+            var_ndsi_2d_future = compute_variability(array=index,
+                                                     mask=definition_mask,
+                                                     step=-2 * nb_slots_per_day,
+                                                     negative_variation_only=True,
+                                                     abs_value=False)
             # first day
             to_return[:nb_slots_per_day] = np.maximum(var_ndsi_1d_future[:nb_slots_per_day],
                                                       var_ndsi_2d_future[:nb_slots_per_day])
@@ -170,36 +170,36 @@ def get_bright_positive_variability_5d(index, definition_mask, satellite_step, s
     :param slot_step: the chosen sampling of slots. if slot_step = n, the sampled slots are s[0], s[n], s[2*n]...
     :return:
     '''
-    from get_data import compute_short_variability
+    from get_data import compute_variability
     nb_slots_per_day = get_nb_slots_per_day(satellite_step, slot_step)
     nb_days = np.shape(index)[0] / nb_slots_per_day
     to_return = np.full_like(index, -10)
     if nb_days >= 2:
-        var_ndsi_1d_past = compute_short_variability(array=index,
-                                                     mask=definition_mask,
-                                                     step=nb_slots_per_day,
-                                                     negative_variation_only=False,
-                                                     abs_value=False)
+        var_ndsi_1d_past = compute_variability(array=index,
+                                               mask=definition_mask,
+                                               step=nb_slots_per_day,
+                                               negative_variation_only=False,
+                                               abs_value=False)
 
-        var_ndsi_1d_future = compute_short_variability(array=index,
-                                                       mask=definition_mask,
-                                                       step=-nb_slots_per_day,
-                                                       negative_variation_only=False,
-                                                       abs_value=False)
+        var_ndsi_1d_future = compute_variability(array=index,
+                                                 mask=definition_mask,
+                                                 step=-nb_slots_per_day,
+                                                 negative_variation_only=False,
+                                                 abs_value=False)
         if nb_days == 2:
             to_return[:nb_slots_per_day] = var_ndsi_1d_future[:nb_slots_per_day]
             to_return[nb_slots_per_day:] = var_ndsi_1d_past[nb_slots_per_day:]
         else:  # nb_days >=3
-            var_ndsi_2d_past = compute_short_variability(array=index,
-                                                         mask=definition_mask,
-                                                         step=nb_slots_per_day * 2,
-                                                         negative_variation_only=False,
-                                                         abs_value=False)
-            var_ndsi_2d_future = compute_short_variability(array=index,
-                                                           mask=definition_mask,
-                                                           step=-2 * nb_slots_per_day,
-                                                           negative_variation_only=False,
-                                                           abs_value=False)
+            var_ndsi_2d_past = compute_variability(array=index,
+                                                   mask=definition_mask,
+                                                   step=nb_slots_per_day * 2,
+                                                   negative_variation_only=False,
+                                                   abs_value=False)
+            var_ndsi_2d_future = compute_variability(array=index,
+                                                     mask=definition_mask,
+                                                     step=-2 * nb_slots_per_day,
+                                                     negative_variation_only=False,
+                                                     abs_value=False)
             # first day
             to_return[:nb_slots_per_day] = np.minimum(var_ndsi_1d_future[:nb_slots_per_day],
                                                       var_ndsi_2d_future[:nb_slots_per_day])
@@ -238,7 +238,7 @@ def get_bright_positive_variability_5d(index, definition_mask, satellite_step, s
     return to_return
 
 
-def get_flat_nir(variable, cos_zen, mask, nb_slots_per_day, slices_per_day, tolerance, persistence_sigma,
+def get_flat_sir(variable, cos_zen, mask, nb_slots_per_day, slices_per_day, tolerance, persistence_sigma,
                  mask_not_proper_weather=None):
     if mask_not_proper_weather is not None:
         mask = mask | mask_not_proper_weather

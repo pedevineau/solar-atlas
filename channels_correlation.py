@@ -101,7 +101,7 @@ if __name__ == '__main__':
                                                           visible_features[:, lat, lon, 1][~mask_mu])[0]
 
     print 'total time corr:', time() - t_corrs, '; nb pixels:', nb_latitudes*nb_longitudes, '; nb slots:', 144*nb_days
-    from quick_visualization import get_bbox, visualize_map
+    from visualize import get_bbox, visualize_map
 
     bbox = get_bbox(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
 

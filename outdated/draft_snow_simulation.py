@@ -18,43 +18,43 @@ mu[mu<0]=0
 # mustd = normalize_array(mu, normalization='standard')
 import matplotlib.pyplot as plt
 from visible_predictors import get_bright_negative_variability_5d
-from infrared_predictors import get_cloud_index_positive_variability_5d
+from infrared_predictors import get_cloud_index_positive_variability_7d
 
 
 Ks=[0]
 for K in Ks:
     vis_water_cloud = 0.2*mu+0.3 + 0.1*np.random.random_sample(len(lis))
-    nir_water_cloud = 0.25*mu+0.25 + 0.1*np.random.random_sample(len(lis))
+    sir_water_cloud = 0.25*mu+0.25 + 0.1*np.random.random_sample(len(lis))
     vis_snow = 0.5*mu+0.3
-    nir_snow = 0.05*mu+0.2
+    sir_snow = 0.05*mu+0.2
     print 0.1/0.45, 0.5/0.55
     vis_snow[25:55] += vis_water_cloud[25:55]
-    nir_snow[25:55] += nir_water_cloud[25:55]
+    sir_snow[25:55] += sir_water_cloud[25:55]
     vis_snow[290+22:290+27] += 0.5*vis_water_cloud[290+22:290+27]
-    nir_snow[290+22:290+27] += 0.5*nir_water_cloud[290+22:290+27]
+    sir_snow[290+22:290+27] += 0.5*sir_water_cloud[290+22:290+27]
     vis_snow[421+22:434+27] += vis_water_cloud[421+22:434+27]
-    nir_snow[421+22:434+27] += nir_water_cloud[421+22:434+27]
+    sir_snow[421+22:434+27] += sir_water_cloud[421+22:434+27]
     vis_snow += K
-    nir_snow += K
-    snow = (vis_snow-nir_snow)/np.maximum(vis_snow+nir_snow,0.05)
+    sir_snow += K
+    snow = (vis_snow-sir_snow)/np.maximum(vis_snow+sir_snow,0.05)
     snow += 0.08*np.random.random_sample(len(lis))
     snow[mu <= 0] = 0
 
     white_cloud_vis = 0.3*mu+0.35
     white_cloud_vis += 0.1*np.random.random_sample(len(lis))
-    white_cloud_nir = 0.05*mu+0.2
-    white_cloud_nir += 0.1*np.random.random_sample(len(lis))
+    white_cloud_sir = 0.05*mu+0.2
+    white_cloud_sir += 0.1*np.random.random_sample(len(lis))
     vis_bare = 0.2*mu+0.3
-    nir_bare = 0.15*mu+0.35
+    sir_bare = 0.15*mu+0.35
     vis_bare[10:40] = white_cloud_vis[10:40]
-    nir_bare[10:40] = white_cloud_nir[10:40]
+    sir_bare[10:40] = white_cloud_sir[10:40]
     vis_bare[210:380] = white_cloud_vis[210:380]
-    nir_bare[210:380] = white_cloud_nir[210:380]
+    sir_bare[210:380] = white_cloud_sir[210:380]
     vis_bare[650+22:750+27] += 0.5*white_cloud_vis[650+22:750+27]
-    nir_bare[1300+22:1400+27] += 0.5*white_cloud_nir[1300+22:1400+27]
+    sir_bare[1300+22:1400+27] += 0.5*white_cloud_sir[1300+22:1400+27]
     vis_bare += K
-    nir_bare += K
-    bare = (vis_bare-nir_bare)/(vis_bare+nir_bare)
+    sir_bare += K
+    bare = (vis_bare-sir_bare)/(vis_bare+sir_bare)
     bare[mu <= 0] = 0
 
     map = np.zeros((len(lis), 2, 1))
@@ -105,7 +105,7 @@ for K in Ks:
     plt.title('K'+str(K))
     plt.show()
     # vis = 0.35*mu+0.1
-# nir = 0.1*mu+0.3
+# sir = 0.1*mu+0.3
 
 antimu = -1/(0.2+mu)
 

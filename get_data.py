@@ -110,9 +110,9 @@ def apply_smooth_threshold(x, th, order=2):
     return np.exp(-(x-th))
 
 
-def compute_short_variability(array, mask=None, cos_zen=None, step=1, return_mask=False, abs_value=False,
-                              negative_variation_only=False,
-                              option='default',  # ['default, 'without-bias']
+def compute_variability(array, mask=None, cos_zen=None, step=1, return_mask=False, abs_value=False,
+                        negative_variation_only=False,
+                        option='default',  # ['default, 'without-bias']
                               normalization='none'):
     step_left = step
     if option == 'without-bias':
@@ -212,7 +212,7 @@ def get_variability_array_modified(array, mask, step=1, th_1=0.02, th_2=0.3,
                                    positive_variation=True, negative_variation=True):
     print 'var array', np.var([~mask])
     print 'mean array', np.mean(array[~mask])
-    arr = compute_short_variability(array, mask=mask, step=step)[0]
+    arr = compute_variability(array, mask=mask, step=step)[0]
     return arr
 
 

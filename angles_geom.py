@@ -295,7 +295,7 @@ if __name__ == '__main__':
     from general_utils.solar_geom_v5 import declin_r, sunposition_r, UTC2LAT_r
 
     nb_slots_per_day = get_nb_slots_per_day(read_satellite_step(), 1)
-    res = 2/60.
+    res = 1/33.
     w = len(longitudes)
     h = len(latitudes)
     bb = bounding_box(xmin=longitude_beginning, xmax=longitude_ending, ymin=latitude_beginning,

@@ -60,23 +60,81 @@ def low_cloud_test_sun_glint(cos_zen, vis, mir, lir, mask):
            (vis > (1/0.15)*cli410)
 
 
-def local_spatial_texture_test(is_land, mir, lir, mask):
+def texture_test(lir, mask=None):
     '''
-    Currently not used, because it is time consuming
-    :param is_land:
-    :param mir:
+    Test to find broken clouds over lands or sea (but not over clouds). WARNING: this test is time consuming
     :param lir:
     :param mask:
     :return:
     '''
     # Le Gleau 2006 (simplified)
     # eliminate pixels near sea
-    is_land = decrease_connectivity_2(decrease_connectivity_2(is_land))
     from filter import local_std
-    thresh_coherence_lir_land, thresh_coherence_mir_lir_land = compute_lir_texture_land(), compute_mir_lir_texture_land()
+    thresh_coherence_lir_land = compute_lir_texture_land_threshold()
     sd_lir = local_std(lir, mask, scope=3)
-    sd_diff410 = local_std(mir - lir, mask, scope=3)
-    return is_land & (sd_lir > thresh_coherence_lir_land) & (sd_diff410 > thresh_coherence_mir_lir_land)
+    # var = get_cloud_index_positive_variability_7d(sd_lir, mask, typical_time_step())
+    # visualize_map_time(sd_lir, typical_bbox(), vmin=0, vmax=3)
+    # sd_diff410 = local_std(mir - lir, mask, scope=3)
+    # visualize_map_time(sd_diff410, typical_bbox())
+    # return sd_lir > thresh_coherence_lir_land
+    # & (sd_diff410 > thresh_coherence_mir_lir_land)
+    return sd_lir
+
+
+def thick_cloud_test(is_land, vis, lir, cli_mu, cli_epsilon, quick_test=False):
+    '''
+    Probably the most important test
+    :param is_land:
+    :param lir:
+    :param cli_mu:
+    :param cli_epsilon:
+    :param quick_test
+    :return:
+    '''
+    if quick_test:
+        return opaque_cloud_test(cli_mu, cli_epsilon)
+    else:
+        not_coast = decrease_connectivity_2(decrease_connectivity_2(is_land)) | \
+                    decrease_connectivity_2(decrease_connectivity_2(~is_land))
+        from infrared_predictors import get_cloud_index_positive_variability_7d
+        mask = (cli_mu == -10)
+
+        #### WARNING: ERROR IN THE NEXT LINES, TO BE FIXED !!!
+        thresh_coherence_lir_land = compute_lir_texture_land_threshold()
+
+        sd_lir = texture_test(lir, mask)
+        heterogeneous = (sd_lir > thresh_coherence_lir_land)
+
+        from read_metadata import read_satellite_step
+        cli_epsilon_var = get_cloud_index_positive_variability_7d(sd_lir, mask, read_satellite_step())
+        thresh_epsilon_var = 0.2
+        del sd_lir
+        broken_cloud_not_coasts = not_coast & heterogeneous & (cli_epsilon_var > thresh_epsilon_var)
+        del cli_epsilon_var
+        opaque = opaque_cloud_test(cli_mu, cli_epsilon)
+        fog = opaque & (vis > 0.5)
+        opaque_heterogeneous_cloud = heterogeneous & opaque
+        return broken_cloud_not_coasts | opaque_heterogeneous_cloud | fog
+
+
+def broken_cloud_test(opaque_texture_index, mask):
+    '''
+
+    :param opaque_texture_index:
+    :param mask:
+    :return:
+    '''
+    from infrared_predictors import get_cloud_index_positive_variability_7d
+    thresh_daily_variability_lir_land = compute_lir_texture_land_variability_threshold()
+    var = get_cloud_index_positive_variability_7d(opaque_texture_index, mask, typical_time_step())
+    return opaque_texture_index & (var > thresh_daily_variability_lir_land)
+
+
+def opaque_cloud_test(cli_mu_observed, cli_espilon_observed):
+    # the choice of the cli_espilon_observed threshold is critical
+    # if the transparent_texture_index is superior to the threshold, we consider the pixel is not an opaque cloud
+    thresh = compute_opaque_cloud_threshold()
+    return cli_water_cloud_test(cli_mu_observed) & (cli_espilon_observed < thresh)
 
 
 def gross_snow_test(lir_observed, lir_forecast):
@@ -459,11 +517,11 @@ def seeds_angular_tests(is_land, angles, specular_angles, satellite_angles, glin
 
 
 def exhaustive_dawn_day_cloud_test(angles, is_land, cli_mu_observed, cli_mu_var_observed, cli_epsilon_observed,
-                                   vis_observed, lir_observed, fir_observed, lir_forecast, fir_forecast):
+                                   vis_observed, lir_observed, fir_observed, lir_forecast, fir_forecast, quick_test):
     '''
     Function detecting clouds which should be called when you have 5 channels
     '''
-    return dawn_day_test(angles) & ((cli_water_cloud_test(cli_mu_observed) & cli_stability(cli_mu_var_observed)) |
+    return dawn_day_test(angles) & (thick_cloud_test(is_land, vis_observed, lir_observed, cli_mu_observed, cli_epsilon_observed, quick_test) |
                                     epsilon_transparent_cloud_test(cli_epsilon_observed) |
                                     sea_coasts_cloud_test(angles, is_land, vis_observed) |
                                     gross_cloud_test(lir_observed, lir_forecast) |
@@ -513,10 +571,10 @@ def partial_dawn_day_snow_test(angles, is_land, ndsi_observed, cli_observed, vis
     Function detecting snow which should be called when you have only 4 channels
     :param angles: matrix time*lat*lon filled with solar zenith angles
     :param is_land: mask where big lakes or sea = False, and lands = True
-    :param ndsi_observed: snow index computed from channels vis (064) and nir (160)
+    :param ndsi_observed: snow index computed from channels vis (064) and sir (160)
     :param cli_observed: basic cloud index computed from channels channels fir 124 (or lir 108 if available) and mir 390
     :param vis_observed: visible channel 064
-    :return: snow mask
+    :return: boolean matrix (time, latitude, longitude) which is True in presence of snow
     '''
     snow_dawn_day = (dawn_day_test(angles) & is_land & ndsi_test(ndsi_observed) & cli_snow_test(cli_observed) &
                      visible_snow_test(vis_observed))
@@ -538,14 +596,14 @@ def suspect_snow_classified_pixels(snow, ndsi, mask_input):
     :param snow:
     :param ndsi:
     :param mask_input:
-    :return:
+    :return: boolean matrix (time, latitude, longitude) which is True if the pixel is snowy
     '''
     from visible_predictors import get_bright_negative_variability_5d, get_bright_positive_variability_5d
-    from get_data import compute_short_variability
+    from get_data import compute_variability
     from utils import typical_time_step
     return snow & ((get_bright_positive_variability_5d(ndsi, mask_input, typical_time_step(), 1) > 0.2) |
-                  (get_bright_negative_variability_5d(ndsi, mask_input, typical_time_step(), 1) > 0.2) |
-                  (compute_short_variability(ndsi, mask=mask_input, abs_value=True) > 0.05))
+                   (get_bright_negative_variability_5d(ndsi, mask_input, typical_time_step(), 1) > 0.2) |
+                   (compute_variability(ndsi, mask=mask_input, abs_value=True) > 0.05))
 
 
 # def score(not_flagged_yet, vis):
@@ -554,16 +612,16 @@ def suspect_snow_classified_pixels(snow, ndsi, mask_input):
 
 def maybe_cloud_after_all(is_land, is_supposed_free, vis):
     '''
-    the "unstable albedo test" classifies as cloud the previously "allegedly cloud-free and snow-free pixels" which are much brighter than normally
+    the "unstable albedo test" classifies as cloud the previously "allegedly cloud-free and snow-free pixels" which are much brighter than expected
     :param is_land:
     :param is_supposed_free:
     :param vis:
-    :return:
+    :return: a boolean matrix which is True if the pixel passes this visible cloud test but not the previous cloud tests
     '''
     # apply only for a few consecutive days
     from utils import np, get_nb_slots_per_day, apply_rolling_on_time
     is_supposed_free_for_long = is_supposed_free & np.roll(is_supposed_free, -1) & np.roll(is_supposed_free, 2) &\
-                       is_supposed_free & np.roll(is_supposed_free, -2) & np.roll(is_supposed_free, 2)
+                                is_supposed_free & np.roll(is_supposed_free, -2) & np.roll(is_supposed_free, 2)
     from read_metadata import read_satellite_step
     (slots, lats, lons) = vis.shape
     slot_per_day = get_nb_slots_per_day(read_satellite_step(), 1)
@@ -572,16 +630,23 @@ def maybe_cloud_after_all(is_land, is_supposed_free, vis):
     vis_copy = vis.copy()
     vis_copy[~is_supposed_free_for_long] = 100
     supposed_clear_sky = np.min(apply_rolling_on_time(vis_copy, 5, 'mean').reshape((entire_days, slot_per_day, lats, lons)), axis=0)
-    # from quick_visualization import visualize_map_time
-    # visualize_map_time(supposed_clear_sky, typical_bbox())
     del vis_copy
     vis = vis.reshape((entire_days, slot_per_day, lats, lons))
+    # from quick_visualization import visualize_map_time
+    # visualize_map_time(supposed_clear_sky, typical_bbox())
     # visualize_map_time(is_supposed_free & land_visible_test(is_land, vis, supposed_clear_sky).reshape((slots, lats, lons)), typical_bbox())
     return is_supposed_free & land_visible_test(is_land, vis, supposed_clear_sky).reshape((slots, lats, lons))
 
 
-def typical_static_classifier(seed=0, bypass=False):
-    from infrared_predictors import get_cloud_index, get_cloud_index_positive_variability_5d
+def typical_static_classifier(seed=0, bypass=False, quick_test=False):
+    '''
+    shortcut for demo: compute the classifier on the sample(s) defined in utils.py
+    :param seed: integer equals to 0 or 1. determine which predefined sample is used
+    :param bypass: boolean. If activated, returns predictors of deterministic classification (instead of its outputs)
+    :param quick_test: boolean. If activated, apply
+    :return: if bypass=False, returns the outputs of classification. If bypass=True, returns its main predictors
+    '''
+    from infrared_predictors import get_cloud_index, get_cloud_index_positive_variability_7d
     from utils import typical_outputs, typical_temperatures_forecast, typical_land_mask, np, typical_time_step
     from temperature_forecast import expected_brightness_temperature_only_emissivity
     zen, vis, ndsi, mask_input = typical_outputs('visible', 'ndsi', seed)
@@ -593,7 +658,7 @@ def typical_static_classifier(seed=0, bypass=False):
         names = read_channels_names('infrared')
         lw_fir = float(names[0][2:5])/10 * 10**(-6)
         lw_lir = float(names[1][2:5])/10 * 10**(-6)
-        cli_epsilon, mask_input_cli = typical_outputs('infrared', 'cli', seed)
+        cli_mu, cli_epsilon, mask_input_cli = typical_outputs('infrared', 'cli', seed)
         cli_default = get_cloud_index(np.cos(zen), mir=infrared[:, :, :, 2], lir=infrared[:, :, :, 1], method='default')
         snow = exhaustive_dawn_day_snow_test(zen, lands, ndsi, cli_default, cli_epsilon, vis, infrared[:, :, :, 1],
                                              expected_brightness_temperature_only_emissivity(
@@ -604,12 +669,10 @@ def typical_static_classifier(seed=0, bypass=False):
         cli_default = get_cloud_index(np.cos(zen), mir=infrared[:, :, :, 1], lir=infrared[:, :, :, 0], method='default')
         snow = partial_dawn_day_snow_test(zen, lands, ndsi, cli_default, vis)
 
-    cli_var = get_cloud_index_positive_variability_5d(cli_default, definition_mask=mask_input, pre_cloud_mask=None,
+    cli_var = get_cloud_index_positive_variability_7d(cli_default, definition_mask=mask_input, pre_cloud_mask=None,
                                                       satellite_step=typical_time_step(), slot_step=1)
     del cli_default
     if is_exhaustive:
-        cli_mu = get_cloud_index(np.cos(zen), mir=infrared[:, :, :, 2], lir=infrared[:, :, :, 1],
-                                 method='mu-normalization')
         if bypass:
             return zen, lands, cli_mu, cli_var, cli_epsilon, vis, infrared[:, :, :, 1], infrared[:, :, :, 0], \
                    expected_brightness_temperature_only_emissivity(
@@ -619,7 +682,7 @@ def typical_static_classifier(seed=0, bypass=False):
         clouds = exhaustive_dawn_day_cloud_test(zen, lands, cli_mu, cli_var, cli_epsilon, vis, infrared[:, :, :, 1],
                                                 infrared[:, :, :, 0], expected_brightness_temperature_only_emissivity(
                 typical_temperatures_forecast(seed), lw_nm=lw_lir, eps=0.95), expected_brightness_temperature_only_emissivity(
-                typical_temperatures_forecast(seed), lw_nm=lw_fir, eps=0.95))
+                typical_temperatures_forecast(seed), lw_nm=lw_fir, eps=0.95), quick_test)
 
         del cli_epsilon, cli_mu, cli_var
     else:
@@ -644,5 +707,5 @@ def typical_static_classifier(seed=0, bypass=False):
 
 if __name__ == '__main__':
     from utils import *
-    from quick_visualization import visualize_map_time
-    visualize_map_time(typical_static_classifier(), typical_bbox(), vmin=0, vmax=5)
+    from visualize import visualize_map_time
+    visualize_map_time(typical_static_classifier(quick_test=False, seed=0), typical_bbox(), vmin=0, vmax=5)

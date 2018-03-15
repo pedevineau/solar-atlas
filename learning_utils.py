@@ -6,7 +6,7 @@ Some utils for data preparation, and some sklearn functions (most of them have b
 '''
 
 
-from quick_visualization import visualize_map_time
+from visualize import visualize_map_time
 
 def create_neural_network():
     print 'Create neural network'
@@ -78,8 +78,107 @@ def reshape_features(features):
         return features.reshape((a * b * c, d))
 
 
+### functions to shape the inputs and the labels for deep-learning (convolutionnal neural network, etc.) ###
+def chunk_spatial(arr, labels, (r, c)):
+    # pre-processing for deep-learning
+    from numpy import reshape
+    tiles, labels_tiles = [], []
+    row = 0
+    for x in range(0, arr.shape[0], r):
+        row += 1
+        col = 0
+        for y in range(0, arr.shape[1], c):
+            col += 1
+            tiles.append(arr[x:x + r, y:y + c])
+            labels_tiles.append(labels[x+r//2, y+c//2])
+    return tiles, reshape(labels_tiles, (row, col))
+
+
+def chunk_spatial_high_resolution(arr, (r, c)):
+    # pre-processing for deep-learning
+    r, c = int(r), int(c)
+    lla, llo, feats = arr.shape
+    from numpy import empty
+    tiles = empty((lla-r, llo-c, r, c, feats))
+    for lat in range(r/2, arr.shape[0]-r/2-1):
+        for lon in range(c/2, arr.shape[1]-c/2-1):
+            try:
+                tiles[lat-r/2, lon-c/2] = arr[lat-r/2:lat + r/2 + 1, lon - c/2:lon + c/2 + 1]
+            except ValueError:
+                tiles[lat - r / 2, lon - c / 2] = -1
+    return tiles
+
+
+def chunk_4d(arr, labels, (r, c)):
+    # pre-processing for deep-learning
+    tiles_3d = []
+    labels_reduced = []
+    from numpy import asarray
+    for slot in range(len(arr)):
+        t, l = chunk_spatial(arr[slot], labels[slot], (r, c))
+        tiles_3d.append(t)
+        labels_reduced.append(l)
+    return asarray(tiles_3d), asarray(labels_reduced)
+
+
+def chunk_4d_high_resolution(arr, (r, c)=(7, 7)):
+    # pre-processing for deep-learning
+    r, c = int(r), int(c)
+    tiles_3d = []
+    for slot in range(len(arr)):
+        tiles_3d.append(chunk_spatial_high_resolution(arr[slot], (r, c)))
+    tiles_3d = tiles_3d[:, r/2, -r/2-1, c/2, -c/2-1]
+    from numpy import shape, asarray
+    ssl, lla, llo, feats = shape(tiles_3d)
+    return asarray(tiles_3d).reshape((ssl*lla*llo, r, c, feats))
+
+
+def chunk_5d_high_resolution(arr, (r, c)=(7, 7)):
+    # pre-processing for deep-learning
+    r, c = int(r), int(c)
+    from numpy import empty, ones, shape
+    ssl, lla, llo, feats = shape(arr)
+    tiles = empty((ssl, lla-r, llo-c, r, c, feats))
+    for lat in range(r/2, lla-r/2-1):
+        for lon in range(c/2, llo-c/2-1):
+            try:
+                tiles[:, lat-r/2, lon-c/2] = arr[:, lat-r/2:lat + r/2 + 1, lon - c/2:lon + c/2 + 1]
+            except ValueError:
+                tiles[:, lat - r / 2, lon - c / 2] = -1*ones((ssl, r, c, feats))
+    # expected array dims :
+    return tiles.transpose((1, 2, 0, 3, 4, 5)).reshape(((lla-r)*(llo-c), ssl, r, c, feats))
+
+
+def reshape_labels(labels, (r, c)=(7, 7), chunk_level=4):
+    r, c = int(r), int(c)
+    ssl, lla, llo = labels.shape
+    assert chunk_level in [3, 4, 5], 'invalid chunk_level. Should be equal to 3, 4 or 5'
+    if chunk_level == 3:
+        return labels.flaten()
+    if chunk_level == 4:
+        return labels[:, r/2:lla-r/2-1, c/2:llo-c/2-1].flatten()
+    if chunk_level == 5:
+        return labels[:, r/2:lla-r/2-1, c/2:llo-c/2-1].reshape(((lla-r)*(llo-c), ssl))
+
+
+def remove_some_label_from_training_pool(inputs, labels, labels_to_remove):
+    if type(labels_to_remove) == int:
+        labels_to_remove = [labels_to_remove]
+    if len(labels_to_remove) == 0:
+        return inputs, labels
+    mask = (labels == labels_to_remove[0])
+    for k in range(1, len(labels_to_remove)):
+        mask = mask | (labels == labels_to_remove[k])
+    to_return = []
+    for k in range(len(mask)):
+        if not mask[k]:
+            to_return.append(inputs[k])
+    from numpy import asarray
+    return to_return, asarray(labels)[~mask]
+
+
 def score_solar_model(classes, predicted, return_string=True):
-    from quick_visualization import visualize_map_time
+    from visualize import visualize_map_time
     from utils import typical_bbox
     from sklearn.metrics import accuracy_score
     stri = 'accuracy score:' + str(accuracy_score(reshape_features(classes), predicted)) + '\n'
@@ -111,7 +210,7 @@ def predict_solar_model(features, pca_components):
     print 'time testing:', t_testing - t_save
     print 'differences', predicted_labels[predicted_labels != predicted_labels[0]]
     predicted_labels = predicted_labels.reshape((a, b, c))
-    from quick_visualization import visualize_map_time
+    from visualize import visualize_map_time
     from utils import typical_bbox
     visualize_map_time(predicted_labels, typical_bbox(), vmin=-1, vmax=4)
     return predicted_labels
@@ -297,12 +396,10 @@ def prepare_angles_features_ped_labels(seed, keep_holes=True):
     from static_tests import dawn_day_test
     from utils import typical_land_mask
     from get_data import get_features
-    from utils import get_times_utc, np, get_latitudes_longitudes, typical_input
-    from read_metadata import read_satellite_step
+    from utils import np, get_latitudes_longitudes, typical_input
 
     beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end = typical_input(seed)
 
-    times = get_times_utc(beginning, ending, read_satellite_step(), slot_step=1)
     latitudes, longitudes = get_latitudes_longitudes(latitude_beginning, latitude_end,
                                                      longitude_beginning, longitude_end)
     from read_labels import read_labels_remove_holes, read_labels_keep_holes
@@ -311,23 +408,32 @@ def prepare_angles_features_ped_labels(seed, keep_holes=True):
     else:
         labels, selected_slots = read_labels_remove_holes('csp', latitude_beginning, latitude_end, longitude_beginning, longitude_end, beginning, ending)
 
-    a, b, c = len(times), len(latitudes), len(longitudes)
-    nb_features_ = 8
-    features = np.empty((a, b, c, nb_features_))
     angles, vis, ndsi, mask = get_features('visible', latitudes, longitudes, beginning, ending, output_level='ndsi',
                                            slot_step=1, gray_scale=False)
+    a, b, c = angles.shape
+    nb_features_ = 8
+    features = np.empty((a, b, c, nb_features_))
+
     test_angles = dawn_day_test(angles)
     land_mask = typical_land_mask(seed)
-    mask = ((test_angles | land_mask) | mask)
-    ndsi[mask] = -10
+    ndsi[((test_angles | land_mask) | mask)] = -10
     features[:, :, :, 5] = test_angles
     features[:, :, :, 6] = land_mask
-    del test_angles, land_mask, mask
     features[:, :, :, 3] = vis
     features[:, :, :, 4] = ndsi
     del vis, ndsi
-    features[:, :, :, :3] = get_features('infrared', latitudes, longitudes, beginning, ending, output_level='abstract',
-                                         slot_step=1, gray_scale=False)[:, :, :, :3]
+
+    cli_mu, cli_epsilon, mask_input_cli = get_features('infrared', latitudes, longitudes, beginning, ending, output_level='cli',
+                                                       slot_step=1, gray_scale=False)
+    mask = ((test_angles | land_mask) | mask)
+    cli_mu[mask] = -10
+    cli_epsilon[mask] = -10
+    features[:, :, :, 0] = cli_mu
+    features[:, :, :, 1] = cli_epsilon
+    del mask, test_angles, land_mask, cli_mu, cli_epsilon
+
+    features[:, :, :, 2] = get_features('infrared', latitudes, longitudes, beginning, ending, output_level='channel',
+                                        slot_step=1, gray_scale=False)[:, :, :, 1]
 
     if selected_slots is not None:
         features[selected_slots, :, :, 7] = labels

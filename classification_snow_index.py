@@ -95,7 +95,7 @@ def check_gaussian_hypothesis(latitudes, longitudes, begin, end, method='none'):
     # snow=feat[:,:,:,0]
     # var=feat[:,:,:,1]
     # del feat
-    from quick_visualization import visualize_hist, visualize_map_time, get_bbox
+    from visualize import visualize_hist, visualize_map_time, get_bbox
     bb = get_bbox(latitudes[0], latitudes[-1], longitudes[0], longitudes[-1])
     # visualize_map_time(snow, bb, vmin=0, vmax=1)
     from static_tests import dawn_day_test

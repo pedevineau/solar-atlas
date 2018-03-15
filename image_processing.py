@@ -189,6 +189,23 @@ def get_local_otsu(img):
     return img > local_otsu
 
 
+def equalize_histogram_2d(img):
+    from cv2 import equalizeHist
+    return equalizeHist(img)
+
+
+def equalize_histograms_all_features(features):
+    nb_dims = len(features.shape)
+    assert nb_dims in [3, 4], 'invalid shape for features'
+    for slot in range(len(features)):
+        if nb_dims == 3:
+            features[slot] = equalize_histogram_2d(features[slot])
+        elif nb_dims == 4:
+            for feat in range(features.shape[-1]):
+                features[slot, :, :, feat] = equalize_histogram_2d(features[slot, :, :, feat])
+    return features
+
+
 if __name__ == '__main__':
     from get_data import get_features
     types_channel = ['infrared', 'visible']
@@ -196,18 +213,12 @@ if __name__ == '__main__':
     chan = 0
     channel_number = 1
     type_channels = types_channel[channel_number]
-    dfb_beginning = 13517
-    nb_days = 3
-    dfb_ending = dfb_beginning + nb_days - 1
-    latitude_beginning = 40.
-    latitude_end = 45.
-    longitude_beginning = 125.
-    longitude_end = 130.
-    date_begin, date_end = print_date_from_dfb(dfb_beginning, dfb_ending)
+    beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end = typical_input(seed=0)
+    date_begin, date_end = print_date_from_dfb(beginning, ending)
     lat, lon = get_latitudes_longitudes(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
     # from quick_visualization import get_bbox
     # bbox = get_bbox(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
-    features = get_features(type_channels, lat, lon, dfb_beginning, dfb_ending, compute_indexes, slot_step=1,
+    features = get_features(type_channels, lat, lon, beginning, ending, compute_indexes, slot_step=1,
                             gray_scale=True)
 
     segmentation_watershed_2d(features[16, :, :, chan])

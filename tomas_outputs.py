@@ -61,7 +61,7 @@ def reduce_tomas_2_classes(classes):
 if __name__ == '__main__':
     print 'tomas reader'
     from utils import typical_input, typical_bbox
-    from quick_visualization import visualize_map_time
+    from visualize import visualize_map_time
     dfb_begin, dfb_end, latitude_begin, latitude_end, longitude_begin, longitude_end = typical_input()
     classes = get_tomas_outputs(dfb_begin, dfb_end, latitude_begin, latitude_end,
                                                                 longitude_begin, longitude_end)

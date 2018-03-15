@@ -142,7 +142,7 @@ def recognize_pattern_ndsi(ndsi, mu, mask, mask_high_variability,
     return stressed_ndsi[:,:,:]
 
 
-def recognize_pattern_vis(ndsi, vis, nir, mu, mask, time_step_satellite, slot_step, slices_by_day=1, tolerance=0.15):
+def recognize_pattern_vis(ndsi, vis, sir, mu, mask, time_step_satellite, slot_step, slices_by_day=1, tolerance=0.15):
     print 'begin recognize pattern'
     from time import time
     t_begin_reco = time()
@@ -168,7 +168,7 @@ def recognize_pattern_vis(ndsi, vis, nir, mu, mask, time_step_satellite, slot_st
 
             while slot_beginning_slice < nb_slots:
                 slice_vis = vis[slot_beginning_slice:slot_ending_slice, lat, lon]
-                slice_nir = nir[slot_beginning_slice:slot_ending_slice, lat, lon]
+                slice_sir = sir[slot_beginning_slice:slot_ending_slice, lat, lon]
                 slice_ndsi = ndsi[slot_beginning_slice:slot_ending_slice, lat, lon]
                 slice_mu = mu[slot_beginning_slice:slot_ending_slice, lat, lon]
                 slice_mask = mask[slot_beginning_slice:slot_ending_slice, lat, lon]
@@ -177,14 +177,14 @@ def recognize_pattern_vis(ndsi, vis, nir, mu, mask, time_step_satellite, slot_st
                         slice_vis[~slice_mask],
                         slice_mu[~slice_mask]
                     )
-                    p_nir, r_nir = pearsonr(   # is expected to be anti-correlated
-                        slice_nir[~slice_mask],
+                    p_sir, r_sir = pearsonr(   # is expected to be anti-correlated
+                        slice_sir[~slice_mask],
                         slice_mu[~slice_mask]
                     )
-                    if p_nir < 4*tolerance: # not correlated with mu
-                        print p_vis, p_nir
+                    if p_sir < 4*tolerance: # not correlated with mu
+                        print p_vis, p_sir
                         # visualize_input(slice_vis[~slice_mask], display_now=False)
-                        # visualize_input(slice_nir[~slice_mask])
+                        # visualize_input(slice_sir[~slice_mask])
                         if p_vis > 1 - tolerance:
                             print 'suspect snow ?', lat, lon
                             stressed_ndsi[slot_beginning_slice:slot_ending_slice, lat, lon] = \

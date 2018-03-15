@@ -110,14 +110,13 @@ class WeatherCNN(WeatherLearning):
 
     def fit(self, inputs, labels, nb_classes, fit_excluding=None):
         from keras.utils import np_utils
-        from utils import chunk_4d_high_resolution
+        from learning_utils import chunk_4d_high_resolution, reshape_labels, remove_some_label_from_training_pool
         from numpy import asarray
         from time import time
         inputs = chunk_4d_high_resolution(asarray(inputs), (self.res, self.res))
-        labels = labels.flatten()
+        labels = reshape_labels(labels, (self.res, self.res), chunk_level=4)
         t_exclude = time()
         if fit_excluding is not None:
-            from utils import remove_some_label_from_training_pool
             inputs, labels = remove_some_label_from_training_pool(inputs, labels, fit_excluding)
         print 'time exclude:', time()-t_exclude
 
@@ -137,27 +136,16 @@ class WeatherCNN(WeatherLearning):
                                  epochs=EPOCHS, verbose=1)
 
     def predict(self, inputs):
-        from utils import chunk_4d_high_resolution
+        from learning_utils import chunk_4d_high_resolution
         return self.model.predict(chunk_4d_high_resolution(np.asarray(inputs), (self.res, self.res)))
 
     def score(self, inputs, labels, nb_classes):
         from keras.utils import np_utils
+        from learning_utils import chunk_4d_high_resolution, reshape_labels
         inputs = chunk_4d_high_resolution(np.asarray(inputs), (self.res, self.res))
-        labels = np_utils.to_categorical(np.asarray(labels).flatten(), nb_classes)
+        labels = np_utils.to_categorical(reshape_labels(labels, (self.res, self.res), chunk_level=4), nb_classes)
         results = self.model.evaluate(inputs, labels, verbose=0)
-        # from sklearn.model_selection import cross_val_score
-        # from sklearn.model_selection import KFold
-        # from utils import chunk_3d_high_resolution
-        # from keras.wrappers.scikit_learn import KerasClassifier
-        # estimator = KerasClassifier(build_fn=self.model, epochs=25, batch_size=32, verbose=0)
-        # kfold = KFold(n_splits=10, shuffle=True, random_state=42)
-        # inputs = chunk_3d_high_resolution(np.asarray(inputs), (self.res, self.res))
-        # labels = np_utils.to_categorical(np.asarray(labels).flatten())
-        # # print inputs
-        # print labels
-        # results = cross_val_score(estimator, inputs, labels, cv=kfold)
         print results
-        # print("Baseline: %.2f%% (%.2f%%)" % (results.mean() * 100, results.std() * 100))
 
     @staticmethod
     def reshape_outputs(outputs, shape):
@@ -191,13 +179,13 @@ class WeatherMLP(WeatherLearning):
         self.model = model
 
     def fit(self, inputs, labels, nb_classes, fit_excluding=None):
-        from learning_utils import reshape_features
+        from learning_utils import reshape_features, remove_some_label_from_training_pool, reshape_labels
         from keras.utils import np_utils
         inputs = reshape_features(inputs)
         inputs = self.apply_pca(inputs)
+        labels = reshape_labels(labels, chunk_level=3)
         if fit_excluding is not None:
-            inputs, labels = remove_some_label_from_training_pool(inputs, labels.flatten(),
-                                                                  fit_excluding)
+            inputs, labels = remove_some_label_from_training_pool(inputs, labels, fit_excluding)
         labels = np_utils.to_categorical(labels, nb_classes)
         self.model.fit(np.asarray(inputs), labels, epochs=20, batch_size=32)
 
@@ -253,12 +241,12 @@ class WeatherConvLSTM(WeatherLearning):
 
     def fit(self, inputs, labels, nb_classes, fit_excluding=None):
         from keras.utils import np_utils
-        from utils import chunk_5d_high_resolution
+        from learning_utils import chunk_5d_high_resolution, reshape_labels
         from numpy import asarray
         from time import time
         nb_slots, nb_lats, nb_lons, nb_feats = inputs.shape
-        inputs = chunk_5d_high_resolution(asarray(inputs), (self.res, self.res))
-        labels = labels.reshape((nb_lats*nb_lons, nb_slots))
+        inputs = chunk_5d_high_resolution(inputs, (self.res, self.res))
+        labels = reshape_labels(labels, (self.res, self.res), chunk_level=5)
         t_exclude = time()
         # following block not adapted to convlstm
         # if fit_excluding is not None:
@@ -280,7 +268,7 @@ class WeatherConvLSTM(WeatherLearning):
             pass
 
     def predict(self, inputs):
-        from utils import chunk_5d_high_resolution
+        from learning_utils import chunk_5d_high_resolution
         from numpy import asarray
         return self.model.predict(chunk_5d_high_resolution(asarray(inputs), (self.res, self.res)))
 
@@ -302,12 +290,13 @@ def keras_cnn_score(model, inputs, labels):
     from sklearn.model_selection import cross_val_score
     from sklearn.model_selection import KFold
     from keras.utils import np_utils
-    from utils import chunk_4d_high_resolution
+    from learning_utils import chunk_4d_high_resolution, reshape_labels
     from keras.wrappers.scikit_learn import KerasClassifier
     estimator = KerasClassifier(build_fn=model, epochs=25, batch_size=32, verbose=0)
     kfold = KFold(n_splits=10, shuffle=True, random_state=42)
     results = cross_val_score(estimator, chunk_4d_high_resolution(inputs, (res, res)),
-                              np_utils.to_categorical(labels.flatten(), nb_classes_), cv=kfold)
+                              np_utils.to_categorical(reshape_labels(labels, (res, res), chunk_level=4),
+                                                      nb_classes_), cv=kfold)
     print("Baseline: %.2f%% (%.2f%%)" % (results.mean() * 100, results.std() * 100))
 
 

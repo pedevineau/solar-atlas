@@ -294,7 +294,7 @@ if __name__ == '__main__':
     date_begin, date_end = print_date_from_dfb(beginning, ending)
     print beginning, ending
     print 'NS:', latitude_beginning, latitude_end, ' WE:', longitude_beginning, longitude_end
-    from quick_visualization import visualize_map_time, get_bbox
+    from visualize import visualize_map_time, get_bbox
     bbox = get_bbox(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
 
     from time import time

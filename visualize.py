@@ -139,6 +139,11 @@ def visualize_hist(array_1d, title='Histogram', precision=50):
     plt.show()
 
 
+def visualize_equalized_normalization(features, bbox, vmin, vmax):
+    from image_processing import equalize_histograms_all_features
+    visualize_map_time(equalize_histograms_all_features(features), bbox, vmin, vmax, color='gray')
+
+
 if __name__ == '__main__':
     from get_data import get_features
     from utils import *
@@ -147,10 +152,13 @@ if __name__ == '__main__':
     level = 0
     channel_number = 1
     display_curves = False
+
+    gray_scale = False
+
     output_level = output_levels[level]
     type_channels = types_channel[channel_number]
     from utils import typical_input
-    dfb_beginning, dfb_ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end = typical_input()
+    dfb_beginning, dfb_ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end = typical_input(0)
     print dfb_beginning, dfb_ending
     print 'NS:', latitude_beginning, latitude_end, ' WE:', longitude_beginning, longitude_end
 
@@ -160,7 +168,11 @@ if __name__ == '__main__':
     bbox = get_bbox(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
 
     features = get_features(type_channels, lat, lon, dfb_beginning, dfb_ending, output_level, slot_step=1,
-                            gray_scale=False)
+                            gray_scale=gray_scale)
+
+    if gray_scale:
+        visualize_equalized_normalization(features, bbox, vmin=0, vmax=255)
+        raise Exception('stop here for now')
 
     if display_curves:
         mask = (features[:, :, :, 0] == -10)
@@ -172,7 +184,7 @@ if __name__ == '__main__':
             visualize_input(features[:, lat_pix, lon_pix, 0], display_now=True, style='^')
 
 
-    if type_channels == 'infrared' and level>0:
+    elif type_channels == 'infrared' and level>0:
         visualize_map_time(features[:, :, :, 0], bbox, title=type_channels, vmin=0, vmax=1, color='gray')
         visualize_map_time(features[:, :, :, 1:], bbox, title=type_channels, vmin=0, vmax=5, color='gray')
     elif type_channels == 'infrared' and level==0:

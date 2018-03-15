@@ -16,7 +16,7 @@ def compute_cli_cloud_threshold():
 
 
 def compute_cloud_stability_threshold():
-    return 5
+    return 4
 
 
 def compute_cloud_epsilon_threshold():
@@ -57,12 +57,16 @@ def compute_vis_sun_glint_threshold():
     return 0.6
 
 
-def compute_lir_texture_land():
+def compute_lir_texture_land_threshold():
     return 2
 
 
-def compute_mir_lir_texture_land():
-    return 2
+def compute_opaque_cloud_threshold():
+    return 0.05
+
+
+def compute_lir_texture_land_variability_threshold():
+    return 1.5
 
 
 def compute_vis_sea_coasts_cloud_factors(zen):

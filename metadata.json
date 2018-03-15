@@ -1,5 +1,5 @@
 {
-  "satellite": "GOES16",
+  "satellite": "H08",
   "H08": {
     "time_step": 10,
     "start_slot": 1,

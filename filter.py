@@ -28,22 +28,27 @@ def local_std(array, mask=None, scope=3):
     from scipy import ndimage
     if scope <= 1:
         return array
+    from numpy import empty_like
+    arr = empty_like(array)
     for k in range(len(array)):
-        array[k] = np.sqrt(ndimage.generic_filter(array[k], np.var, size=scope))
+        arr[k] = np.sqrt(ndimage.generic_filter(array[k], np.var, size=scope))
         if mask is not None:
-            array[k][ndimage.morphology.binary_dilation(mask[k])] = -10
-    return array
+            mask[k] = ndimage.morphology.binary_dilation(mask[k])
+            arr[k][mask[k]] = -10
+    return arr
 
 
 def local_max(array, mask=None, scope=3):
     from scipy import ndimage
     if scope <= 1:
         return array
+    from numpy import empty_like
+    arr = empty_like(array)
     for k in range(len(array)):
-        array[k] = ndimage.maximum_filter(array[k], size=scope)
+        arr[k] = ndimage.maximum_filter(array[k], size=scope)
         if mask is not None:
-            array[k][ndimage.morphology.binary_dilation(mask[k])] = -10
-    return array
+            arr[k][ndimage.morphology.binary_dilation(mask[k])] = -10
+    return arr
 
 
 # low pass spatial filter case use: NOT ndsi, perhaps CLI or stressed NDSI
