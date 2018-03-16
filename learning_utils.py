@@ -127,7 +127,7 @@ def chunk_4d_high_resolution(arr, (r, c)=(7, 7)):
     tiles_3d = []
     for slot in range(len(arr)):
         tiles_3d.append(chunk_spatial_high_resolution(arr[slot], (r, c)))
-    tiles_3d = tiles_3d[:, r/2, -r/2-1, c/2, -c/2-1]
+    tiles_3d = tiles_3d[:, r/2: -r/2-1, c/2: -c/2-1]
     from numpy import shape, asarray
     ssl, lla, llo, feats = shape(tiles_3d)
     return asarray(tiles_3d).reshape((ssl*lla*llo, r, c, feats))
