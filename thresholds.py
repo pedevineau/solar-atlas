@@ -20,7 +20,7 @@ def compute_cloud_stability_threshold():
 
 
 def compute_cloud_epsilon_threshold():
-    return 0.25
+    return 0.3
 
 
 def compute_thresh_temperature():

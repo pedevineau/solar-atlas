@@ -633,7 +633,7 @@ def maybe_cloud_after_all(is_land, is_supposed_free, vis):
     del vis_copy
     vis = vis.reshape((entire_days, slot_per_day, lats, lons))
     # from quick_visualization import visualize_map_time
-    # visualize_map_time(supposed_clear_sky, typical_bbox())
+    # visualize_map_time(supposed_clear_sky, typical_bbox(seed))
     # visualize_map_time(is_supposed_free & land_visible_test(is_land, vis, supposed_clear_sky).reshape((slots, lats, lons)), typical_bbox())
     return is_supposed_free & land_visible_test(is_land, vis, supposed_clear_sky).reshape((slots, lats, lons))
 
@@ -708,4 +708,7 @@ def typical_static_classifier(seed=0, bypass=False, quick_test=False):
 if __name__ == '__main__':
     from utils import *
     from visualize import visualize_map_time
-    visualize_map_time(typical_static_classifier(quick_test=False, seed=0), typical_bbox(), vmin=0, vmax=5)
+
+    seed = 0
+
+    visualize_map_time(typical_static_classifier(quick_test=False, seed=seed), typical_bbox(seed=seed), vmin=0, vmax=5)

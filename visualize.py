@@ -149,8 +149,8 @@ if __name__ == '__main__':
     from utils import *
     output_levels = ['channel', 'ndsi', 'cli', 'abstract']
     types_channel = ['infrared', 'visible']
-    level = 0
-    channel_number = 1
+    level = 3
+    channel_number = 0
     display_curves = False
 
     gray_scale = False

@@ -4,7 +4,7 @@
     "time_step": 10,
     "start_slot": 1,
     "longitude": 140.7,
-    "epsilon_param": 8.5,
+    "epsilon_param": 2.0,
     "channels_name": ["IR124_2000", "IR104_2000", "IR390_2000", "VIS160_2000", "VIS064_2000"],
     "indexes": {
       "visible": {

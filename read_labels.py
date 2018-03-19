@@ -103,9 +103,10 @@ def read_labels(label_type, lat_beginning, lat_ending, lon_beginning,  lon_endin
 
 
 if __name__ == '__main__':
+    seed = 1
     from utils import typical_input, visualize_map_time, typical_bbox, print_date_from_dfb
-    dfb_begin, dfb_end, latitude_begin, latitude_end, longitude_begin, longitude_end = typical_input()
+    dfb_begin, dfb_end, latitude_begin, latitude_end, longitude_begin, longitude_end = typical_input(seed=seed)
     print dfb_begin, dfb_end
     print_date_from_dfb(dfb_begin, dfb_end)
     visualize_map_time(read_labels('CSP', latitude_begin, latitude_end, longitude_begin, longitude_end,
-                                   dfb_begin, dfb_end)[0], typical_bbox())
+                                   dfb_begin, dfb_end)[0], typical_bbox(seed))

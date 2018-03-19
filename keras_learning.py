@@ -116,8 +116,8 @@ class WeatherCNN(WeatherLearning):
         inputs = chunk_4d_high_resolution(asarray(inputs), (self.res, self.res))
         labels = reshape_labels(labels, (self.res, self.res), chunk_level=4)
         t_exclude = time()
-        if fit_excluding is not None:
-            inputs, labels = remove_some_label_from_training_pool(inputs, labels, fit_excluding)
+        # if fit_excluding is not None:
+        #     inputs, labels = remove_some_label_from_training_pool(inputs, labels, fit_excluding)
         print 'time exclude:', time()-t_exclude
 
         from sklearn.model_selection import train_test_split

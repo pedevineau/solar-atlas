@@ -64,16 +64,16 @@ def infrared_abstract_predictors(zen, lir, mask_input, temperatures, cli, ancill
     if not gray_scale:  # if on-point
         array_indexes = np.empty(shape=(nb_slots, nb_latitudes, nb_longitudes, nb_features))
         array_indexes[:, :, :, 0] = cli
-        array_indexes[:, :, :, 0][mask_output] = -10
+        # array_indexes[:, :, :, 0][mask_output] = -10
         array_indexes[:, :, :, 1] = ancillary_cloud_index
-        var = 35 * get_cloud_index_positive_variability_7d(
-                cloud_index=ancillary_cloud_index,
-                definition_mask=(mask_input|~dawn_day_test(zen)),
-                # pre_cloud_mask=high_cli_mask | (cold == 1),
-                pre_cloud_mask=None,
-                satellite_step=satellite_step,
-                slot_step=slot_step) / (lir-203.7)
-        array_indexes[:, :, :, 1][var < 8] = 0
+        # var = 35 * get_cloud_index_positive_variability_7d(
+        #         cloud_index=ancillary_cloud_index,
+        #         definition_mask=(mask_input|~dawn_day_test(zen)),
+        #         # pre_cloud_mask=high_cli_mask | (cold == 1),
+        #         pre_cloud_mask=None,
+        #         satellite_step=satellite_step,
+        #         slot_step=slot_step) / (lir-203.7)
+        # array_indexes[:, :, :, 1][var < 8] = 0
 
     else:  # if image
         array_indexes = np.empty(shape=(nb_slots, nb_latitudes, nb_longitudes, nb_features), dtype=np.uint8)

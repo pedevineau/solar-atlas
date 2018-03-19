@@ -7,13 +7,13 @@ def typical_input(seed=0):
     sat_name = read_satellite_name()
     if seed == 0:
         if sat_name == 'GOES16':
-            beginning = 13516 + 365+30+16
-            nb_days = 3
+            beginning = 13516 + 365+10#+36
+            nb_days = 5
             ending = beginning + nb_days - 1
-            latitude_beginning = 35.
-            latitude_end = 60.
+            latitude_beginning = 35.+5
+            latitude_end = 40.+5
             longitude_beginning = -80.
-            longitude_end = -70.
+            longitude_end = -75.
         elif sat_name == 'H08':
             beginning = 13525 + 180
             nb_days = 3
@@ -36,10 +36,10 @@ def typical_input(seed=0):
             beginning = 13525 + 180
             nb_days = 5
             ending = beginning + nb_days - 1
-            latitude_beginning = 40.
-            latitude_end = 45.
-            longitude_beginning = 110.
-            longitude_end = 115.
+            latitude_beginning = 40.-5
+            latitude_end = 45.-5
+            longitude_beginning = 110.+10+5
+            longitude_end = 115.+10+5
         return beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end
 
 
@@ -317,4 +317,4 @@ if __name__ == '__main__':
 
     dfb_begin, dfb_end, latitude_begin, latitude_end, longitude_begin, longitude_end = typical_input()
     print rc_to_latlon(10,53)
-    print latlon_to_rc(35,135)
+    print latlon_to_rc(-8,111)
