@@ -1,13 +1,25 @@
+from math import radians
+from time import time
+
+import numpy as np
+import sunpos
+from scipy.ndimage.filters import gaussian_filter1d
+from scipy.stats import pearsonr, linregress
+
+from general_utils.latlon import bounding_box
+from general_utils.satellite_geom import sat_asat_r_vect2, sat_hsat_r_vect2, sat_sun_angle_r, sat_sun_mirror_angle_r
+from general_utils.solar_geom_v5 import UTC2LAT_r
+from general_utils.solar_geom_v5 import declin_r, sunposition_r
+from general_utils.solar_geom_v5_test import parseDateTime
+from read_metadata import read_satellite_step, read_satellite_longitude
 from utils import *
 
 
 def get_cos_zen(times, latitudes, longitudes):
-    import sunpos
     return sunpos.evaluate(times, np.flip(latitudes, 0), longitudes, ndim=2, n_cpus=2).cosz
 
 
 def get_zenith_angle(times, latitudes, longitudes):
-    import sunpos
     return sunpos.evaluate(times, np.flip(latitudes, 0), longitudes, ndim=2, n_cpus=2).zenith
 
 
@@ -22,9 +34,8 @@ def apply_gaussian_persistence(persistence_array_1d, persistence_mask_1d, persis
     :param persistence_scope: number of slots where applying persistence
     :return: array of float between 0. and 1.
     '''
-    from scipy.ndimage.filters import gaussian_filter1d
     persistence_sigma = float(persistence_sigma)
-    trunc = persistence_scope/persistence_sigma
+    trunc = persistence_scope / persistence_sigma
     return normalize(gaussian_filter1d(persistence_array_1d[~persistence_mask_1d],
                                        sigma=persistence_sigma, axis=0, truncate=trunc),
                      normalization='max')
@@ -40,7 +51,6 @@ def look_like_cos_zen_1d(variable, cos_zen, under_bound, upper_bound, mask=None)
     :param upper_bound: hyper-parameter between -1 and 1 (eg: -0.89 or 1.)
     :return: integer 0-1
     '''
-    from scipy.stats import pearsonr, linregress
     if mask is None:
         r, p = pearsonr(variable, cos_zen)
     else:
@@ -70,7 +80,6 @@ def get_likelihood_variable_cos_zen(variable, cos_zen, under_bound, upper_bound,
         return look_like_cos_zen_1d(variable, cos_zen, under_bound, upper_bound, mask)
     elif len(variable.shape) == 3 and variable.shape == cos_zen.shape:
         to_return = np.zeros_like(cos_zen)
-        from time import time
         print 'begin recognizing pattern'
         t_begin_reco = time()
         # https://docs.scipy.org/doc/scipy-0.14.0/reference/generated/scipy.stats.pearsonr.html
@@ -147,8 +156,8 @@ def get_likelihood_variable_cos_zen(variable, cos_zen, under_bound, upper_bound,
 
 def get_next_midnight(mu_point, nb_slots_per_day, current_slot=0):
     return np.maximum(0,
-                      current_slot+nb_slots_per_day-3 +
-                      np.argmin(mu_point[current_slot+nb_slots_per_day-3:current_slot+nb_slots_per_day+3]))
+                      current_slot + nb_slots_per_day - 3 +
+                      np.argmin(mu_point[current_slot + nb_slots_per_day - 3:current_slot + nb_slots_per_day + 3]))
 
 
 def get_next_midday(mu_point, nb_slots_per_day, current_midday=0):
@@ -158,11 +167,12 @@ def get_next_midday(mu_point, nb_slots_per_day, current_midday=0):
 
 
 def get_map_next_midnight(mu, nb_slots_per_day, current_midnight=0):
-    if current_midnight == 0:   # means it is first iteration
+    if current_midnight == 0:  # means it is first iteration
         return np.argmin(mu[0:nb_slots_per_day], axis=0)
     else:
         return np.maximum(0, current_midnight + nb_slots_per_day - 3 +
-                          np.argmin(mu[current_midnight + nb_slots_per_day - 3:current_midnight + nb_slots_per_day + 3], axis=0))
+                          np.argmin(mu[current_midnight + nb_slots_per_day - 3:current_midnight + nb_slots_per_day + 3],
+                                    axis=0))
 
 
 def get_map_next_midday(mu, nb_slots_per_day, current_slot=0):
@@ -171,17 +181,17 @@ def get_map_next_midday(mu, nb_slots_per_day, current_slot=0):
 
 def get_map_next_sunrise(mu, nb_slots_per_day, current_dawn=0):
     # derivative of cos-zen angle = 1
-    if current_dawn == 0:   # means it is first iteration
-        derivative = mu[0:nb_slots_per_day]-np.roll(mu[0:nb_slots_per_day], shift=-1)
+    if current_dawn == 0:  # means it is first iteration
+        derivative = mu[0:nb_slots_per_day] - np.roll(mu[0:nb_slots_per_day], shift=-1)
         return np.argmax(derivative, axis=0)
     else:
-        derivative = mu[current_dawn + nb_slots_per_day - 3:current_dawn + nb_slots_per_day + 3]\
+        derivative = mu[current_dawn + nb_slots_per_day - 3:current_dawn + nb_slots_per_day + 3] \
                      - np.roll(mu[current_dawn + nb_slots_per_day - 3:current_dawn + nb_slots_per_day + 3], shift=-1)
         return np.maximum(0, current_dawn + nb_slots_per_day - 3 +
                           np.argmax(derivative, axis=0))
 
 
- # should be useless, since these slots are supposed to be regularly distant from nb_slots_per_day
+# should be useless, since these slots are supposed to be regularly distant from nb_slots_per_day
 
 
 def get_map_next_sunset(mu, nb_slots_per_day, current_dawn=0):
@@ -206,12 +216,12 @@ def get_map_all_midnight_slots(mu, nb_slots_per_day):
         for lon in range(nb_longitudes):
             for day in range(1, nb_days):
                 current_slots[day, lat, lon] = get_next_midnight(mu, nb_slots_per_day,
-                                                                 current_slots[day-1, lat, lon])
+                                                                 current_slots[day - 1, lat, lon])
     return current_slots
 
 
 def compute_angle_glint(zen, sat, scat):
-    return 2*np.cos(zen)*np.cos(sat) - np.cos(scat)
+    return 2 * np.cos(zen) * np.cos(sat) - np.cos(scat)
 
 
 def simplified_declination_angle(day, year=None, method='tomas'):
@@ -219,8 +229,8 @@ def simplified_declination_angle(day, year=None, method='tomas'):
     # can be used with scalars or arrays
     assert method in ['julian', 'tomas'], 'method non implemented'
     if method == 'julian':
-        julian = day/365.*360
-        sin_delta = 0.3978*np.sin(julian-80.2+1.92*np.sin(julian-2.8))
+        julian = day / 365. * 360
+        sin_delta = 0.3978 * np.sin(julian - 80.2 + 1.92 * np.sin(julian - 2.8))
         return np.arcsin(sin_delta)
     elif method == 'tomas':
         from general_utils.solar_geom_v5 import declin_r
@@ -229,8 +239,6 @@ def simplified_declination_angle(day, year=None, method='tomas'):
 
 def solar_altitude_angle(times, lats, lons, declin):
     # can be used with scalars or arrays
-    from general_utils.solar_geom_v5_test import parseDateTime
-    from general_utils.solar_geom_v5 import UTC2LAT_r
     lons, lats = np.asarray(lons), np.asarray(lats)
     sin_altitude = np.empty((len(times), len(lats), len(lons)))
     for t_ind, t in enumerate(times):
@@ -239,13 +247,14 @@ def solar_altitude_angle(times, lats, lons, declin):
             time_apparent = UTC2LAT_r(time, day, lon)
             omega = 15 * (time_apparent - 12)  # angle in degrees
             for lat_ind, lat in enumerate(lons):
-                sin_altitude[t_ind, lat_ind, lon_ind] = np.sin(lat)*np.sin(declin) + np.cos(lat)*np.cos(declin)*np.cos(omega)
+                sin_altitude[t_ind, lat_ind, lon_ind] = np.sin(lat) * np.sin(declin) + np.cos(lat) * np.cos(
+                    declin) * np.cos(omega)
     return np.arcsin(sin_altitude)
 
 
 def solar_azimuth_angle():
-    cos_alpha = np.sin(lats)*np.sin(altitude)-np.sin(declin)/(np.cos(lats)*np.cos(altitude))
-    sin_alpha = np.cos(declin)*np.sin(omega)/np.cos(altitude)
+    cos_alpha = np.sin(lats) * np.sin(altitude) - np.sin(declin) / (np.cos(lats) * np.cos(altitude))
+    sin_alpha = np.cos(declin) * np.sin(omega) / np.cos(altitude)
     alpha = np.empty_like(cos_alpha)
     alpha[sin_alpha < 0] = -np.arccos(cos_alpha)
     alpha[sin_alpha >= 0] = np.arccos(cos_alpha)
@@ -263,10 +272,9 @@ def calculate_satellite_geometry_point(lon_r, lat_r, asun_r, hsun_r, satlon_r):
     :return:
     '''
 
-    from general_utils.satellite_geom import sat_asat_r_vect2, sat_hsat_r_vect2, sat_sun_angle_r, sat_sun_mirror_angle_r
     # satellite geometry
-    Asat_r = sat_asat_r_vect2(lon_r, lat_r, satlon_r)#[:, :, 0, 0]
-    Hsat_r = sat_hsat_r_vect2(lon_r, lat_r, satlon_r)#[:, :, 0, 0]
+    Asat_r = sat_asat_r_vect2(lon_r, lat_r, satlon_r)  # [:, :, 0, 0]
+    Hsat_r = sat_hsat_r_vect2(lon_r, lat_r, satlon_r)  # [:, :, 0, 0]
     # sun - ground - satellite geometry
     sun_sat_angle_r = sat_sun_angle_r(asun_r, hsun_r, Asat_r, Hsat_r)
     # specular angle - give idea of possible mirroring effect
@@ -284,24 +292,19 @@ if __name__ == '__main__':
     latitude_ending = 45.
     longitude_beginning = 125.
     longitude_ending = 130.
-    latitudes, longitudes = get_latitudes_longitudes(latitude_beginning, latitude_ending, longitude_beginning, longitude_ending)
+    latitudes, longitudes = get_latitudes_longitudes(latitude_beginning, latitude_ending, longitude_beginning,
+                                                     longitude_ending)
 
-    from math import radians
-    from general_utils.solar_geom_v5_test import parseDateTime
-    from general_utils.latlon import bounding_box
-    from read_metadata import read_satellite_step, read_satellite_longitude
     times = get_times_utc(beginning, ending, read_satellite_step(), 1)
 
-    from general_utils.solar_geom_v5 import declin_r, sunposition_r, UTC2LAT_r
-
     nb_slots_per_day = get_nb_slots_per_day(read_satellite_step(), 1)
-    res = 1/33.
+    res = 1 / 33.
     w = len(longitudes)
     h = len(latitudes)
     bb = bounding_box(xmin=longitude_beginning, xmax=longitude_ending, ymin=latitude_beginning,
                       ymax=latitude_ending, resolution=res, width=w, height=h)
 
-    coef = (2*np.pi/360.)
+    coef = (2 * np.pi / 360.)
     # for lon in lons_1d:
     asun_r = np.empty((nb_days, nb_slots_per_day, h, w))
     hsun_r = np.empty((nb_days, nb_slots_per_day, h, w))
@@ -310,7 +313,7 @@ if __name__ == '__main__':
         date = t.isoformat()
         year, day, time = parseDateTime(date)
         dfb_index = int(t_ind / nb_slots_per_day)
-        slot_index = t_ind - nb_slots_per_day*dfb_index
+        slot_index = t_ind - nb_slots_per_day * dfb_index
         for lon_ind, lon in enumerate(longitudes):
             decl = declin_r(year, day, radians(lon))
             #     print 'declination:',decli,'rad  ', declin_d(year,doy,longi),'deg'
@@ -321,9 +324,7 @@ if __name__ == '__main__':
                     sunposition_r(decl, radians(lat), time_LAT)
 
     satlon_r = np.empty(shape=(nb_days, nb_slots_per_day))
-    satlon_r[0,0]=read_satellite_longitude()
+    satlon_r[0, 0] = read_satellite_longitude()
     lats_2d = bb.latitudes(array2d=True)
     lons_2d = bb.longitudes(array2d=True)
     calculate_satellite_geometry_point(lons_2d, lats_2d, asun_r, hsun_r, satlon_r)
-
-

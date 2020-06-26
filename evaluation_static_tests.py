@@ -1,9 +1,8 @@
-'''
-author: Pierre-Etienne Devineau
-SOLARGIS S.R.O.
+from numpy import zeros_like
 
-To measure the relative efficiency of each cloud test
-'''
+from static_tests import dawn_day_test, gross_cloud_test, thin_cirrus_test
+from static_tests import typical_static_classifier, epsilon_transparent_cloud_test, thick_cloud_test
+from utils import visualize_map_time, typical_bbox
 
 
 def corr2test(test_1, test_2):
@@ -11,7 +10,7 @@ def corr2test(test_1, test_2):
     # test_1 = test_1.flatten()
     # test_2 = test_2.flatten()
     assert len(test_1) == len(test_2), 'the two lists have different sizes'
-    score = float(sum(test_2))/sum(test_1)
+    score = float(sum(test_2)) / sum(test_1)
     # score = (1.*sum(test_1 == test_2)) / len(test_1)
     return score
 
@@ -31,7 +30,6 @@ def compute_common_scores(*args):
 def compute_unique_scores(*args):
     # expect list
     n = len(args)
-    from numpy import zeros
     common = args[0]
     for k in range(1, n):
         common = (args[k] | common)
@@ -53,10 +51,6 @@ def visualize_regular_cloud_tests(quick_test=False):
     :param quick_test: if True, does not compute texture test
     :return: two lists: the list
     '''
-    from static_tests import dawn_day_test, cli_water_cloud_test, cli_stability, gross_cloud_test, thin_cirrus_test, \
-        typical_static_classifier, epsilon_transparent_cloud_test, thick_cloud_test
-    from numpy import zeros_like
-    from utils import visualize_map_time, typical_bbox
     zen, lands, cli_mu, cli_var, cli_epsilon, vis, lir, fir, lir_forecast, fir_forecast = typical_static_classifier(
         bypass=True)
     # visualize_map_time(cli_mu, typical_bbox(), vmin=0, vmax=50, color='gray')

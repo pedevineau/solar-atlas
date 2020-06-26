@@ -1,10 +1,17 @@
-'''
-author: Pierre-Etienne Devineau
-SOLARGIS S.R.O.
+import cv2
+import numpy as np
+from cv2 import equalizeHist
+from scipy import ndimage
+from scipy.ndimage import distance_transform_edt
+from skimage.filters import rank
+from skimage.filters import threshold_otsu
+from skimage.measure import label
+from skimage.morphology import disk
+from skimage.morphology import opening, octahedron
+# from skimage.feature import peak_local_max
+from skimage.morphology import watershed
 
-To measure the relative efficiency of each cloud test
-'''
-
+from get_data import get_features
 from utils import *
 
 
@@ -25,7 +32,6 @@ def segmentation(method, feature, chan=None, thresh_method='otsu', static=None):
 
 def segmentation_otsu_2d(feature):
     to_return = np.zeros_like(feature, dtype=bool)
-    from skimage.filters import threshold_otsu
     nb_slots = np.shape(to_return)[0]
     for slot in range(nb_slots):
         try:
@@ -37,7 +43,6 @@ def segmentation_otsu_2d(feature):
 
 def segmentation_otsu_3d(feature):
     # skimage library
-    from skimage.filters import threshold_otsu
     try:
         return feature > threshold_otsu(feature)
     except ValueError:
@@ -59,10 +64,6 @@ def segmentation_watershed_3d(feature, thresh_method='otsu', coherence=0.3, stat
 
 
 def watershed_3d(feature, coherence, thresh_method, static):
-    from scipy.ndimage import distance_transform_edt
-    from skimage.morphology import watershed, dilation, opening, cube, octahedron
-    from skimage.measure import find_contours, label
-    from skimage.filters import threshold_otsu, threshold_minimum
     # kernel = cube(3)  # try other forms
     kernel = octahedron(1)
     assert thresh_method in ['otsu', 'static', 'static-inverted', 'binary'], 'threshing method unknown'
@@ -109,13 +110,6 @@ def watershed_3d(feature, coherence, thresh_method, static):
 def watershed_2d(image, thresh_method, spatial_coherence=0.2, static=None):
     # Image Segmentation with Watershed Algorithm
     # http://opencv-python-tutroals.readthedocs.io/en/latest/py_tutorials/py_imgproc/py_watershed/py_watershed.html
-    from scipy import ndimage
-    # from skimage.feature import peak_local_max
-    from skimage.morphology import watershed
-    from skimage.measure import find_contours, label
-    import numpy as np
-    import cv2
-
     # noise removal
     assert thresh_method in ['otsu', 'static', 'binary'], 'threshing method unknown'
     if thresh_method == 'otsu':
@@ -165,22 +159,18 @@ def watershed_2d(image, thresh_method, spatial_coherence=0.2, static=None):
 
 
 def apply_otsu(img):
-    import cv2
     blur = cv2.GaussianBlur(img, (3, 3), 0)
     ret, th = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     return th, ret
 
 
 def apply_inverted_otsu(img):
-    import cv2
     blur = cv2.GaussianBlur(img, (3, 3), 0)
     ret, th = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
     return th, ret
 
 
 def get_local_otsu(img):
-    from skimage.filters import rank
-    from skimage.morphology import disk
     radius = 5
     selem = disk(radius)
     local_otsu = rank.otsu(img, selem)
@@ -190,7 +180,6 @@ def get_local_otsu(img):
 
 
 def equalize_histogram_2d(img):
-    from cv2 import equalizeHist
     return equalizeHist(img)
 
 
@@ -207,7 +196,6 @@ def equalize_histograms_all_features(features):
 
 
 if __name__ == '__main__':
-    from get_data import get_features
     types_channel = ['infrared', 'visible']
     compute_indexes = True
     chan = 0

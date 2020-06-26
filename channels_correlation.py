@@ -1,13 +1,18 @@
+from time import time
+
+from scipy.stats import pearsonr
+
 from get_data import get_features
 from utils import *
-from scipy.stats import pearsonr, linregress
+from visualize import get_bbox, visualize_map
 
 if __name__ == '__main__':
+
     beginning = 13517
     nb_days = 10
     ending = beginning + nb_days - 1
-    latitude_beginning = 35.+15
-    latitude_end = 40.+15
+    latitude_beginning = 35. + 15
+    latitude_end = 40. + 15
     longitude_beginning = 125.
     longitude_end = 130.
     latitudes, longitudes = get_latitudes_longitudes(latitude_beginning, latitude_end,
@@ -80,7 +85,6 @@ if __name__ == '__main__':
         visible_correlations = np.empty((nb_latitudes, nb_longitudes))
         visible_means = np.empty((nb_latitudes, nb_longitudes))
 
-    from time import time
     t_corrs = time()
     for lat in range(nb_latitudes):
         for lon in range(nb_longitudes):
@@ -100,8 +104,7 @@ if __name__ == '__main__':
                 visible_correlations[lat, lon] = pearsonr(visible_features[:, lat, lon, 0][~mask_mu],
                                                           visible_features[:, lat, lon, 1][~mask_mu])[0]
 
-    print 'total time corr:', time() - t_corrs, '; nb pixels:', nb_latitudes*nb_longitudes, '; nb slots:', 144*nb_days
-    from visualize import get_bbox, visualize_map
+    print 'total time corr:', time() - t_corrs, '; nb pixels:', nb_latitudes * nb_longitudes, '; nb slots:', 144 * nb_days
 
     bbox = get_bbox(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
 
@@ -116,4 +119,3 @@ if __name__ == '__main__':
     elif type_channels == 1:
         visualize_map(visible_correlations)
         visualize_map(visible_means)
-

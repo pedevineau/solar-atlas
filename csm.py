@@ -1,11 +1,14 @@
-from general_utils import latlon
 import os
 
-from netCDF4 import Dataset
 import numpy as np
+from netCDF4 import Dataset
+
+from general_utils import latlon
 
 try:
     from numba import jit
+
+
     @jit
     def is_range_array(array, bmin, bmax):
         """is_01range_array"""
@@ -17,7 +20,6 @@ except Exception as e:
     def is_range_array(array, bmin, bmax):
         """is_01range_array"""
         return np.all(array >= bmin) and np.all(array <= bmax)
-
 
 if __name__ == '__main__':
 
@@ -74,8 +76,11 @@ if __name__ == '__main__':
                     csp_ = ncF.variables[nc_csp]
                     csp_data = csp_[:]
                     if is_range_array(csp_data, bmin=0., bmax=1.):
-                        newcsp = Dataset(os.path.join(dir_csp_out, file_.replace('P1S-ABOM_CLD-PRJ_GEOS141_2000', 'CSP_LATLON')), 'w', 'NETCDF4')
-                        rectl, rectc = proj4_navigation.ll2lc(lats, lons, ssp=ssp, gt=(-5500000, 2000, 0, 5500000, 0, -2000))
+                        newcsp = Dataset(
+                            os.path.join(dir_csp_out, file_.replace('P1S-ABOM_CLD-PRJ_GEOS141_2000', 'CSP_LATLON')),
+                            'w', 'NETCDF4')
+                        rectl, rectc = proj4_navigation.ll2lc(lats, lons, ssp=ssp,
+                                                              gt=(-5500000, 2000, 0, 5500000, 0, -2000))
                         csp_latlon_data = csp_data[0, rectl, rectc]
                         # t = newcsp.createDimension('t', 1)
                         lat = newcsp.createDimension('lat', csp_latlon_data.shape[0])
@@ -88,8 +93,11 @@ if __name__ == '__main__':
                     ct_ = ncF.variables[nc_ct]
                     ct_data = ct_[:]
                     if is_range_array(ct_data, bmin=0., bmax=10.):
-                        newct = Dataset(os.path.join(dir_ct_out, file_.replace('P1S-ABOM_CLD-PRJ_GEOS141_2000', 'CT_LATLON')), 'w', 'NETCDF4')
-                        rectl, rectc = proj4_navigation.ll2lc(lats, lons, ssp=140.7, gt=(-5500000, 2000, 0, 5500000, 0, -2000))
+                        newct = Dataset(
+                            os.path.join(dir_ct_out, file_.replace('P1S-ABOM_CLD-PRJ_GEOS141_2000', 'CT_LATLON')), 'w',
+                            'NETCDF4')
+                        rectl, rectc = proj4_navigation.ll2lc(lats, lons, ssp=140.7,
+                                                              gt=(-5500000, 2000, 0, 5500000, 0, -2000))
                         ct_latlon_data = ct_data[0, rectl, rectc]
                         # t = newct.createDimension('t', 1)
                         lat = newct.createDimension('lat', ct_latlon_data.shape[0])
@@ -149,6 +157,3 @@ if __name__ == '__main__':
                 continue
             except Exception as e:
                 print("Exception", file_path, type(e), e)
-
-
-

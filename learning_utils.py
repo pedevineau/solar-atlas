@@ -1,52 +1,71 @@
-'''
-author: Pierre-Etienne Devineau
-SOLARGIS S.R.O.
-
-Some utils for data preparation, and some sklearn functions (most of them have been replaced by keras models in keras_learning.py)
-'''
-
-
+from choose_training_sample import restrict_pools
+from read_metadata import read_satellite_model_path
+from static_tests import dawn_day_test
+from utils import typical_land_mask
+from get_data import get_features
+from utils import get_times_utc, typical_input
+from read_labels import read_labels_keep_holes, read_labels_remove_holes
+from decision_tree import get_classes_v2_image
+from decision_tree import reduce_classes
+from decision_tree import get_classes_v1_point
+from static_tests import typical_static_classifier
+from utils import get_latitudes_longitudes, print_date_from_dfb, typical_input
+from utils import load
+from time import time
+from bias_checking import comparision_algorithms
+from decision_tree import reduce_two_classes
 from visualize import visualize_map_time
+from utils import typical_bbox
+from sklearn.metrics import accuracy_score
+from numpy import ones
+from numpy import asarray
+from numpy import empty
+from numpy import shape
+from sklearn.decomposition import PCA
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.neural_network import MLPClassifier
+from sklearn.naive_bayes import GaussianNB
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import BaggingClassifier
+from numpy import reshape
+from utils import get_nb_slots_per_day, np, save
+from choose_training_sample import mask_temporally_stratified_samples
+from read_metadata import read_satellite_step
+
 
 def create_neural_network():
     print 'Create neural network'
-    from sklearn.neural_network import MLPClassifier
     return MLPClassifier(solver='lbfgs', alpha=1e-5, hidden_layer_sizes=(5, 2), random_state=1)
 
 
 def create_naive_bayes():
     print 'Create naive Bayes'
-    from sklearn.naive_bayes import GaussianNB
     return GaussianNB()
 
 
 def create_random_forest():
     print 'Create random forest'
-    from sklearn.ensemble import RandomForestClassifier
     return RandomForestClassifier(n_estimators=30)
 
 
 def create_bagging_estimator(estimator):
     print 'Apply bagging'
-    from sklearn.ensemble import BaggingClassifier
     return BaggingClassifier(estimator)
 
 
 def create_knn():
     print 'Create 7-nearest-neighbours'
-    from sklearn.neighbors import KNeighborsClassifier
     return KNeighborsClassifier(n_neighbors=7, weights='uniform')
 
 
 def create_decision_tree():
     print 'create decision tree'
-    from sklearn.tree import DecisionTreeClassifier
     return DecisionTreeClassifier(criterion='entropy')
 
 
 def immediate_pca(features, components=3):
     print 'apply pca'
-    from sklearn.decomposition import PCA
     return PCA(components).fit_transform(features)
 
 
@@ -60,7 +79,6 @@ def predictions_model(model, testing):
 
 
 def reshape_features(features):
-    from numpy import shape
     s = shape(features)
     if len(s) == 1:
         # allegedly array is [x, y, z]
@@ -71,7 +89,7 @@ def reshape_features(features):
     elif len(s) == 3:
         # allegedly array is [[[x,y],[z,s]],[[t, u],[v,w]]]
         (a, b, c) = s
-        return features.reshape((a*b*c))
+        return features.reshape((a * b * c))
     elif len(s) == 4:
         # allegedly array is [[[[x1,x2],[y1,y2]],[[z1,z2],...,[w1,w2]]]]
         (a, b, c, d) = s
@@ -81,7 +99,6 @@ def reshape_features(features):
 ### functions to shape the inputs and the labels for deep-learning (convolutionnal neural network, etc.) ###
 def chunk_spatial(arr, labels, (r, c)):
     # pre-processing for deep-learning
-    from numpy import reshape
     tiles, labels_tiles = [], []
     row = 0
     for x in range(0, arr.shape[0], r):
@@ -90,7 +107,7 @@ def chunk_spatial(arr, labels, (r, c)):
         for y in range(0, arr.shape[1], c):
             col += 1
             tiles.append(arr[x:x + r, y:y + c])
-            labels_tiles.append(labels[x+r//2, y+c//2])
+            labels_tiles.append(labels[x + r // 2, y + c // 2])
     return tiles, reshape(labels_tiles, (row, col))
 
 
@@ -98,12 +115,11 @@ def chunk_spatial_high_resolution(arr, (r, c)):
     # pre-processing for deep-learning
     r, c = int(r), int(c)
     lla, llo, feats = arr.shape
-    from numpy import empty
-    tiles = empty((lla-r, llo-c, r, c, feats))
-    for lat in range(r/2, arr.shape[0]-r/2-1):
-        for lon in range(c/2, arr.shape[1]-c/2-1):
+    tiles = empty((lla - r, llo - c, r, c, feats))
+    for lat in range(r / 2, arr.shape[0] - r / 2 - 1):
+        for lon in range(c / 2, arr.shape[1] - c / 2 - 1):
             try:
-                tiles[lat-r/2, lon-c/2] = arr[lat-r/2:lat + r/2 + 1, lon - c/2:lon + c/2 + 1]
+                tiles[lat - r / 2, lon - c / 2] = arr[lat - r / 2:lat + r / 2 + 1, lon - c / 2:lon + c / 2 + 1]
             except ValueError:
                 tiles[lat - r / 2, lon - c / 2] = -1
     return tiles
@@ -113,7 +129,6 @@ def chunk_4d(arr, labels, (r, c)):
     # pre-processing for deep-learning
     tiles_3d = []
     labels_reduced = []
-    from numpy import asarray
     for slot in range(len(arr)):
         t, l = chunk_spatial(arr[slot], labels[slot], (r, c))
         tiles_3d.append(t)
@@ -128,25 +143,23 @@ def chunk_4d_high_resolution(arr, (r, c)=(7, 7)):
     for slot in range(len(arr)):
         tiles_3d.append(chunk_spatial_high_resolution(arr[slot], (r, c)))
     # tiles_3d = tiles_3d[:, r/2: -r/2-1, c/2: -c/2-1]
-    from numpy import shape, asarray
     ssl, lla, llo, r, c, feats = shape(tiles_3d)
-    return asarray(tiles_3d).reshape((ssl*lla*llo, r, c, feats))
+    return asarray(tiles_3d).reshape((ssl * lla * llo, r, c, feats))
 
 
 def chunk_5d_high_resolution(arr, (r, c)=(7, 7)):
     # pre-processing for deep-learning
     r, c = int(r), int(c)
-    from numpy import empty, ones, shape
     ssl, lla, llo, feats = shape(arr)
-    tiles = empty((ssl, lla-r, llo-c, r, c, feats))
-    for lat in range(r/2, lla-r/2-1):
-        for lon in range(c/2, llo-c/2-1):
+    tiles = empty((ssl, lla - r, llo - c, r, c, feats))
+    for lat in range(r / 2, lla - r / 2 - 1):
+        for lon in range(c / 2, llo - c / 2 - 1):
             try:
-                tiles[:, lat-r/2, lon-c/2] = arr[:, lat-r/2:lat + r/2 + 1, lon - c/2:lon + c/2 + 1]
+                tiles[:, lat - r / 2, lon - c / 2] = arr[:, lat - r / 2:lat + r / 2 + 1, lon - c / 2:lon + c / 2 + 1]
             except ValueError:
-                tiles[:, lat - r / 2, lon - c / 2] = -1*ones((ssl, r, c, feats))
+                tiles[:, lat - r / 2, lon - c / 2] = -1 * ones((ssl, r, c, feats))
     # expected array dims :
-    return tiles.transpose((1, 2, 0, 3, 4, 5)).reshape(((lla-r)*(llo-c), ssl, r, c, feats))
+    return tiles.transpose((1, 2, 0, 3, 4, 5)).reshape(((lla - r) * (llo - c), ssl, r, c, feats))
 
 
 def reshape_labels(labels, (r, c)=(7, 7), chunk_level=4):
@@ -156,9 +169,9 @@ def reshape_labels(labels, (r, c)=(7, 7), chunk_level=4):
     if chunk_level == 3:
         return labels.flaten()
     if chunk_level == 4:
-        return labels[:, r/2:lla-r/2-1, c/2:llo-c/2-1].flatten()
+        return labels[:, r / 2:lla - r / 2 - 1, c / 2:llo - c / 2 - 1].flatten()
     if chunk_level == 5:
-        return labels[:, r/2:lla-r/2-1, c/2:llo-c/2-1].reshape(((lla-r)*(llo-c), ssl))
+        return labels[:, r / 2:lla - r / 2 - 1, c / 2:llo - c / 2 - 1].reshape(((lla - r) * (llo - c), ssl))
 
 
 def remove_some_label_from_training_pool(inputs, labels, labels_to_remove):
@@ -173,35 +186,27 @@ def remove_some_label_from_training_pool(inputs, labels, labels_to_remove):
     for k in range(len(mask)):
         if not mask[k]:
             to_return.append(inputs[k])
-    from numpy import asarray
     return to_return, asarray(labels)[~mask]
 
 
 def score_solar_model(classes, predicted, return_string=True):
-    from visualize import visualize_map_time
-    from utils import typical_bbox
-    from sklearn.metrics import accuracy_score
     stri = 'accuracy score:' + str(accuracy_score(reshape_features(classes), predicted)) + '\n'
     print stri
     if return_string:
         return stri
     else:
-        from bias_checking import comparision_algorithms
-        from decision_tree import reduce_two_classes
         visualize_map_time(comparision_algorithms(reduce_two_classes(predicted), reduce_two_classes(classes)),
                            typical_bbox(),
                            vmin=-1, vmax=1)
 
 
 def predict_solar_model(features, pca_components):
-    from time import time
     a, b, c = features.shape[0:3]
     if pca_components is not None:
         features = immediate_pca(reshape_features(features), pca_components)
     else:
         features = reshape_features(features)
     t_save = time()
-    from utils import load
     model_bis = load(path_)
     t_load = time()
     print 'time load:', t_load - t_save
@@ -210,18 +215,12 @@ def predict_solar_model(features, pca_components):
     print 'time testing:', t_testing - t_save
     print 'differences', predicted_labels[predicted_labels != predicted_labels[0]]
     predicted_labels = predicted_labels.reshape((a, b, c))
-    from visualize import visualize_map_time
-    from utils import typical_bbox
     visualize_map_time(predicted_labels, typical_bbox(), vmin=-1, vmax=4)
     return predicted_labels
 
 
 def train_solar_model(zen, classes, features, method_learning, meta_method, pca_components, training_rate):
-    from time import time
     t_beg = time()
-    from utils import get_nb_slots_per_day, np, save
-    from choose_training_sample import mask_temporally_stratified_samples
-    from read_metadata import read_satellite_step
     nb_days_training = len(zen) / get_nb_slots_per_day(read_satellite_step(), 1)
     select = mask_temporally_stratified_samples(zen, training_rate, coef_randomization * nb_days_training)
     features = reshape_features(features)
@@ -273,8 +272,6 @@ def prepare_angles_features_classes_ped(seed=0, keep_holes=True, method_labels='
         for k, slot in enumerate(selected_slots):
             dict[str(k)] = slot
         print dict
-
-    from utils import get_latitudes_longitudes, print_date_from_dfb, typical_input
     beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end = typical_input(seed)
     latitudes, longitudes = get_latitudes_longitudes(latitude_beginning, latitude_end,
                                                      longitude_beginning, longitude_end)
@@ -284,32 +281,26 @@ def prepare_angles_features_classes_ped(seed=0, keep_holes=True, method_labels='
     from time import time
     t_begin = time()
     print method_labels
-    assert method_labels in ['on-point', 'otsu-2d', 'otsu-3d', 'watershed-2d', 'watershed-3d', 'static'], 'unknown label method'
+    assert method_labels in ['on-point', 'otsu-2d', 'otsu-3d', 'watershed-2d', 'watershed-3d',
+                             'static'], 'unknown label method'
     if method_labels == 'static':
-        from static_tests import typical_static_classifier
         classes = typical_static_classifier(seed)
     elif method_labels == 'on-point':
         # not really used anymore
-        from decision_tree import get_classes_v1_point
         classes = get_classes_v1_point(latitudes,
                                        longitudes,
                                        beginning,
                                        ending,
-                                       slot_step,
-                                       )
-        from decision_tree import reduce_classes
+                                       slot_step)
         classes = reduce_classes(classes)
     elif method_labels in ['otsu-2d', 'otsu-3d', 'watershed-2d', 'watershed-3d']:
         # not really used anymore
-        from decision_tree import get_classes_v2_image
         classes = get_classes_v2_image(latitudes,
                                        longitudes,
                                        beginning,
                                        ending,
                                        slot_step,
-                                       method_labels
-                                        )
-        from decision_tree import reduce_classes
+                                       method_labels)
         classes = reduce_classes(classes)
     t_classes = time()
     print 'time classes:', t_classes - t_begin
@@ -327,13 +318,10 @@ def prepare_angles_features_classes_ped(seed=0, keep_holes=True, method_labels='
 
 
 def prepare_angles_features_classes_bom(seed=0, keep_holes=True):
-    from utils import typical_input
     beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end = typical_input(seed)
 
-    from read_labels import read_labels_keep_holes, read_labels_remove_holes
-
     if keep_holes:
-        classes, selected_slots = read_labels_keep_holes('csp',latitude_beginning, latitude_end, longitude_beginning,
+        classes, selected_slots = read_labels_keep_holes('csp', latitude_beginning, latitude_end, longitude_beginning,
                                                          longitude_end, beginning, ending)
     else:
         classes, selected_slots = read_labels_remove_holes('csp', latitude_beginning, latitude_end, longitude_beginning,
@@ -345,12 +333,6 @@ def prepare_angles_features_classes_bom(seed=0, keep_holes=True):
 
 
 def prepare_angles_features_bom_labels(seed, selected_slots):
-    from static_tests import dawn_day_test
-    from utils import typical_land_mask
-    from get_data import get_features
-    from utils import get_times_utc, np, get_latitudes_longitudes, typical_input
-    from read_metadata import read_satellite_step
-
     beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end = typical_input(seed)
     times = get_times_utc(beginning, ending, read_satellite_step(), slot_step=1)
     latitudes, longitudes = get_latitudes_longitudes(latitude_beginning, latitude_end,
@@ -372,7 +354,6 @@ def prepare_angles_features_bom_labels(seed, selected_slots):
     del vis, ndsi
     features[:, :, :, :3] = get_features('infrared', latitudes, longitudes, beginning, ending, output_level='abstract',
                                          slot_step=1, gray_scale=False)[:, :, :, :3]
-    from static_tests import typical_static_classifier
     features[:, :, :, 7] = (typical_static_classifier(seed) >= 2)
     if selected_slots is not None:
         return angles[selected_slots], features[selected_slots], selected_slots
@@ -393,20 +374,16 @@ def prepare_angles_features_ped_labels(seed, keep_holes=True):
     :param keep_holes:
     :return:
     '''
-    from static_tests import dawn_day_test
-    from utils import typical_land_mask
-    from get_data import get_features
-    from utils import np, get_latitudes_longitudes, typical_input
-
     beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end = typical_input(seed)
 
     latitudes, longitudes = get_latitudes_longitudes(latitude_beginning, latitude_end,
                                                      longitude_beginning, longitude_end)
-    from read_labels import read_labels_remove_holes, read_labels_keep_holes
     if keep_holes:
-        labels, selected_slots = read_labels_keep_holes('csp', latitude_beginning, latitude_end, longitude_beginning, longitude_end, beginning, ending)
+        labels, selected_slots = read_labels_keep_holes('csp', latitude_beginning, latitude_end, longitude_beginning,
+                                                        longitude_end, beginning, ending)
     else:
-        labels, selected_slots = read_labels_remove_holes('csp', latitude_beginning, latitude_end, longitude_beginning, longitude_end, beginning, ending)
+        labels, selected_slots = read_labels_remove_holes('csp', latitude_beginning, latitude_end, longitude_beginning,
+                                                          longitude_end, beginning, ending)
 
     angles, vis, ndsi, mask = get_features('visible', latitudes, longitudes, beginning, ending, output_level='ndsi',
                                            slot_step=1, gray_scale=False)
@@ -423,7 +400,8 @@ def prepare_angles_features_ped_labels(seed, keep_holes=True):
     features[:, :, :, 4] = ndsi
     del vis, ndsi
 
-    cli_mu, cli_epsilon, mask_input_cli = get_features('infrared', latitudes, longitudes, beginning, ending, output_level='cli',
+    cli_mu, cli_epsilon, mask_input_cli = get_features('infrared', latitudes, longitudes, beginning, ending,
+                                                       output_level='cli',
                                                        slot_step=1, gray_scale=False)
     mask = ((test_angles | land_mask) | mask)
     cli_mu[mask] = -10
@@ -444,24 +422,22 @@ def prepare_angles_features_ped_labels(seed, keep_holes=True):
 
 
 if __name__ == '__main__':
-    from utils import typical_input, typical_bbox
-    from read_metadata import read_satellite_model_path
     slot_step = 1
     coef_randomization = 4
     path_ = read_satellite_model_path()
 
-    beginning_testing, ending_testing, lat_beginning_testing, lat_ending_testing, lon_beginning_testing, lon_ending_testing = typical_input(seed=0)
+    beginning_testing, ending_testing, lat_beginning_testing, lat_ending_testing, lon_beginning_testing, lon_ending_testing = typical_input(
+        seed=0)
 
     testing_angles, testing_inputs, testing_classes = prepare_angles_features_classes_ped(seed=0, keep_holes=True)
-    from choose_training_sample import restrict_pools
 
     inputs, labs = restrict_pools(testing_angles, testing_inputs, testing_classes)
     sl, la, lo, fe = testing_inputs.shape
-    inputs = inputs.reshape(((1.*len(inputs))/la/lo, la, lo, fe))
+    inputs = inputs.reshape(((1. * len(inputs)) / la / lo, la, lo, fe))
     # print (inputs[:, 15, 15, 4]>0).mean()
     # print (testing_inputs[:, 15, 15, 4]>0).mean()
-    print (inputs[:, 15, 15, 3]>-10).mean()
-    print (testing_inputs[:, 15, 15, 3]>-10).mean()
+    print (inputs[:, 15, 15, 3] > -10).mean()
+    print (testing_inputs[:, 15, 15, 3] > -10).mean()
     visualize_map_time(inputs, typical_bbox())
 
     learn_new_model = True
@@ -471,7 +447,8 @@ if __name__ == '__main__':
         METHODS_LEARNING = ['keras']  # , 'tree', 'mlp', 'forest']
         META_METHODS = ['bagging']  # ,'b']
         PCA_COMPONENTS = [None]  # 2, None, 3, 4
-        beginning_training, ending_training, lat_beginning_training, lat_ending_training, lon_beginning_training, lon_ending_training = typical_input(seed=1)
+        beginning_training, ending_training, lat_beginning_training, lat_ending_training, lon_beginning_training, lon_ending_training = typical_input(
+            seed=1)
         training_angles, training_inputs, training_classes = prepare_angles_features_classes_ped(seed=1)
         for k in range(len(METHODS_LEARNING)):
             for l in range(len(META_METHODS)):
@@ -480,9 +457,11 @@ if __name__ == '__main__':
                         method_learning_ = METHODS_LEARNING[k]
                         meta_method_ = META_METHODS[l]
                         pca_components_ = PCA_COMPONENTS[m]
-                        header = str(method_learning_) + ' ' + str(meta_method_) + ' pca:' + str(pca_components_) + ' --- '
+                        header = str(method_learning_) + ' ' + str(meta_method_) + ' pca:' + str(
+                            pca_components_) + ' --- '
                         try:
-                            train_solar_model(training_angles, training_classes, training_inputs, method_learning_, meta_method_, pca_components_, training_rate=0.06)
+                            train_solar_model(training_angles, training_classes, training_inputs, method_learning_,
+                                              meta_method_, pca_components_, training_rate=0.06)
                             predictions = predict_solar_model(testing_inputs, pca_components_)
                             LOGS = header + '\n' + score_solar_model(testing_classes, predictions, return_string=False)
                         except Exception as e:

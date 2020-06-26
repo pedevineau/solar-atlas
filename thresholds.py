@@ -75,7 +75,7 @@ def compute_vis_sea_coasts_cloud_factors(zen):
     cos_zen = cos(zen)
     cos_zen[cos_zen < 0.03] = 0.03
     cos_zen = power(cos_zen, 0.3)
-    return 1/cos_zen
+    return 1 / cos_zen
 
 
 def compute_vis_coasts_cloud_all_coefficient():

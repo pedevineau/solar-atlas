@@ -1,8 +1,10 @@
 import time
-from sklearn import mixture, cluster
-from visualize import *
-from get_data import *
+
 import numpy as np
+from sklearn import mixture, cluster
+
+from get_data import *
+from visualize import *
 
 # global variables to evaluate "cano" separation critera
 cano_checked = 0
@@ -25,22 +27,29 @@ def filter_nan_training_set(array, multi_channel_bool):
     return filtered
 
 
-### build model ###
 def get_basis_model(process, nb_components=None, max_iter=None, means_init=None):
+    '''
+    ### build model ###
+    :param process:
+    :param nb_components:
+    :param max_iter:
+    :param means_init:
+    :return:
+    '''
     if process == 'gaussian':
-    #     if
-    #         means_radiance_ = get_gaussian_init_means(nb_components_)
-    #         means_init_ = np.zeros((nb_components_, nb_selected_channels))
-    #         for compo in range(nb_components_):
-    #             means_init_[compo] = np.array([means_radiance_[chan][compo] for chan in selected_channels]).reshape(
-    #                 nb_selected_channels)
-    #
+        #     if
+        #         means_radiance_ = get_gaussian_init_means(nb_components_)
+        #         means_init_ = np.zeros((nb_components_, nb_selected_channels))
+        #         for compo in range(nb_components_):
+        #             means_init_[compo] = np.array([means_radiance_[chan][compo] for chan in selected_channels]).reshape(
+        #                 nb_selected_channels)
+        #
         model = mixture.GaussianMixture(
             n_components=nb_components,
             covariance_type='full',
             # warm_start=True,
             means_init=means_init
-            )
+        )
     elif process == 'bayesian':
         model = mixture.BayesianGaussianMixture(
             n_components=nb_components,
@@ -48,7 +57,7 @@ def get_basis_model(process, nb_components=None, max_iter=None, means_init=None)
             # warm_start=True,
             max_iter=max_iter,
             # weight_concentration_prior=1
-            )
+        )
     elif process == 'DBSCAN':
         model = cluster.DBSCAN(
             min_samples=100,
@@ -154,10 +163,10 @@ def get_updated_model(training_array, model):
 ### prediction ###
 def get_classes(data_array, process, model, verbose=True, display_counts=True):
     nb_slots, nb_latitudes, nb_longitudes, nb_features = np.shape(data_array)
-    shape_for_prediction = (nb_slots*nb_latitudes*nb_longitudes, nb_features)
+    shape_for_prediction = (nb_slots * nb_latitudes * nb_longitudes, nb_features)
     if False and process == 'DBSCAN':
         print 'resh b'
-        data_array = np.reshape(data_array,(nb_slots*nb_latitudes*nb_longitudes, nb_features))
+        data_array = np.reshape(data_array, (nb_slots * nb_latitudes * nb_longitudes, nb_features))
         print 'resh d'
         prediction = model.fit_predict(data_array)
         print len(model.components_)
@@ -175,10 +184,10 @@ def get_classes(data_array, process, model, verbose=True, display_counts=True):
         except Exception as e:
             if verbose:
                 print e
-        return np.reshape(data_array_predicted,  (nb_slots, nb_latitudes, nb_longitudes))
+        return np.reshape(data_array_predicted, (nb_slots, nb_latitudes, nb_longitudes))
 
 
-### unused functions to evaluate models
+# unused functions to evaluate models
 def evaluate_model_quality(testing_array, model):
     return model.score(testing_array)
 
@@ -189,7 +198,7 @@ def update_cano_evaluation(gmm):
     for j in range(len(gmm.means_)):
         for i in range(len(gmm.means_)):
             if i != j:
-                ratio = np.abs((gmm.means_[i][0] - gmm.means_[j][0])/np.sqrt(variances[j]))
+                ratio = np.abs((gmm.means_[i][0] - gmm.means_[j][0]) / np.sqrt(variances[j]))
                 ratios.append(ratio)
     bool_ratio = False
     for ratio in ratios:
@@ -271,7 +280,6 @@ def testing(beginning, ending, latitudes, longitudes,
 
 def training(beginning, ending, latitudes, longitudes, process, compute_indexes, slot_step,
              coef_randomization, normalize, weights, display_means, verbose, nb_components, max_iter):
-
     print 'TRAINING'
     time_start_training = time.time()
     from choose_training_sample import mask_temporally_stratified_samples, evaluate_randomization
@@ -296,7 +304,7 @@ def training(beginning, ending, latitudes, longitudes, process, compute_indexes,
         slot_step,
         normalize,
     )
-    nb_features = np.shape(infrared_samples_for_training)[-1]+np.shape(visible_samples_for_training)[-1]
+    nb_features = np.shape(infrared_samples_for_training)[-1] + np.shape(visible_samples_for_training)[-1]
     infrared_me, infrared_std = np.zeros(nb_features), np.full(nb_features, 1)
     len_training = int(len(infrared_samples_for_training) * training_rate)
 
@@ -305,9 +313,8 @@ def training(beginning, ending, latitudes, longitudes, process, compute_indexes,
     (a, b, c) = np.shape(infrared_samples_for_training)[0:3]
 
     super_data = np.empty((a, b, c, nb_features))
-    super_data[:,:,:,:np.shape(infrared_samples_for_training)[-1]] = infrared_samples_for_training
-    super_data[:,:,:,np.shape(infrared_samples_for_training)[-1]:] = visible_samples_for_training
-
+    super_data[:, :, :, :np.shape(infrared_samples_for_training)[-1]] = infrared_samples_for_training
+    super_data[:, :, :, np.shape(infrared_samples_for_training)[-1]:] = visible_samples_for_training
 
     if randomization:
         t_randomization = time.time()
@@ -336,47 +343,49 @@ def training(beginning, ending, latitudes, longitudes, process, compute_indexes,
 
 
 if __name__ == '__main__':
-    ### TRAINING PARAMETERS ###
+    # TRAINING PARAMETERS
     slot_step_training = 1
-    training_rate = 1 # critical     # mathematical training rate is training_rate / slot_step_training
+    training_rate = 1  # critical     # mathematical training rate is training_rate / slot_step_training
     randomization = False  # to select training data among input data
     dfb_beginning_training = 13531
     nb_days_training = 1
     dfb_ending_training = dfb_beginning_training + nb_days_training - 1
-    nb_components_ = 5 # critical!!!   # 5 recommended for gaussian minitest in january: normal, cloud, snow, sea, no data
+    nb_components_ = 5  # critical! # 5 recommended for gaussian minitest in january: normal, cloud, snow, sea, no data
     max_iter_ = 100
     display_means_ = True
     coef_randomization_ = 6
 
-    latitude_beginning_training = 35.0+20
-    latitude_end_training = 40.+20
+    latitude_beginning_training = 35.0 + 20
+    latitude_end_training = 40. + 20
     longitude_beginning_training = 125.
     longitude_end_training = 130.
-    latitudes_training, longitudes_training = get_latitudes_longitudes(latitude_beginning_training, latitude_end_training,
-                                                                     longitude_beginning_training, longitude_end_training)
+    latitudes_training, longitudes_training = get_latitudes_longitudes(latitude_beginning_training,
+                                                                       latitude_end_training,
+                                                                       longitude_beginning_training,
+                                                                       longitude_end_training)
 
-    ### TESTING PARAMETERS ###
+    # TESTING PARAMETERS
     dfb_beginning_testing = 13531
     nb_days_testing = 1
     slot_step_testing = 1
     display_counts_ = False
 
-    latitude_beginning_testing = 35.+20
-    latitude_end_testing = 40.+20
+    latitude_beginning_testing = 35. + 20
+    latitude_end_testing = 40. + 20
     longitude_beginning_testing = 125.
     longitude_end_testing = 130.
     latitudes_testing, longitudes_testing = get_latitudes_longitudes(latitude_beginning_testing, latitude_end_testing,
                                                                      longitude_beginning_testing, longitude_end_testing)
 
-    ### SHARED PARAMETERS ###
+    # SHARED PARAMETERS
     multi_channels = True
     compute_indexes_ = True
     process_ = 'kmeans'  # bayesian (not good), gaussian, DBSCAN or kmeans
-    normalize_ = False   # should stay False as long as thresholds has not be computed !?
+    normalize_ = False  # should stay False as long as thresholds has not be computed !?
     # weights_ = None
     weights_array = [
         None,
-        [1,0.1],
+        [1, 0.1],
         # [1., 1., 1., 1., 1.],
         # [0.5, 1., 1., 1., 1.],
         # [1,10,1,10,1],
@@ -394,9 +403,9 @@ if __name__ == '__main__':
 
     selected_channels = []
     if multi_channels:
-        selected_channels = ['IR124_2000', 'IR390_2000', 'VIS160_2000',  'VIS064_2000']
+        selected_channels = ['IR124_2000', 'IR390_2000', 'VIS160_2000', 'VIS064_2000']
     else:
-        selected_channels = get_selected_channels(['IR124_2000', 'IR390_2000', 'VIS160_2000',  'VIS064_2000'], True)
+        selected_channels = get_selected_channels(['IR124_2000', 'IR390_2000', 'VIS160_2000', 'VIS064_2000'], True)
 
     nb_selected_channels = len(selected_channels)
 
@@ -405,9 +414,7 @@ if __name__ == '__main__':
     [dfb_beginning_testing, dfb_ending_testing] = get_dfb_tuple(dfb_beginning=dfb_beginning_testing,
                                                                 nb_days=nb_days_testing)
 
-    ###
-    ### insert smoothing here if useful ###
-    ###
+    # insert smoothing here if useful
     single_model_ = training(beginning=dfb_beginning_training,
                              ending=dfb_ending_training,
                              latitudes=latitudes_training,
@@ -448,8 +455,5 @@ if __name__ == '__main__':
             verbose=verbose_,
             display_counts=display_counts_)
 
-
     # print 'cano_checked', str(cano_checked)
     # print 'cano_unchecked', str(cano_unchecked)
-
-

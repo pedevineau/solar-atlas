@@ -11,42 +11,38 @@ NOTE: Only FUll disk (M3 mode of the instrument) are coivered here
 
 """
 
-#FOV in radians of a Full disk image
+# FOV in radians of a Full disk image
 import ctypes
 import multiprocessing as mp
 
 import numpy as np
+from goesr.test import display
 
-#NAVIGATION DATA
+# NAVIGATION DATA
 
 REQ = 6378137.0  # equatorial radius, m, semi major oaxis of GRS80
-RPOL = 6356752.31414 # polar radius, m, semi_minor axis of GRS80
-ECCENTRICITY = 0.0818191910435 # 1st eccentricity = sqrt(f(2-f))=sqrt((req ^ 2 - rpol ^ 2) / req ^ 2)
+RPOL = 6356752.31414  # polar radius, m, semi_minor axis of GRS80
+ECCENTRICITY = 0.0818191910435  # 1st eccentricity = sqrt(f(2-f))=sqrt((req ^ 2 - rpol ^ 2) / req ^ 2)
 
-SAT_HEIGHT = 35786023.0 # the height of satellite above ground in m
-H = 42164160 # sat_height + semi_major axis
-INV_FLATTENING = 298.2572221 # 1/f where f = (a-b)/a and a= req and b = rpol
+SAT_HEIGHT = 35786023.0  # the height of satellite above ground in m
+H = 42164160  # sat_height + semi_major axis
+INV_FLATTENING = 298.2572221  # 1/f where f = (a-b)/a and a= req and b = rpol
 
-
-
-#INSTRUMENT WIDE  DATA
+# INSTRUMENT WIDE  DATA
 FD_FOV_RAD = 0.303744
 
-L1B_RESOLUTIONS_MICRORAD = 14,28,56,112, 280 #micro radians
-L1B_NPIXELS = tuple([int(FD_FOV_RAD/e*1e6) for e in L1B_RESOLUTIONS_MICRORAD]) # the number of lines or columns. FOR FD they are identical
+L1B_RESOLUTIONS_MICRORAD = 14, 28, 56, 112, 280  # micro radians
+L1B_NPIXELS = tuple([int(FD_FOV_RAD / e * 1e6) for e in
+                     L1B_RESOLUTIONS_MICRORAD])  # the number of lines or columns. FOR FD they are identical
 
-L1B_RESOLUTIONS_KM  = 0.5, 1, 2,4, 10
+L1B_RESOLUTIONS_KM = 0.5, 1, 2, 4, 10
 
 L1B_RESOLUTIONS_KM_DICT = dict(zip(L1B_RESOLUTIONS_KM, L1B_RESOLUTIONS_MICRORAD))
-L1B_RESOLUTIONS_MICRORAD_DICT = dict(zip( L1B_RESOLUTIONS_MICRORAD, L1B_RESOLUTIONS_KM))
-
-
+L1B_RESOLUTIONS_MICRORAD_DICT = dict(zip(L1B_RESOLUTIONS_MICRORAD, L1B_RESOLUTIONS_KM))
 
 L1B_NPIXELS_RESOLUTIONS = dict(zip(L1B_NPIXELS, L1B_RESOLUTIONS_MICRORAD))
-L1B_RESOLUTIONS_KM_NPIXELS_DICT = dict(zip(L1B_RESOLUTIONS_KM,L1B_NPIXELS))
+L1B_RESOLUTIONS_KM_NPIXELS_DICT = dict(zip(L1B_RESOLUTIONS_KM, L1B_NPIXELS))
 L1B_NPIXELS_RESOLUTIONS_KM = dict(zip(L1B_NPIXELS, L1B_RESOLUTIONS_KM))
-
-
 
 
 def rad2ll(x=None, y=None, lon0=None):
@@ -69,7 +65,7 @@ def rad2ll(x=None, y=None, lon0=None):
 
     if x.ndim == y.ndim == 0:
         pass
-    elif x.ndim ==y.ndim == 1:
+    elif x.ndim == y.ndim == 1:
         # nl = y.size
         # nc = x.size
         # broadcasting is faster here
@@ -79,11 +75,11 @@ def rad2ll(x=None, y=None, lon0=None):
         raise Exception('Invalind dimesions for x %s or y %s. Max allowed is 2' % (x.ndim, y.ndim))
 
     lon0_rad = np.deg2rad(lon0)
-    a=np.sin(x)**2+np.cos(x)**2*(np.cos(y)**2 + (REQ/RPOL*np.sin(y))**2)
+    a = np.sin(x) ** 2 + np.cos(x) ** 2 * (np.cos(y) ** 2 + (REQ / RPOL * np.sin(y)) ** 2)
 
-    b = -2*H*np.cos(x)*np.cos(y)
-    c = H**2-REQ**2
-    t = b**2-4*a*c
+    b = -2 * H * np.cos(x) * np.cos(y)
+    c = H ** 2 - REQ ** 2
+    t = b ** 2 - 4 * a * c
     # not_vis = t<0
     # #t[not_vis] == np.nan
     # if not_vis[not_vis].size > 0:
@@ -134,22 +130,21 @@ def rad2ll(x=None, y=None, lon0=None):
     #
     #     lat = np.rad2deg(lat_rad)
     #     lon = np.rad2deg(lon_rad)
-    not_vis = t<0
+    not_vis = t < 0
 
-    rs = (-b-(np.sqrt(t)))/2*a
+    rs = (-b - (np.sqrt(t))) / 2 * a
 
-    sx = rs*np.cos(x)*np.cos(y)
-    sy = -rs*np.sin(x)
-    sz = rs*np.cos(x)*np.sin(y)
+    sx = rs * np.cos(x) * np.cos(y)
+    sy = -rs * np.sin(x)
+    sz = rs * np.cos(x) * np.sin(y)
 
-    lat_rad = np.arctan((REQ**2/RPOL**2)*(sz/np.sqrt((H-sx)**2+sy**2)))
-    lon_rad = lon0_rad - np.arctan(sy/(H-sx))
+    lat_rad = np.arctan((REQ ** 2 / RPOL ** 2) * (sz / np.sqrt((H - sx) ** 2 + sy ** 2)))
+    lon_rad = lon0_rad - np.arctan(sy / (H - sx))
 
     lat = np.rad2deg(lat_rad)
     lon = np.rad2deg(lon_rad)
 
-
-    return lat.T,lon.T
+    return lat.T, lon.T
 
 
 def ll2rad(lat=None, lon=None, lon0=None):
@@ -171,7 +166,7 @@ def ll2rad(lat=None, lon=None, lon0=None):
         pass
     elif lat.ndim == lon.ndim == 1:
         # broadcasting is faster here
-        lon = lon[np.newaxis,:]
+        lon = lon[np.newaxis, :]
         lat = lat[:, np.newaxis]
     elif (lat.ndim > 2) or (lon.ndim > 2):
         raise Exception('Invalind dimesions for lat %s or lon %s. Max allowed is 2' % (lat.ndim, lon.ndim))
@@ -184,30 +179,26 @@ def ll2rad(lat=None, lon=None, lon0=None):
     ssx = H - rc * np.cos(latc) * np.cos(lon_rad - lon0_rad)
     ssy = -rc * np.cos(latc) * np.sin(lon_rad - lon0_rad)
     ssz = rc * np.sin(latc)
-    rn =np.sqrt(ssx ** 2 + ssy ** 2 + ssz ** 2)
+    rn = np.sqrt(ssx ** 2 + ssy ** 2 + ssz ** 2)
 
-    isvisible = rn*rn + np.square(rc*latc)
+    isvisible = rn * rn + np.square(rc * latc)
     # if isvisible> np.square(H):
     # 	return y,x
 
     l_rad = np.arctan(ssz / ssx)
-    c_rad = np.arcsin(-ssy / rn )
+    c_rad = np.arcsin(-ssy / rn)
 
     return l_rad, c_rad
 
 
-
-def rad2lc(y=None, x=None, res_km=None ):
-
+def rad2lc(y=None, x=None, res_km=None):
     res_microrad = L1B_RESOLUTIONS_KM_DICT[res_km]
     xres_rad = res_microrad * 1e-6
     yres_rad = -xres_rad
     x_offset = (-FD_FOV_RAD / 2) - (xres_rad / 2)  # the x offset is - half the field of view minus half resolution,
     y_offset = (FD_FOV_RAD / 2) - (yres_rad / 2)
 
-
     # it is easier/faster to produce the radian  coordinates arrays then read them from the netcdf.
-
 
     yrad, xrad = get_radian_arrays(resolution_km=res_km)
 
@@ -219,14 +210,11 @@ def rad2lc(y=None, x=None, res_km=None ):
     # int arrays. It is relatively easy to find the indices of the transformed radians inside the full disk radians by leveraging the transformation
     # an using searchsorted function
 
-
-
-
     yrad_src_indices = np.round((yrad / yres_rad - y_offset)).astype(np.int32)
 
     xrad_src_indices = np.round((xrad / xres_rad - x_offset)).astype(np.int32)
 
-    lrad_src_indices =(y / yres_rad - y_offset).astype(np.int32)
+    lrad_src_indices = (y / yres_rad - y_offset).astype(np.int32)
 
     crad_src_indices = (x / xres_rad - x_offset).astype(np.int32)
 
@@ -236,11 +224,8 @@ def rad2lc(y=None, x=None, res_km=None ):
 
 
 def ll2lc(lat=None, lon=None, lon0=None, res_km=None):
-
     y, x = ll2rad(lat=lat, lon=lon, lon0=lon0)
-    return rad2lc(y=y,x=x,res_km=res_km)
-
-
+    return rad2lc(y=y, x=x, res_km=res_km)
 
 
 def get_radian_arrays(resolution_km=None):
@@ -249,20 +234,16 @@ def get_radian_arrays(resolution_km=None):
     :param resolution_km, number:, the resolution in kilometers
     :return:
     """
-    assert resolution_km in L1B_RESOLUTIONS_KM, 'The supplied resolution %s is not a native ABI resolution. valid resolutions are %s' % (resolution_km,L1B_RESOLUTIONS_KM)
+    assert resolution_km in L1B_RESOLUTIONS_KM, 'The supplied resolution %s is not a native ABI resolution. valid resolutions are %s' % (
+        resolution_km, L1B_RESOLUTIONS_KM)
 
     res_microrad = L1B_RESOLUTIONS_KM_DICT[resolution_km]
-    res_rad = res_microrad*1e-6
-    n_pixels_in_dim = int(FD_FOV_RAD/res_rad)
-    offset = (-FD_FOV_RAD/2)-(res_rad/2) # the offset is half the foield of view minus half resolution,
-    y_rad = np.arange(1,n_pixels_in_dim+1,dtype=np.int16) * res_rad + offset
-    x_rad = np.arange(1,n_pixels_in_dim+1,dtype=np.int16) * res_rad + offset
+    res_rad = res_microrad * 1e-6
+    n_pixels_in_dim = int(FD_FOV_RAD / res_rad)
+    offset = (-FD_FOV_RAD / 2) - (res_rad / 2)  # the offset is half the foield of view minus half resolution,
+    y_rad = np.arange(1, n_pixels_in_dim + 1, dtype=np.int16) * res_rad + offset
+    x_rad = np.arange(1, n_pixels_in_dim + 1, dtype=np.int16) * res_rad + offset
     return y_rad[::-1], x_rad  # reverse the y
-
-
-
-
-
 
 
 def reproject2ll(abi_array=None, bbox=None, lon0=None):
@@ -273,8 +254,8 @@ def reproject2ll(abi_array=None, bbox=None, lon0=None):
     :param lon0:
     :return:
     """
-    #lats and lons can 2 2D or 1D.
-    #we preffer 1D = use broadcasting because of these results of ll2rad
+    # lats and lons can 2 2D or 1D.
+    # we preffer 1D = use broadcasting because of these results of ll2rad
     # 2D arrays 'll2rad' avg run time was 0.501402807 sec in 10 runs
     # 1D 'll2rad' avg run time was 0.135642862 sec in 10 runs
 
@@ -282,7 +263,7 @@ def reproject2ll(abi_array=None, bbox=None, lon0=None):
 
     lat = bbox.latitudes()
     lon = bbox.longitudes()
-    return  reproject_abi2ll(abi_array=abi_array,lat=lat, lon=lon,lon0=lon0)
+    return reproject_abi2ll(abi_array=abi_array, lat=lat, lon=lon, lon0=lon0)
 
 
 def reproject_abi2ll(abi_array=None, lat=None, lon=None, lon0=None):
@@ -306,27 +287,20 @@ def reproject_abi2ll(abi_array=None, lat=None, lon=None, lon0=None):
 
     x_offset = (-FD_FOV_RAD / 2) - (xres_rad / 2)  # the x offset is - half the field of view minus half resolution,
     y_offset = (FD_FOV_RAD / 2) - (yres_rad / 2)
-    #convert radians to latlon
+    # convert radians to latlon
     lrad, crad = ll2rad(lon=lon, lat=lat, lon0=lon0)
 
     # it is easier/faster to produce the radian  coordinates arrays then read them from the netcdf.
 
-
     yrad, xrad = get_radian_arrays(resolution_km=res_km)
 
+    # we ended up with 2 sets of radian coordinates, the generated coordinates of the full disk
+    # image and the coordinates relusted from stransforming the input lat/lon to radians
 
-
-
-    #we ended up with 2 sets of radian coordinates, the generated coordinates of the full disk
-    #image and the coordinates relusted from stransforming the input lat/lon to radians
-
-    #The radian arrayes are float values ordered and separated by very small numbers (resolution)
-    #By dividing the radians with the resolution and substracting the corresponding offset and casting to int we get
-    #int arrays. It is relatively easy to find the indices of the transformed radians inside the full disk radians by leveraging the transformation
-    #an using searchsorted function
-
-
-
+    # The radian arrayes are float values ordered and separated by very small numbers (resolution)
+    # By dividing the radians with the resolution and substracting the corresponding offset and casting to int we get
+    # int arrays. It is relatively easy to find the indices of the transformed radians inside the full disk radians by leveraging the transformation
+    # an using searchsorted function
 
     yrad_src_indices = np.floor((yrad / yres_rad - y_offset)).astype(np.int32)
 
@@ -339,9 +313,7 @@ def reproject_abi2ll(abi_array=None, lat=None, lon=None, lon0=None):
     y_ind = yrad_src_indices.searchsorted(lrad_src_indices)
     x_ind = xrad_src_indices.searchsorted(crad_src_indices)
 
-
     return abi_array[y_ind, x_ind]
-
 
 
 def reproject_abi2ll2(abi_array=None, lat=None, lon=None, lon0=None):
@@ -365,29 +337,20 @@ def reproject_abi2ll2(abi_array=None, lat=None, lon=None, lon0=None):
 
     x_offset = (-FD_FOV_RAD / 2) - (xres_rad / 2)  # the x offset is - half the field of view minus half resolution,
     y_offset = (FD_FOV_RAD / 2) - (yres_rad / 2)
-    #convert radians to latlon
+    # convert radians to latlon
     lrad, crad = ll2rad(lon=lon, lat=lat, lon0=lon0)
 
     # it is easier/faster to produce the radian  coordinates arrays then read them from the netcdf.
 
-
     yrad, xrad = get_radian_arrays(resolution_km=res_km)
 
+    # we ended up with 2 sets of radian coordinates, the generated coordinates of the full disk
+    # image and the coordinates relusted from stransforming the input lat/lon to radians
 
-
-
-
-
-    #we ended up with 2 sets of radian coordinates, the generated coordinates of the full disk
-    #image and the coordinates relusted from stransforming the input lat/lon to radians
-
-    #The radian arrayes are float values ordered and separated by very small numbers (resolution)
-    #By dividing the radians with the resolution and substracting the corresponding offset and casting to int we get
-    #int arrays. It is relatively easy to find the indices of the transformed radians inside the full disk radians by leveraging the transformation
-    #an using searchsorted function
-
-
-
+    # The radian arrayes are float values ordered and separated by very small numbers (resolution)
+    # By dividing the radians with the resolution and substracting the corresponding offset and casting to int we get
+    # int arrays. It is relatively easy to find the indices of the transformed radians inside the full disk radians by leveraging the transformation
+    # an using searchsorted function
 
     yrad_src_indices = (yrad / yres_rad - y_offset).astype(np.int32)
 
@@ -400,22 +363,16 @@ def reproject_abi2ll2(abi_array=None, lat=None, lon=None, lon0=None):
     y_ind = yrad_src_indices.searchsorted(lrad_src_indices)
     x_ind = xrad_src_indices.searchsorted(crad_src_indices)
 
-
-
-
-
-
     return abi_array[y_ind, x_ind]
-
 
 
 def get_nav_coeff(res_km=None):
     res_mrad = L1B_RESOLUTIONS_KM_DICT[res_km]
-    res_rad = res_mrad*1e-6
-    offset  = int(np.round(FD_FOV_RAD / res_rad))
-    fac = int(np.round(np.deg2rad(2**16/res_rad)))
-    #fac = np.deg2rad(2**16/res_rad)
-    return offset//2, fac
+    res_rad = res_mrad * 1e-6
+    offset = int(np.round(FD_FOV_RAD / res_rad))
+    fac = int(np.round(np.deg2rad(2 ** 16 / res_rad)))
+    # fac = np.deg2rad(2**16/res_rad)
+    return offset // 2, fac
 
 
 # import pylab
@@ -569,7 +526,6 @@ def get_nav_coeff(res_km=None):
 #     return out_geos_data
 
 
-
 def create_shared_ndarray(shape, dtype, manager):
     """Create shared array suiting the required np.ndarray with given shape and dtype; use local_ndarray_from_shareable
     to convert it locally into np.ndarray
@@ -578,17 +534,20 @@ def create_shared_ndarray(shape, dtype, manager):
     :return: initialized shareable multiprocessing.Array object"""
     element_count = reduce(lambda x, y: x * y, shape)
     element_size = dtype(0).nbytes
-    shareable_array = manager.Array(typecode_or_type=ctypes.c_byte, size_or_initializer=element_size * element_count, lock=True)
+    shareable_array = manager.Array(typecode_or_type=ctypes.c_byte, size_or_initializer=element_size * element_count,
+                                    lock=True)
     return shareable_array
 
-def rr(shared_y_array=None, shared_x_array=None, sl=None, el=None, sc=None , ec=None, from_ssp=None, to_ssp=None, res_km=None,):
+
+def rr(shared_y_array=None, shared_x_array=None, sl=None, el=None, sc=None, ec=None, from_ssp=None, to_ssp=None,
+       res_km=None, ):
     x_arr = np.frombuffer(shared_x_array.get_obj())
     y_arr = np.frombuffer(shared_y_array.get_obj())
     xseg = x_arr[sc:ec]
     yseg = y_arr[sl:el]
     lat, lon = rad2ll(x=xseg, y=yseg, lon0=from_ssp)
     l, c = ll2lc(lat, lon, to_ssp, res_km)
-    return l,c, sl, el, sc, ec
+    return l, c, sl, el, sc, ec
 
 
 def local_ndarray_from_shareable(shareable_array, shape, dtype):
@@ -602,7 +561,7 @@ def local_ndarray_from_shareable(shareable_array, shape, dtype):
 
         return shareable_array
 
-    #if isinstance(shareable_array, mp.sharedctypes.SynchronizedArray):
+    # if isinstance(shareable_array, mp.sharedctypes.SynchronizedArray):
 
     else:
         element_count = reduce(lambda x, y: x * y, shape)
@@ -610,12 +569,12 @@ def local_ndarray_from_shareable(shareable_array, shape, dtype):
         local_ndarray = local_ndarray.reshape(shape)
         return local_ndarray
 
+
 def repr_ssp2ssp(abi_array=None, from_ssp=None, to_ssp=None, use_chunks=True, use_mp=True):
-    nl, nc  = abi_array.shape
+    nl, nc = abi_array.shape
     assert nl == nc, 'Input array has different dimensions %s %s' % (nl, nc)
     out_geos_data = np.zeros((nl, nc), dtype=abi_array.dtype)
     out_geos_data[:] = 0
-
 
     # l, c = np.mgrid[:nl,:nc]
     res_km = L1B_NPIXELS_RESOLUTIONS_KM[nl]
@@ -625,9 +584,9 @@ def repr_ssp2ssp(abi_array=None, from_ssp=None, to_ssp=None, use_chunks=True, us
     y, x = get_radian_arrays(res_km)
     if not use_chunks:
 
-        lat, lon = rad2ll(x=x,y=y,lon0=to_ssp)
-        l,c = ll2lc(lat, lon,from_ssp, res_km)
-        m = (l < nl)& (l>=0) & (c < nc) & (c>=0)
+        lat, lon = rad2ll(x=x, y=y, lon0=to_ssp)
+        l, c = ll2lc(lat, lon, from_ssp, res_km)
+        m = (l < nl) & (l >= 0) & (c < nc) & (c >= 0)
         out_geos_data[m] = abi_array[l[m], c[m]]
 
     else:
@@ -635,11 +594,11 @@ def repr_ssp2ssp(abi_array=None, from_ssp=None, to_ssp=None, use_chunks=True, us
             print 'mp'
 
             l = list()
-            x_sh = mp.Array(ctypes.c_byte,x.nbytes)
-            xx = np.frombuffer(x_sh.get_obj(),dtype=x.dtype, count=x.size)
+            x_sh = mp.Array(ctypes.c_byte, x.nbytes)
+            xx = np.frombuffer(x_sh.get_obj(), dtype=x.dtype, count=x.size)
             xx[:] = x[:]
-            y_sh = mp.Array(ctypes.c_byte,y.nbytes)
-            yy = np.frombuffer(x_sh.get_obj(),dtype=x.dtype, count=x.size)
+            y_sh = mp.Array(ctypes.c_byte, y.nbytes)
+            yy = np.frombuffer(x_sh.get_obj(), dtype=x.dtype, count=x.size)
             yy[:] = y[:]
 
             pool = mp.Pool()
@@ -649,13 +608,14 @@ def repr_ssp2ssp(abi_array=None, from_ssp=None, to_ssp=None, use_chunks=True, us
                 for j in range(nsegs):
                     sc = j * seg_len
                     ec = sc + seg_len
-                    kwargs = {'shared_y_array':y_sh, 'shared_x_array': x_sh, 'sl':sl, 'el':el, 'sc':sc , 'ec':ec, 'from_ssp':from_ssp, 'to_ssp':to_ssp, 'res_km':res_km, 'nl':nl, 'nc':nc}
+                    kwargs = {'shared_y_array': y_sh, 'shared_x_array': x_sh, 'sl': sl, 'el': el, 'sc': sc, 'ec': ec,
+                              'from_ssp': from_ssp, 'to_ssp': to_ssp, 'res_km': res_km, 'nl': nl, 'nc': nc}
                     l.append(pool.apply_async(rr, kwds=kwargs))
 
             for __e in l:
-                l, c, sl, el, sc, ec= __e.get()
+                l, c, sl, el, sc, ec = __e.get()
                 m = (l < nl) & (l >= 0) & (c < nc) & (c >= 0)
-                out_geos_data[sl:el, sc:ec][m] = abi_array[l[m], c[m]] # pus
+                out_geos_data[sl:el, sc:ec][m] = abi_array[l[m], c[m]]  # pus
 
 
         else:
@@ -673,28 +633,20 @@ def repr_ssp2ssp(abi_array=None, from_ssp=None, to_ssp=None, use_chunks=True, us
                     m = np.isnan(lat) & np.isnan(lon)
                     l, c = ll2lc(lat, lon, from_ssp, res_km)
 
-                    #m =  (l<nl) & (l>=0) & (c<nc) & (c>=0)
+                    # m =  (l<nl) & (l>=0) & (c<nc) & (c>=0)
                     a = abi_array[l[~m], c[~m]]
-                    if i ==0  and j ==3 :
-                        from goesr.test import display
+                    if i == 0 and j == 3:
                         b = np.empty_like(g)
                         b[:] = np.nan
                         b[~m] = a
 
-
-                        d = {'b':b, 'g':g,'~m':~m}
-                        display(d,)
-                    out_geos_data[sl:el, sc:ec][~m] =a
+                        d = {'b': b, 'g': g, '~m': ~m}
+                        display(d, )
+                    out_geos_data[sl:el, sc:ec][~m] = a
     return out_geos_data
-
-
-
-
 
     # pylab.imshow(l, interpolation='nearest')
     # pylab.show()
-
-
 
     # src_ssp_l, src_ssp_c = ll2lc(lat=0, lon=from_spp, lon0=from_spp,res_km=res_km)
     # dst_ssp_l, dst_ssp_c = ll2lc(lat=0, lon=to_ssp, lon0=from_spp, res_km=res_km)
@@ -703,10 +655,4 @@ def repr_ssp2ssp(abi_array=None, from_ssp=None, to_ssp=None, use_chunks=True, us
     # fc = c+coffset
     # cm = (fc<0) & (fc>nc)
     # fc[cm] = 0
-    #return abi_array[l.ravel(), c.ravel()]
-
-
-
-
-
-
+    # return abi_array[l.ravel(), c.ravel()]

@@ -1,4 +1,12 @@
+import numpy as np
+
+from angles_geom import get_zenith_angle
+from naive_gaussian_classification import get_basis_model, get_trained_model
+from read_metadata import read_satellite_step
+from static_tests import dawn_day_test
 from utils import *
+from utils import typical_input
+from visualize import visualize_hist, get_bbox
 
 
 def classify_brightness(bright_index):
@@ -25,7 +33,6 @@ def classify_brightness(bright_index):
     nb_samples = int(training_rate * len(bright_index_1d))
     bright_index_training = brightness_copy[:nb_samples]
     del brightness_copy
-    from naive_gaussian_classification import get_basis_model, get_trained_model
     process = 'bayesian'
     print 'classify brightness', process
     nb_components = 3
@@ -37,9 +44,9 @@ def classify_brightness(bright_index):
     centers3 = get_centers(model, process)
     [undefined, dark, bright] = np.argsort(centers3.flatten())
 
-    better_than_threshold = (centers3[bright, 0] + get_std(model, process, bright)/2) > default_threshold
+    better_than_threshold = (centers3[bright, 0] + get_std(model, process, bright) / 2) > default_threshold
     separability_condition = centers3[bright, 0] - centers3[dark, 0] > \
-            1.2*max(get_std(model, process, dark), get_std(model, process, bright))
+                             1.2 * max(get_std(model, process, dark), get_std(model, process, bright))
 
     if not better_than_threshold or not separability_condition:
         print 'bad separation between bright and dark'
@@ -51,9 +58,9 @@ def classify_brightness(bright_index):
         brightness[brightness == bright] = nb_components + 1
         brightness[brightness == dark] = nb_components
         if nb_components >= 4:
-            in_between = nb_components*(nb_components-1)/2 - dark-bright-undefined
-            brightness[brightness == in_between] = nb_components+2
-        return brightness-nb_components
+            in_between = nb_components * (nb_components - 1) / 2 - dark - bright - undefined
+            brightness[brightness == in_between] = nb_components + 2
+        return brightness - nb_components
 
 
 def classifiy_brightness_variability(bright_variability):
@@ -71,7 +78,6 @@ def classifiy_brightness_variability(bright_variability):
     nb_samples = int(training_rate * len(bright_variability_1d))
     bright_index_training = brightness_copy[:nb_samples]
     del brightness_copy
-    from naive_gaussian_classification import get_basis_model, get_trained_model
     process = 'bayesian'
     print 'classify brightness variability', process
     nb_components = 3
@@ -81,27 +87,23 @@ def classifiy_brightness_variability(bright_variability):
     model = get_trained_model(bright_index_training, model, process)
     brightness_variability = model.predict(bright_variability_1d).reshape((nb_slots, nb_latitudes, nb_longitudes))
     centers = get_centers(model, process)
-    [undefined, constant, variable] = np.argsort(centers.flatten())
+    [_, constant, variable] = np.argsort(centers.flatten())
     brightness_variability[brightness_variability == variable] = nb_components + 1
     brightness_variability[brightness_variability == constant] = nb_components
-    return brightness_variability-nb_components
+    return brightness_variability - nb_components
 
 
 def check_gaussian_hypothesis(latitudes, longitudes, begin, end, method='none'):
     from tomas_outputs import reduce_tomas_2_classes, get_tomas_outputs
-    from decision_tree import reduce_two_classes, get_classes_v1_point, reduce_classes, get_classes_v2_image
+    from decision_tree import reduce_two_classes, get_classes_v1_point, reduce_classes
     from get_data import get_features
-    snow = get_features('visible', latitudes, longitudes, begin, end, 'abstract')[:,:,:,0]
+    snow = get_features('visible', latitudes, longitudes, begin, end, 'abstract')[:, :, :, 0]
     # snow=feat[:,:,:,0]
     # var=feat[:,:,:,1]
     # del feat
-    from visualize import visualize_hist, visualize_map_time, get_bbox
     bb = get_bbox(latitudes[0], latitudes[-1], longitudes[0], longitudes[-1])
     # visualize_map_time(snow, bb, vmin=0, vmax=1)
-    from static_tests import dawn_day_test
-    from read_metadata import read_satellite_step
-    from angles_geom import get_zenith_angle
-    dmask=dawn_day_test(get_zenith_angle(get_times_utc(begin, end, read_satellite_step(), 1), latitudes, longitudes))
+    dmask = dawn_day_test(get_zenith_angle(get_times_utc(begin, end, read_satellite_step(), 1), latitudes, longitudes))
     if method == 'tomas':
         cloud = (reduce_tomas_2_classes(get_tomas_outputs(
             begin, end, latitudes[0], latitudes[-1], longitudes[0], longitudes[-1]
@@ -122,7 +124,6 @@ def check_gaussian_hypothesis(latitudes, longitudes, begin, end, method='none'):
 
 
 if __name__ == '__main__':
-    from utils import typical_input
     slot_step = 1
     beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end = typical_input()
     lat, lon = get_latitudes_longitudes(latitude_beginning, latitude_end,
@@ -130,4 +131,3 @@ if __name__ == '__main__':
     check_gaussian_hypothesis(lat, lon, beginning, ending, 'none')
     # check_gaussian_hypothesis(lat, lon, beginning, ending, 'tomas')
     check_gaussian_hypothesis(lat, lon, beginning, ending, 'ped')
-

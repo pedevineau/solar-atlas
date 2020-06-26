@@ -5,7 +5,13 @@
     "start_slot": 1,
     "longitude": 140.7,
     "epsilon_param": 2.0,
-    "channels_name": ["IR124_2000", "IR104_2000", "IR390_2000", "VIS160_2000", "VIS064_2000"],
+    "channels_name": [
+      "IR124_2000",
+      "IR104_2000",
+      "IR390_2000",
+      "VIS160_2000",
+      "VIS064_2000"
+    ],
     "indexes": {
       "visible": {
         "dir": "/data/test_data/computed",
@@ -21,7 +27,10 @@
       }
     },
     "channels": {
-      "dir": ["/data/test_data/himawari_test2", "/data/test_data/CHN13"],
+      "dir": [
+        "/data/test_data/himawari_test2",
+        "/data/test_data/CHN13"
+      ],
       "pattern": "{SATELLITE}LATLON_{CHANNEL}__TMON_{YYYY}_{mm}__SDEG05_r{SDEG5_LATITUDE}_c{SDEG5_LONGITUDE}.nc"
     },
     "model_path": "/data/test_data/models/model_H08",
@@ -37,7 +46,13 @@
     "start_slot": 0,
     "longitude": 75.2,
     "epsilon_param": 2.0,
-    "channels_name": ["IR123", "IR103", "IR390", "VIS161", "VIS064"],
+    "channels_name": [
+      "IR123",
+      "IR103",
+      "IR390",
+      "VIS161",
+      "VIS064"
+    ],
     "indexes": {
       "visible": {
         "dir": "/data/test_data/computed",
@@ -63,7 +78,6 @@
       "csp": "/data/test_data/GOES_clear_mask_latlon"
     }
   },
-
   "masks": {
     "land": {
       "dir": "/data/test_data/masks",
@@ -74,7 +88,6 @@
       "pattern": "CFSv2_t2_{YYYY}_ts.nc"
     },
     "terrain": {
-
     }
   }
 }

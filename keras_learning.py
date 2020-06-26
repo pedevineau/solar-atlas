@@ -1,7 +1,64 @@
-'''
-author: Pierre-Etienne Devineau
-SOLARGIS S.R.O.
-'''
+from read_metadata import read_satellite_model_path, read_satellite_pca_path, read_satellite_resolution_path
+from utils import *
+from choose_training_sample import restrict_pools
+from learning_utils import prepare_angles_features_classes_ped
+from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import KFold
+from keras.wrappers.scikit_learn import KerasClassifier
+from numpy import transpose
+from learning_utils import chunk_5d_high_resolution
+from keras.optimizers import Adadelta
+from keras.layers import TimeDistributed
+from keras.layers import ConvLSTM2D
+from learning_utils import reshape_features, remove_some_label_from_training_pool
+from keras.optimizers import SGD
+from keras.layers import Dropout
+from sklearn.model_selection import train_test_split
+from keras.utils import np_utils
+from numpy import asarray
+from time import time
+from keras.models import Sequential
+from keras.layers.convolutional import Conv2D, MaxPooling2D
+from keras.layers import Activation, Flatten, Dense, BatchNormalization
+from keras.optimizers import Adam
+from sklearn.decomposition import PCA
+from keras.models import load_model
+import utils
+from numpy import max, argmax
+from keras.preprocessing.image import ImageDataGenerator
+from learning_utils import chunk_4d_high_resolution, reshape_labels
+from time import time
+
+from keras.layers import Activation, Flatten, Dense, BatchNormalization
+from keras.layers import ConvLSTM2D
+from keras.layers import Dropout
+from keras.layers import TimeDistributed
+from keras.layers.convolutional import Conv2D, MaxPooling2D
+from keras.models import Sequential
+from keras.models import load_model
+from keras.optimizers import Adadelta
+from keras.optimizers import Adam
+from keras.optimizers import SGD
+from keras.preprocessing.image import ImageDataGenerator
+from keras.utils import np_utils
+from keras.wrappers.scikit_learn import KerasClassifier
+from numpy import asarray
+from numpy import max, argmax
+from numpy import transpose
+from sklearn.decomposition import PCA
+from sklearn.model_selection import KFold
+from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import train_test_split
+
+import utils
+from choose_training_sample import restrict_pools
+from learning_utils import chunk_4d_high_resolution, reshape_labels
+from learning_utils import chunk_5d_high_resolution
+from learning_utils import prepare_angles_features_classes_ped
+from learning_utils import reshape_features, remove_some_label_from_training_pool
+from read_metadata import read_satellite_model_path, read_satellite_pca_path, read_satellite_resolution_path
+from utils import *
+
 
 class WeatherLearning:
     def __init__(self, model=None, resolution=9, pca=None):
@@ -35,7 +92,6 @@ class WeatherLearning:
         raise Exception('Method not implemented in super-class WeatherLearning')
 
     def fit_pca(self, inputs, components):
-        from sklearn.decomposition import PCA
         self.pca = PCA(components).fit(inputs)
 
     def apply_pca(self, inputs):
@@ -43,8 +99,6 @@ class WeatherLearning:
 
     @classmethod
     def load(cls, path_model, path_pca, path_res=None):
-        from keras.models import load_model
-        import utils
         if path_res is None:
             return cls(model=load_model(path_model), pca=utils.load(path_pca))
         else:
@@ -52,7 +106,6 @@ class WeatherLearning:
 
     @staticmethod
     def deterministic_predictions(predicted, nb_classes):
-        from numpy import ones, zeros, max, argmax
         slots, lats, lons = predicted.shape[0:3]
         # determ_classification = -1*ones((slots, lats, lons))
         # for k in range(nb_classes):
@@ -68,7 +121,6 @@ class WeatherCNN(WeatherLearning):
     def compile(self, nb_lats, nb_lons, nb_features, nb_classes, nb_slots=0):
         EPOCHS = 25
         INIT_LR = 1e-3
-        from keras.optimizers import Adam
         model = self.build(nb_lats, nb_lons, nb_features, nb_classes)
         opt = Adam(lr=INIT_LR, decay=INIT_LR / EPOCHS)
         model.compile(loss="categorical_crossentropy", optimizer=opt, metrics=["accuracy"])
@@ -76,13 +128,9 @@ class WeatherCNN(WeatherLearning):
 
     @staticmethod
     def build(height, width, depth, nb_classes, time=0):
-        from keras.models import Sequential
-        from keras.layers.convolutional import Conv2D, MaxPooling2D
-        from keras.layers import Activation, Flatten, Dense, Dropout, BatchNormalization
-
         # initialize the model
         model = Sequential()
-        shape = (height, width, depth)
+        shape = (height, width, devpth)
         # first set of CONV => RELU => POOL layers
         model.add(Conv2D(20, (4, 4), padding="same",
                          input_shape=shape))
@@ -109,24 +157,18 @@ class WeatherCNN(WeatherLearning):
         return model
 
     def fit(self, inputs, labels, nb_classes, fit_excluding=None):
-        from keras.utils import np_utils
-        from learning_utils import chunk_4d_high_resolution, reshape_labels, remove_some_label_from_training_pool
-        from numpy import asarray
-        from time import time
         inputs = chunk_4d_high_resolution(asarray(inputs), (self.res, self.res))
         labels = reshape_labels(labels, (self.res, self.res), chunk_level=4)
         t_exclude = time()
         # if fit_excluding is not None:
         #     inputs, labels = remove_some_label_from_training_pool(inputs, labels, fit_excluding)
-        print 'time exclude:', time()-t_exclude
+        print 'time exclude:', time() - t_exclude
 
-        from sklearn.model_selection import train_test_split
         (trainX, testX, trainY, testY) = train_test_split(inputs, labels, test_size=0.7, random_state=42)
         trainY = np_utils.to_categorical(trainY, nb_classes)
         testY = np_utils.to_categorical(testY, nb_classes)
         EPOCHS = 5
         BS = 32
-        from keras.preprocessing.image import ImageDataGenerator
         # construct the image generator for data augmentation
         aug = ImageDataGenerator(rotation_range=30, width_shift_range=0.1,
                                  height_shift_range=0.1, shear_range=0.2, zoom_range=0,
@@ -140,8 +182,6 @@ class WeatherCNN(WeatherLearning):
         return self.model.predict(chunk_4d_high_resolution(np.asarray(inputs), (self.res, self.res)))
 
     def score(self, inputs, labels, nb_classes):
-        from keras.utils import np_utils
-        from learning_utils import chunk_4d_high_resolution, reshape_labels
         inputs = chunk_4d_high_resolution(np.asarray(inputs), (self.res, self.res))
         labels = np_utils.to_categorical(reshape_labels(labels, (self.res, self.res), chunk_level=4), nb_classes)
         results = self.model.evaluate(inputs, labels, verbose=0)
@@ -158,8 +198,6 @@ class WeatherMLP(WeatherLearning):
 
     @staticmethod
     def build(depth, nb_classes, height=0, width=0, time=0):
-        from keras import Sequential
-        from keras.layers import Dense, Dropout, Flatten
         model = Sequential()
         model.add(Dense(32, activation='relu', input_dim=depth))
         model.add(Dropout(0.5))
@@ -170,7 +208,6 @@ class WeatherMLP(WeatherLearning):
         return model
 
     def compile(self, nb_features, nb_classes, nb_lats=0, nb_lons=0, nb_slots=0):
-        from keras.optimizers import SGD
         model = self.build(nb_features, nb_classes)
         sgd = SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=True)
         model.compile(loss='categorical_crossentropy',
@@ -179,8 +216,6 @@ class WeatherMLP(WeatherLearning):
         self.model = model
 
     def fit(self, inputs, labels, nb_classes, fit_excluding=None):
-        from learning_utils import reshape_features, remove_some_label_from_training_pool, reshape_labels
-        from keras.utils import np_utils
         inputs = reshape_features(inputs)
         inputs = self.apply_pca(inputs)
         labels = reshape_labels(labels, chunk_level=3)
@@ -190,7 +225,6 @@ class WeatherMLP(WeatherLearning):
         self.model.fit(np.asarray(inputs), labels, epochs=20, batch_size=32)
 
     def predict(self, inputs):
-        from learning_utils import reshape_features
         inputs = reshape_features(inputs)
         if self.pca is not None:
             inputs = self.apply_pca(inputs)
@@ -207,9 +241,6 @@ class WeatherConvLSTM(WeatherLearning):
 
     @staticmethod
     def build(height, width, depth, nb_classes, nb_slots):
-        from keras.models import Sequential
-        from keras.layers import TimeDistributed
-        from keras.layers import ConvLSTM2D, MaxPooling2D, Dropout, Flatten, Dense, BatchNormalization
         model = Sequential()
         model.add(ConvLSTM2D(filters=32, kernel_size=(3, 3),
                              activation='tanh',
@@ -232,18 +263,13 @@ class WeatherConvLSTM(WeatherLearning):
         return model
 
     def compile(self, nb_lats=0, nb_lons=0, nb_features=0, nb_classes=0, nb_slots=0):
-        from keras.optimizers import Adadelta
         model = WeatherConvLSTM.build(nb_lats, nb_lons, nb_features, nb_classes, nb_slots)
         model.compile(loss='categorical_crossentropy',
-                           optimizer=Adadelta(),
-                           metrics=['accuracy'])
+                      optimizer=Adadelta(),
+                      metrics=['accuracy'])
         self.model = model
 
     def fit(self, inputs, labels, nb_classes, fit_excluding=None):
-        from keras.utils import np_utils
-        from learning_utils import chunk_5d_high_resolution, reshape_labels
-        from numpy import asarray
-        from time import time
         nb_slots, nb_lats, nb_lons, nb_feats = inputs.shape
         inputs = chunk_5d_high_resolution(inputs, (self.res, self.res))
         labels = reshape_labels(labels, (self.res, self.res), chunk_level=5)
@@ -252,9 +278,8 @@ class WeatherConvLSTM(WeatherLearning):
         # if fit_excluding is not None:
         #     from utils import remove_some_label_from_training_pool
         #     inputs, labels = remove_some_label_from_training_pool(inputs, labels, fit_excluding)
-        print 'time exclude:', time()-t_exclude
+        print 'time exclude:', time() - t_exclude
 
-        from sklearn.model_selection import train_test_split
         (trainX, testX, trainY, testY) = train_test_split(inputs, labels, test_size=0.5, random_state=42)
         trainY = np_utils.to_categorical(trainY, nb_classes)
         testY = np_utils.to_categorical(testY, nb_classes)
@@ -268,14 +293,13 @@ class WeatherConvLSTM(WeatherLearning):
             pass
 
     def predict(self, inputs):
-        from learning_utils import chunk_5d_high_resolution
-        from numpy import asarray
         return self.model.predict(chunk_5d_high_resolution(asarray(inputs), (self.res, self.res)))
 
     @staticmethod
     def reshape_outputs(outputs, shape):
-        from numpy import transpose
         return transpose(outputs, (1, 0, 2)).reshape(shape)
+
+
 #
 # class WeatherConvSeries(WeatherLearning):
 #     def __init__(self):
@@ -287,11 +311,6 @@ class WeatherConvLSTM(WeatherLearning):
 #
 
 def keras_cnn_score(model, inputs, labels):
-    from sklearn.model_selection import cross_val_score
-    from sklearn.model_selection import KFold
-    from keras.utils import np_utils
-    from learning_utils import chunk_4d_high_resolution, reshape_labels
-    from keras.wrappers.scikit_learn import KerasClassifier
     estimator = KerasClassifier(build_fn=model, epochs=25, batch_size=32, verbose=0)
     kfold = KFold(n_splits=10, shuffle=True, random_state=42)
     results = cross_val_score(estimator, chunk_4d_high_resolution(inputs, (res, res)),
@@ -308,13 +327,14 @@ def learn_new_model(nb_classes, class_to_exclude=None, method='cnn'):
     beginning_training, ending_training, lat_beginning_training, lat_ending_training, lon_beginning_training, lon_ending_training = typical_input(
         seed=seed_training)
 
-    from learning_utils import prepare_angles_features_classes_ped
+
     # the two parameters (seed, keep_holes) are critical
-    angles, training_inputs, training_classes = prepare_angles_features_classes_ped(seed=seed_training, keep_holes=False)
+    angles, training_inputs, training_classes = prepare_angles_features_classes_ped(seed=seed_training,
+                                                                                    keep_holes=False)
 
     if False and not use_lstm:
-        from choose_training_sample import restrict_pools
-        angles, training_inputs, training_classes = restrict_pools(angles, training_inputs, training_classes, training_rate=0.1)
+        angles, training_inputs, training_classes = restrict_pools(angles, training_inputs, training_classes,
+                                                                   training_rate=0.1)
     nb_feats = training_inputs.shape[-1]
     nb_slots = training_inputs.shape[0]
     del angles
@@ -339,20 +359,18 @@ def learn_new_model(nb_classes, class_to_exclude=None, method='cnn'):
 
 
 if __name__ == '__main__':
-    from learning_utils import prepare_angles_features_classes_ped, prepare_angles_features_bom_labels
-    from utils import *
     slot_step = 1
     output_level = 'abstract'
     nb_classes_ = 6
     res = 11
 
-    from read_metadata import read_satellite_model_path, read_satellite_pca_path, read_satellite_resolution_path
     path_model = read_satellite_model_path()
     path_pca = read_satellite_pca_path()
     path_res = read_satellite_resolution_path()
 
     seed_testing = 0
-    testing_angles, testing_inputs, testing_classes = prepare_angles_features_classes_ped(seed=seed_testing, keep_holes=False)
+    testing_angles, testing_inputs, testing_classes = prepare_angles_features_classes_ped(seed=seed_testing,
+                                                                                          keep_holes=False)
     #     testing_angles, testing_inputs, testing_classes = prepare_angles_features_classes_bom(seed=seed_testing)
 
     should_learn_new_model = False
@@ -363,7 +381,7 @@ if __name__ == '__main__':
     if should_learn_new_model:
         learn_new_model(nb_classes_, class_to_exclude=-10, method=meth)
     else:
-        from keras.models import load_model
+        pass
         # model_ = load_model(path)
         # print model_
     sl, la, lo, fe = testing_inputs.shape
@@ -389,4 +407,3 @@ if __name__ == '__main__':
     visualize_map_time(predictions, typical_bbox(), vmin=0, vmax=5, title='deterministic predictions')
     visualize_map_time(confidence, typical_bbox(), vmin=0, vmax=1, title='confidence')
     # visualize_map_time(testing_classes, typical_bbox(), vmin=0, vmax=5, title='static')
-

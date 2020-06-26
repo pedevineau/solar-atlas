@@ -1,11 +1,17 @@
+import numpy
+from numpy import full_like
+
+from general_utils import daytimeconv
+from general_utils import latlon
+from himawari8.sat_model.utils import himawari_nc_latlontools
+from utils import latlon_to_rc
+from utils import typical_input, typical_bbox
+from visualize import visualize_map_time
+
+
 def get_tomas_outputs(dfb_begin, dfb_end, lat_begin, lat_end, lon_begin, lon_end):
-    from utils import latlon_to_rc
-    import numpy
-    from himawari8.sat_model.utils import himawari_nc_latlontools
-    from general_utils import daytimeconv
-    from general_utils import latlon
     r_end, c_begin = latlon_to_rc(lat_begin, lon_begin)
-    r_begin, c_end = latlon_to_rc(lat_end-0.01, lon_end-0.01)
+    r_begin, c_end = latlon_to_rc(lat_end - 0.01, lon_end - 0.01)
     # r_begin += 1
     # c_end -= 1
     print [c_begin, c_end, r_begin, r_end]
@@ -52,7 +58,6 @@ def get_tomas_outputs(dfb_begin, dfb_end, lat_begin, lat_end, lon_begin, lon_end
 
 
 def reduce_tomas_2_classes(classes):
-    from numpy import full_like
     to_return = full_like(classes, 1)
     to_return[classes == 2] = 0
     return to_return
@@ -60,9 +65,8 @@ def reduce_tomas_2_classes(classes):
 
 if __name__ == '__main__':
     print 'tomas reader'
-    from utils import typical_input, typical_bbox
-    from visualize import visualize_map_time
+
     dfb_begin, dfb_end, latitude_begin, latitude_end, longitude_begin, longitude_end = typical_input()
     classes = get_tomas_outputs(dfb_begin, dfb_end, latitude_begin, latitude_end,
-                                                                longitude_begin, longitude_end)
+                                longitude_begin, longitude_end)
     visualize_map_time(classes, typical_bbox(), vmin=0, vmax=7)

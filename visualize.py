@@ -1,4 +1,15 @@
+from collections import namedtuple
+
+import matplotlib.pyplot as plt
+from matplotlib import pyplot
+from mpl_toolkits.mplot3d import Axes3D
 from numpy.random import randint
+from pandas import Series
+
+from image_processing import equalize_histograms_all_features
+from nclib2.visualization import show_raw
+from nclib2.visualization import visualize_map_3d
+from utils import *
 
 
 def output_filters(array):
@@ -32,20 +43,16 @@ def output_filters(array):
 
 
 def get_bbox(latitudes, longitudes):
-    from collections import namedtuple
     Bbox = namedtuple("Bbox", ("xmin", "ymin", "xmax", "ymax"))
     return Bbox(longitudes[0], latitudes[0], longitudes[-1], latitudes[-1])
 
 
 def get_bbox(lat_start, lat_end, lon_start, lon_end):
-    from collections import namedtuple
     Bbox = namedtuple("Bbox", ("xmin", "ymin", "xmax", "ymax"))
     return Bbox(lon_start, lat_start, lon_end, lat_end)
 
 
 def visualize_curves_3d(latitudes, longitudes, array_2d, title=None):
-    from matplotlib import pyplot
-    from mpl_toolkits.mplot3d import Axes3D
     latitudes = list(reversed(latitudes))
     latitudes, longitudes = np.meshgrid(latitudes, longitudes)
     fig = pyplot.figure()
@@ -58,14 +65,13 @@ def visualize_curves_3d(latitudes, longitudes, array_2d, title=None):
 
 def visualize_map_time(array_map, bbox, vmin=0, vmax=1, title=None, subplot_titles_list=[], color='jet'):
     # array can be 3d or 4d
-    from nclib2.visualization import visualize_map_3d
     interpolation_ = None
     ocean_mask_ = False
     if len(array_map.shape) == 4:
         (a, b, c, d) = array_map.shape
         for var_index in range(d):
             if title is None:
-                title = 'Input_'+str(var_index)
+                title = 'Input_' + str(var_index)
             print title
             visualize_map_3d(array_map[:, :, :, var_index],
                              bbox,
@@ -89,15 +95,13 @@ def visualize_map_time(array_map, bbox, vmin=0, vmax=1, title=None, subplot_titl
 
 
 def visualize_map(array_2d):
-    from nclib2.visualization import show_raw
     show_raw(array_2d)
 
 
 def visualize_classes(data_predicted, bbox):
-    from nclib2.visualization import visualize_map_3d
     interpolation_ = None
     ocean_mask_ = False
-    title_ = 'Naive classification. Plot id:' + str(randint(0,1000))
+    title_ = 'Naive classification. Plot id:' + str(randint(0, 1000))
     print title_
     visualize_map_3d(data_predicted,
                      bbox,
@@ -110,8 +114,7 @@ def visualize_classes(data_predicted, bbox):
 
 def visualize_input(y_axis, x_axis=None, title='Curve', display_now=True, style='-'):
     r = randint(1, 1000)
-    title = title + ' id:'+str(r)
-    import matplotlib.pyplot as plt
+    title = title + ' id:' + str(r)
     plt.figure(r)
     print title
     plt.title(title)
@@ -124,10 +127,8 @@ def visualize_input(y_axis, x_axis=None, title='Curve', display_now=True, style=
 
 
 def visualize_hist(array_1d, title='Histogram', precision=50):
-    from pandas import Series
-    import matplotlib.pyplot as plt
     r = randint(1, 1000)
-    title = title + ' id:'+str(r)
+    title = title + ' id:' + str(r)
     print title
     plt.figure(r)
     plt.title(title)
@@ -140,13 +141,11 @@ def visualize_hist(array_1d, title='Histogram', precision=50):
 
 
 def visualize_equalized_normalization(features, bbox, vmin, vmax):
-    from image_processing import equalize_histograms_all_features
     visualize_map_time(equalize_histograms_all_features(features), bbox, vmin, vmax, color='gray')
 
 
 if __name__ == '__main__':
-    from get_data import get_features
-    from utils import *
+
     output_levels = ['channel', 'ndsi', 'cli', 'abstract']
     types_channel = ['infrared', 'visible']
     level = 3
@@ -158,6 +157,7 @@ if __name__ == '__main__':
     output_level = output_levels[level]
     type_channels = types_channel[channel_number]
     from utils import typical_input
+
     dfb_beginning, dfb_ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end = typical_input(0)
     print dfb_beginning, dfb_ending
     print 'NS:', latitude_beginning, latitude_end, ' WE:', longitude_beginning, longitude_end
@@ -184,10 +184,10 @@ if __name__ == '__main__':
             visualize_input(features[:, lat_pix, lon_pix, 0], display_now=True, style='^')
 
 
-    elif type_channels == 'infrared' and level>0:
+    elif type_channels == 'infrared' and level > 0:
         visualize_map_time(features[:, :, :, 0], bbox, title=type_channels, vmin=0, vmax=1, color='gray')
         visualize_map_time(features[:, :, :, 1:], bbox, title=type_channels, vmin=0, vmax=5, color='gray')
-    elif type_channels == 'infrared' and level==0:
+    elif type_channels == 'infrared' and level == 0:
         visualize_map_time((features[:, :, :, :]), bbox, title=type_channels, vmin=230, vmax=310, color='gray')
     elif level == 0:
         visualize_map_time((features[:, :, :, :]), bbox, title=type_channels, vmin=0, vmax=1, color='gray')

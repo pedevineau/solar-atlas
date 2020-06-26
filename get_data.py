@@ -1,127 +1,164 @@
-'''
-author: Pierre-Etienne Devineau
-SOLARGIS S.R.O.
+from scipy.stats import linregress
 
-Channels preparation
-'''
-
+from infrared_predictors import infrared_outputs
+from read_metadata import read_satellite_step, read_channels_names
+from read_netcdf import read_channels, read_land_mask, read_temperature_forecast
 from utils import *
 from visible_predictors import visible_outputs
-from infrared_predictors import infrared_outputs
 
 
 # precomputing data and indexes
-def get_mask_outliers(array):
-    maskup = array > 350
-    maskdown = array < 0
-    masknan = np.isnan(array) | np.isinf(array)
+def mask_all_sun_outliers(sun_zenith_angle):
+    """
+    Return a boolean matrix indicating if the sun position is between sunset line and the line 10 degrees before sunset
+
+    :param sun_zenith_angle: 3-d array (time, latitude, longitude) indicating the angle between the position of
+        the sun observed from a pixel and the relative zenith position
+    :return: (boolean 3-d array) of shape (time, latitude, longitude) indicating if the sun is between the sunrise
+        and the position 10 degree before sunset
+    """
+    maskup = sun_zenith_angle > 350
+    maskdown = sun_zenith_angle < 0
+    masknan = np.isnan(sun_zenith_angle) | np.isinf(sun_zenith_angle)
     mask = maskup | maskdown | masknan
     return mask
 
 
-def is_likely_outlier(point):
-    return np.isnan(point) or np.isinf(point) or point > 350 or point < 0
+def mask_one_sun_outlier(angle):
+    """
+    Return a boolean indicating if the sun position is between sunset line and the line 10 degrees before sunset
+
+    :param angle:
+    :return: (bool) indicating if the sun is between the sunrise and the position 10 degree before sunset
+    """
+    return np.isnan(angle) or np.isinf(angle) or angle > 350 or angle < 0
 
 
-def interpolate_the_missing_slots(array, missing_slots_list_1, missing_slots_list_2,
-                                  missing_slots_list_3, interpolation):   # interpolation: 'keep-last', 'linear', 'none'
+def interpolate_the_missing_slots(satellite_measurements, missing_slots_list_1, missing_slots_list_2,
+                                  missing_slots_list_3, interpolation):  # interpolation: 'keep-last', 'linear', 'none'
+    """
+    Return sensors measurements where data has been interpolated when its missing during at maximum 3 consecutiv slots
+
+    :param satellite_measurements: 4-d array (time, latitude, longitude, channel) with possible missing data due to
+        sensors restart
+    :param missing_slots_list_1: list of slot indexes where only one consecutive slot is missing
+    :param missing_slots_list_1: list of slot indexes where 2 consecutive slot are missing
+    :param missing_slots_list_1: list of slot indexes where 2 consecutive slot are missing
+    :param interpolation: (str) name of chosen interpolation method. Possibilities so far: `keep-last`, `linear`, `none`
+    :return: 4-d array (time, latitude, longitude, channel) 
+    """
+    assert interpolation in ['keep-last', 'linear', 'none'], "Only acceptable options for method " \
+                                                             "`interpolate_the_missing_slots` are `keep-last`, `linear`" \
+                                                             " or `none`, not {}".format(option)
+
     for slot in missing_slots_list_1:
         if interpolation == 'linear':
-            array[slot] = 0.5*(array[slot-1]+array[slot+1])
+            satellite_measurements[slot] = 0.5 * (satellite_measurements[slot - 1] + satellite_measurements[slot + 1])
         elif interpolation == 'keep-last':
-            array[slot] = array[slot-1]
+            satellite_measurements[slot] = satellite_measurements[slot - 1]
     for slot in missing_slots_list_2:
         if interpolation == 'linear':
-            array[slot] = (array[slot-1]*2. + array[slot+2]) / 3.
-            array[slot+1] = (array[slot-1] + array[slot+2]*2.) / 3.
+            satellite_measurements[slot] = (satellite_measurements[slot - 1] * 2. + satellite_measurements[
+                slot + 2]) / 3.
+            satellite_measurements[slot + 1] = (satellite_measurements[slot - 1] + satellite_measurements[
+                slot + 2] * 2.) / 3.
         elif interpolation == 'keep-last':
-            array[slot] = array[slot-1]
-            array[slot+1] = array[slot-1]
+            satellite_measurements[slot] = satellite_measurements[slot - 1]
+            satellite_measurements[slot + 1] = satellite_measurements[slot - 1]
     for slot in missing_slots_list_3:
         if interpolation == 'linear':
-            array[slot] = (array[slot-1]*3. + array[slot+3]) / 4.
-            array[slot+1] = (array[slot-1]*2. + array[slot+3]*2) / 4.
-            array[slot+2] = (array[slot-1]*1. + array[slot+3]*3) / 4.
+            satellite_measurements[slot] = (satellite_measurements[slot - 1] * 3. + satellite_measurements[
+                slot + 3]) / 4.
+            satellite_measurements[slot + 1] = (satellite_measurements[slot - 1] * 2. + satellite_measurements[
+                slot + 3] * 2) / 4.
+            satellite_measurements[slot + 2] = (satellite_measurements[slot - 1] * 1. + satellite_measurements[
+                slot + 3] * 3) / 4.
         elif interpolation == 'keep-last':
-            array[slot] = array[slot-1]
-            array[slot+1] = array[slot-1]
-            array[slot+2] = array[slot-1]
-    return array
+            satellite_measurements[slot] = satellite_measurements[slot - 1]
+            satellite_measurements[slot + 1] = satellite_measurements[slot - 1]
+            satellite_measurements[slot + 2] = satellite_measurements[slot - 1]
+    return satellite_measurements
 
 
 # get list of isolated slots
 def get_list_isolated_missing_slots(array, maximal_scope=3):
-    # (a, b, c) = np.shape(array)
-    # lat_1 = np.random.randint(0,b)
-    # lon_1 = np.random.randint(0,c)
-    # lat_2 = np.random.randint(0,b)
-    # lon_2 = np.random.randint(0,c)
-    # lat_3 = np.random.randint(0,b)
-    # lon_3 = np.random.randint(0,c)
-    # if a slot is missing for 3 random places, it's probably missing everywhere...
-    # mask = get_mask_outliers(array[:, lat_1, lon_1]) & get_mask_outliers(array[:, lat_2, lon_2]) & get_mask_outliers(array[:, lat_3, lon_3])
-
-    mask = get_mask_outliers(array[:, 0, 0]) & get_mask_outliers(array[:, -1, -1]) \
-           & get_mask_outliers(array[:, -1, 0]) & get_mask_outliers(array[:, 0, -1])
+    mask = mask_all_sun_outliers(array[:, 0, 0]) & mask_all_sun_outliers(array[:, -1, -1]) \
+           & mask_all_sun_outliers(array[:, -1, 0]) & mask_all_sun_outliers(array[:, 0, -1])
 
     # indexes list of isolated slots
     indexes_isolated_1, indexes_isolated_2, indexes_isolated_3 = [], [], []
     # indexes list of dawn slots to be removed
     # dawn_indexes = []
     if maximal_scope >= 1:
-        for k in range(1, len(mask)-1):
-            if mask[k] and not mask[k-1] and not mask[k+1]:
+        for k in range(1, len(mask) - 1):
+            if mask[k] and not mask[k - 1] and not mask[k + 1]:
                 indexes_isolated_1.append(k)
     if maximal_scope >= 2:
-        for k in range(1, len(mask)-2):
-            if mask[k] and mask[k+1] and not mask[k-1] and not mask[k+2]:
-                indexes_isolated_2.append(k)   # keep only the index of the first of the two consecutive missing slots
+        for k in range(1, len(mask) - 2):
+            if mask[k] and mask[k + 1] and not mask[k - 1] and not mask[k + 2]:
+                indexes_isolated_2.append(k)  # keep only the index of the first of the two consecutive missing slots
     if maximal_scope >= 3:
-        for k in range(1, len(mask)-3):
-            if mask[k] and mask[k+1] and mask[k+2] and not mask[k-1] and not mask[k+3]:
+        for k in range(1, len(mask) - 3):
+            if mask[k] and mask[k + 1] and mask[k + 2] and not mask[k - 1] and not mask[k + 3]:
                 indexes_isolated_3.append(k)
     if maximal_scope >= 4:
         raise Exception('the maximal interpolation scope allowed is 3')
     return indexes_isolated_1, indexes_isolated_2, indexes_isolated_3
 
 
-def mask_channels(array_data):
-    (nb_slots, nb_latitudes, nb_longitudes, nb_channels) = np.shape(array_data)
+def mask_channels(satellite_measurements):
+    """
+    Return a boolean array of pixels to mask due to invalid satellite sensors measurements
+
+    :param satellite_measurements: 4-D array (time, latitude, longitude, channels) measured with satellite sensors
+    :return: (boolean 3-D array) (time, latitude, longitude) matrix indicating the pixels where measurements are invalid
+    """
+    (nb_slots, nb_latitudes, nb_longitudes, nb_channels) = np.shape(satellite_measurements)
 
     mask = np.zeros((nb_slots, nb_latitudes, nb_longitudes), dtype=bool)
     for chan in range(nb_channels):
-        slots_to_interpolate_1, slots_to_interpolate_2, slots_to_interpolate_3 =\
-            get_list_isolated_missing_slots(array_data[:, :, :, chan])
+        slots_to_interpolate_1, slots_to_interpolate_2, slots_to_interpolate_3 = \
+            get_list_isolated_missing_slots(satellite_measurements[:, :, :, chan])
         # filter isolated nan and aberrant
-        array_data[:, :, :, chan] = interpolate_the_missing_slots(array_data[:, :, :, chan],
-                                                                  slots_to_interpolate_1,
-                                                                  slots_to_interpolate_2,
-                                                                  slots_to_interpolate_3,
-                                                                  interpolation='linear')
+        satellite_measurements[:, :, :, chan] = interpolate_the_missing_slots(satellite_measurements[:, :, :, chan],
+                                                                              slots_to_interpolate_1,
+                                                                              slots_to_interpolate_2,
+                                                                              slots_to_interpolate_3,
+                                                                              interpolation='linear')
         # get mask for non isolated nan and aberrant
-        mask_current_channels = get_mask_outliers(array_data[:, :, :, chan])
+        mask_current_channels = mask_all_sun_outliers(satellite_measurements[:, :, :, chan])
         mask = mask | mask_current_channels
 
-    array_data[mask] = -1
-    return array_data, mask
+    satellite_measurements[mask] = -1
+    return satellite_measurements, mask
 
 
 def apply_smooth_threshold(x, th, order=2):
-    return np.exp(-(x-th))
+    return np.exp(-(x - th))
 
 
-def compute_variability(array, mask=None, cos_zen=None, step=1, return_mask=False, abs_value=False,
+def compute_variability(cloud_index, mask=None, cos_zen=None, step=1, return_mask=False, abs_value=False,
                         negative_variation_only=False,
                         option='default',  # ['default, 'without-bias']
-                              normalization='none'):
+                        normalization='none'):
+    """
+    Return cloud variability index based on cloud index maps. This method can apply various normalization techniques,
+    and remove measurement bias due to sun position
+
+    :param cloud_index: array (slots, latitudes, longitudes) with cloud index (cli or unbiased difference)
+    :param mask: boolean array (slots, latitudes, longitudes) indicating which measurements are valid
+    :return: array (slots, latitudes, longitudes) with cloud variability index between consecutive cloud index maps
+    """
+    assert option in ['default', 'without-bias'], "Only acceptable options for method `compute_variability` are " \
+                                                  "`default` and `without-bias`, not {}".format(option)
     step_left = step
     if option == 'without-bias':
         try:
-            array = remove_cos_zen_correlation(array, cos_zen, mask)
+            cloud_index = remove_cos_zen_correlation(cloud_index, cos_zen, mask)
         except:
             raise Exception('Cos-zen is compulsory to compute without-bias')
-    previous = np.roll(array, step_left, axis=0)
-    array = array - previous
+    previous = np.roll(cloud_index, step_left, axis=0)
+    cloud_index = cloud_index - previous
     if mask is not None:
         mask = mask + np.roll(mask, step_left, axis=0)
         if step_left >= 0:
@@ -129,18 +166,18 @@ def compute_variability(array, mask=None, cos_zen=None, step=1, return_mask=Fals
         else:
             mask[step_left:] = True
     if negative_variation_only:
-        array[array > 0] = 0
-        array[~mask] *= -1
+        cloud_index[cloud_index > 0] = 0
+        cloud_index[~mask] *= -1
     if abs_value:
-        array = np.abs(array)
+        cloud_index = np.abs(cloud_index)
     if mask is not None:
-        array[mask] = -10
+        cloud_index[mask] = -10
     if normalization != 'none':
-        array = normalize(array, mask=mask, normalization=normalization)
+        cloud_index = normalize(cloud_index, mask=mask, normalization=normalization)
     if return_mask:
-        return array, mask
+        return cloud_index, mask
     else:
-        return array
+        return cloud_index
 
 
 # def compute_intra_variability(*groups):
@@ -151,6 +188,7 @@ def compute_variability(array, mask=None, cos_zen=None, step=1, return_mask=Fals
 
 def remove_cos_zen_correlation(index, cos_zen, mask, pre_mask=None):
     '''
+    Return a 3-d array (time, latitude, longitude) of measurements where artefacts due to sun position has been removed
 
     :param index: 3-d array representing the variable to test
     :param cos_zen: 3-d array with cos of zenith angle
@@ -160,7 +198,6 @@ def remove_cos_zen_correlation(index, cos_zen, mask, pre_mask=None):
     '''
     to_return = index.copy()
     (nb_slots, nb_latitudes, nb_longitudes) = np.shape(to_return)
-    from scipy.stats import linregress
     if pre_mask is not None:
         for lat in range(nb_latitudes):
             for lon in range(nb_longitudes):
@@ -169,7 +206,8 @@ def remove_cos_zen_correlation(index, cos_zen, mask, pre_mask=None):
                 slice_total_mask = (slice_mask | slice_pre_mask)
                 if not np.all(slice_total_mask):
                     # exclude pre-masked values from slope computing, but remove the cos-zen component all the same
-                    slope = linregress(cos_zen[:, lat, lon][~slice_total_mask], index[:, lat, lon][~slice_total_mask])[0]
+                    slope = linregress(cos_zen[:, lat, lon][~slice_total_mask], index[:, lat, lon][~slice_total_mask])[
+                        0]
                     to_return[:, lat, lon][~slice_mask] -= slope * cos_zen[:, lat, lon][~slice_mask]
     else:
         for lat in range(nb_latitudes):
@@ -178,33 +216,6 @@ def remove_cos_zen_correlation(index, cos_zen, mask, pre_mask=None):
                 if not np.all(slice_mask):
                     slope = linregress(cos_zen[:, lat, lon][~slice_mask], index[:, lat, lon][~slice_mask])[0]
                     to_return[:, lat, lon][~slice_mask] -= slope * cos_zen[:, lat, lon][~slice_mask]
-    return to_return
-
-
-def get_variability_parameters_manually(array, step, th_2, positive_variation=True, negative_variation=True):
-    # not used anymore
-    th_1_array = np.linspace(0.01, 0.5, 20)
-    (a,b,c) = np.shape(array)
-    # cum_len = 0
-    # for th_1 in th_1_array:
-    #     for th_2 in th_2_array:
-    #         if th_1 < th_2:
-    #             cum_len += 4
-    # print cum_len
-    to_return = np.zeros((a, b, c))
-    print np.shape(to_return)
-    cursor=0
-    for th_1 in th_1_array:
-        if cursor + 1 <= a:   # the potential end is already completed with zeros...
-            to_return[cursor, :, :] = get_variability_array_modified(array, step, th_1, th_2,
-            positive_variation=positive_variation, negative_variation=negative_variation)[22, :, :]
-            to_return[cursor+20, :, :] = get_variability_array_modified(array, step, th_1, th_2,
-            positive_variation=positive_variation, negative_variation=negative_variation)[35, :, :]
-            to_return[cursor+40, :, :] = get_variability_array_modified(array, step, th_1, th_2,
-            positive_variation=positive_variation, negative_variation=negative_variation)[40, :, :]
-            print 'cursor is now', cursor
-            print 'parameters', th_1
-            cursor += 1
     return to_return
 
 
@@ -220,8 +231,19 @@ def get_features(type_channels, latitudes, longitudes, dfb_beginning, dfb_ending
                  slot_step=1,
                  gray_scale=False,
                  ):
-    from read_netcdf import read_channels, read_land_mask, read_temperature_forecast
-    from read_metadata import read_satellite_step, read_channels_names
+    """
+    Wrapper returning the predictors for cloud-classification model, using the desired type of inpit light channels
+
+    :param type_channels:
+    :param latitudes:
+    :param longitudes:
+    :param dfb_beginning:
+    :param dfb_ending:
+    :param output_level:
+    :param slot_step:
+    :param gray_scale:
+    :return:
+    """
     satellite_step = read_satellite_step()
 
     is_land = read_land_mask(latitudes, longitudes)
@@ -272,3 +294,23 @@ def get_features(type_channels, latitudes, longitudes, dfb_beginning, dfb_ending
         )
     else:
         raise AttributeError('The type of channels should be \'visible\' or \'infrared\'')
+
+# def get_variability_parameters_manually(array, step, th_2, positive_variation=True, negative_variation=True):
+#     # not used anymore
+#     th_1_array = np.linspace(0.01, 0.5, 20)
+#     (a,b,c) = np.shape(array)
+#     to_return = np.zeros((a, b, c))
+#     print np.shape(to_return)
+#     cursor=0
+#     for th_1 in th_1_array:
+#         if cursor + 1 <= a:   # the potential end is already completed with zeros...
+#             to_return[cursor, :, :] = get_variability_array_modified(array, step, th_1, th_2,
+#             positive_variation=positive_variation, negative_variation=negative_variation)[22, :, :]
+#             to_return[cursor+20, :, :] = get_variability_array_modified(array, step, th_1, th_2,
+#             positive_variation=positive_variation, negative_variation=negative_variation)[35, :, :]
+#             to_return[cursor+40, :, :] = get_variability_array_modified(array, step, th_1, th_2,
+#             positive_variation=positive_variation, negative_variation=negative_variation)[40, :, :]
+#             print 'cursor is now', cursor
+#             print 'parameters', th_1
+#             cursor += 1
+#     return to_return
