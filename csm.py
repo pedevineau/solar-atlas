@@ -154,7 +154,7 @@ if __name__ == "__main__":
                 print("Exception", file_path, type(e), e)
 
     elif name == "GOES16":
-        dir_in = "test***/goes_clear_mask"
+        dir_in = "test***/"
         dir_csp_out = "test***/"
         nc_csp = "BCM"
 
