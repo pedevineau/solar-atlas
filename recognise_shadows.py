@@ -3,10 +3,10 @@ from utils import *
 
 
 def recognize_edge():
-    '''
+    """
     Could be relevant over snow snow
     :return:
-    '''
+    """
     return
 
 
@@ -27,7 +27,10 @@ def recognize_cloud_shade(vis, real_cloud_mask, cos_zen, th=0.2):
                     supposed_albedo = np.median(l)
                     for day in range(nb_days):
                         s = day * nb_slots_per_day + slot
-                        if not real_cloud_mask[s, lat, lon] and (supposed_albedo - vis[s, lat, lon]) \
-                                > th * cos_zen[s, lat, lon]:  # not real_cloud_mask[s, lat, lon]:
+                        if (
+                            not real_cloud_mask[s, lat, lon]
+                            and (supposed_albedo - vis[s, lat, lon])
+                            > th * cos_zen[s, lat, lon]
+                        ):  # not real_cloud_mask[s, lat, lon]:
                             detected_cloud_shade[s, lat, lon] = True
     return detected_cloud_shade

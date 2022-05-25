@@ -8,6 +8,7 @@ from skimage.filters import threshold_otsu
 from skimage.measure import label
 from skimage.morphology import disk
 from skimage.morphology import opening, octahedron
+
 # from skimage.feature import peak_local_max
 from skimage.morphology import watershed
 
@@ -15,18 +16,25 @@ from get_data import get_features
 from utils import *
 
 
-def segmentation(method, feature, chan=None, thresh_method='otsu', static=None):
+def segmentation(method, feature, chan=None, thresh_method="otsu", static=None):
     if len(np.shape(feature)) == 4:
-        assert chan is not None and chan < np.shape(feature)[-1], 'please give a valid channel number'
+        assert (
+            chan is not None and chan < np.shape(feature)[-1]
+        ), "please give a valid channel number"
         feature = feature[:, :, :, chan]
-    assert method in ['otsu-2d', 'otsu-3d', 'watershed-2d', 'watershed-3d'], 'segmentation method unknown'
-    if method == 'otsu-2d':
+    assert method in [
+        "otsu-2d",
+        "otsu-3d",
+        "watershed-2d",
+        "watershed-3d",
+    ], "segmentation method unknown"
+    if method == "otsu-2d":
         return segmentation_otsu_2d(feature)
-    elif method == 'otsu-3d':
+    elif method == "otsu-3d":
         return segmentation_otsu_3d(feature)
-    elif method == 'watershed-2d':
+    elif method == "watershed-2d":
         return segmentation_watershed_2d(feature, thresh_method, static=static)
-    elif method == 'watershed-3d':
+    elif method == "watershed-3d":
         return segmentation_watershed_3d(feature, thresh_method, static=static)
 
 
@@ -35,7 +43,7 @@ def segmentation_otsu_2d(feature):
     nb_slots = np.shape(to_return)[0]
     for slot in range(nb_slots):
         try:
-            to_return[slot] = (feature[slot] > threshold_otsu(feature[slot]))
+            to_return[slot] = feature[slot] > threshold_otsu(feature[slot])
         except ValueError:
             pass
     return to_return
@@ -50,7 +58,9 @@ def segmentation_otsu_3d(feature):
         return np.zeros_like(feature, dtype=bool)
 
 
-def segmentation_watershed_2d(feature, thresh_method='otsu', coherence=0.2, static=None):
+def segmentation_watershed_2d(
+    feature, thresh_method="otsu", coherence=0.2, static=None
+):
     (slots, lats, lons) = np.shape(feature)
     to_return = np.empty((slots, lats, lons), dtype=bool)
     for slot in range(slots):
@@ -59,26 +69,33 @@ def segmentation_watershed_2d(feature, thresh_method='otsu', coherence=0.2, stat
     return to_return
 
 
-def segmentation_watershed_3d(feature, thresh_method='otsu', coherence=0.3, static=None):
+def segmentation_watershed_3d(
+    feature, thresh_method="otsu", coherence=0.3, static=None
+):
     return watershed_3d(feature, coherence, thresh_method, static)
 
 
 def watershed_3d(feature, coherence, thresh_method, static):
     # kernel = cube(3)  # try other forms
     kernel = octahedron(1)
-    assert thresh_method in ['otsu', 'static', 'static-inverted', 'binary'], 'threshing method unknown'
-    if thresh_method == 'otsu':
+    assert thresh_method in [
+        "otsu",
+        "static",
+        "static-inverted",
+        "binary",
+    ], "threshing method unknown"
+    if thresh_method == "otsu":
         try:
             thresh = feature < threshold_otsu(feature)  # mask=True for background
         except ValueError:
             # if the feature is monochromatic
             return np.zeros_like(feature, dtype=bool)
-    elif thresh_method == 'static-inverted':
+    elif thresh_method == "static-inverted":
         thresh = feature > static
-    elif thresh_method == 'static':
+    elif thresh_method == "static":
         thresh = feature < static
     else:  # if the image is already binary
-        thresh = (feature == 0)
+        thresh = feature == 0
     opened = opening(thresh, kernel)
     # opened = opening(opened, kernel)
     # opened = opening(opened, kernel)
@@ -92,7 +109,7 @@ def watershed_3d(feature, coherence, thresh_method, static):
     sure_fg = dist_transform > coherence * dist_transform.max()
 
     # Finding unknown region
-    unknown = (opened ^ sure_fg > 0)
+    unknown = opened ^ sure_fg > 0
 
     # Marker labelling
     markers = label(sure_fg, background=0)
@@ -104,17 +121,17 @@ def watershed_3d(feature, coherence, thresh_method, static):
         water = watershed(-dist_transform, markers, mask=thresh)
     except NameError:
         water = watershed(-dist_transform, markers)
-    return (water == 1)
+    return water == 1
 
 
 def watershed_2d(image, thresh_method, spatial_coherence=0.2, static=None):
     # Image Segmentation with Watershed Algorithm
     # http://opencv-python-tutroals.readthedocs.io/en/latest/py_tutorials/py_imgproc/py_watershed/py_watershed.html
     # noise removal
-    assert thresh_method in ['otsu', 'static', 'binary'], 'threshing method unknown'
-    if thresh_method == 'otsu':
+    assert thresh_method in ["otsu", "static", "binary"], "threshing method unknown"
+    if thresh_method == "otsu":
         thresh = apply_inverted_otsu(image)[0]
-    elif thresh_method == 'static':
+    elif thresh_method == "static":
         thresh = image > static
     else:
         thresh = image
@@ -130,7 +147,9 @@ def watershed_2d(image, thresh_method, spatial_coherence=0.2, static=None):
         dist_transform = cv2.distanceTransform(opening, cv2.DIST_L2, 5)
     except:
         dist_transform = cv2.distanceTransform(opening, cv2.cv.CV_DIST_L2, 5)
-    ret, sure_fg = cv2.threshold(dist_transform, spatial_coherence * dist_transform.max(), 255, 0)
+    ret, sure_fg = cv2.threshold(
+        dist_transform, spatial_coherence * dist_transform.max(), 255, 0
+    )
 
     # Finding unknown region
     sure_fg = np.uint8(sure_fg)
@@ -155,7 +174,7 @@ def watershed_2d(image, thresh_method, spatial_coherence=0.2, static=None):
     #     ax.plot(contour[:, 1], contour[:, 0], linewidth=2)
     # ax.imshow(image, cmap=plt.cm.gray)
     # plt.show()
-    return (water == 1)
+    return water == 1
 
 
 def apply_otsu(img):
@@ -185,29 +204,48 @@ def equalize_histogram_2d(img):
 
 def equalize_histograms_all_features(features):
     nb_dims = len(features.shape)
-    assert nb_dims in [3, 4], 'invalid shape for features'
+    assert nb_dims in [3, 4], "invalid shape for features"
     for slot in range(len(features)):
         if nb_dims == 3:
             features[slot] = equalize_histogram_2d(features[slot])
         elif nb_dims == 4:
             for feat in range(features.shape[-1]):
-                features[slot, :, :, feat] = equalize_histogram_2d(features[slot, :, :, feat])
+                features[slot, :, :, feat] = equalize_histogram_2d(
+                    features[slot, :, :, feat]
+                )
     return features
 
 
-if __name__ == '__main__':
-    types_channel = ['infrared', 'visible']
+if __name__ == "__main__":
+    types_channel = ["infrared", "visible"]
     compute_indexes = True
     chan = 0
     channel_number = 1
     type_channels = types_channel[channel_number]
-    beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end = typical_input(seed=0)
+    (
+        beginning,
+        ending,
+        latitude_beginning,
+        latitude_end,
+        longitude_beginning,
+        longitude_end,
+    ) = typical_input(seed=0)
     date_begin, date_end = print_date_from_dfb(beginning, ending)
-    lat, lon = get_latitudes_longitudes(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
+    lat, lon = get_latitudes_longitudes(
+        latitude_beginning, latitude_end, longitude_beginning, longitude_end
+    )
     # from quick_visualization import get_bbox
     # bbox = get_bbox(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
-    features = get_features(type_channels, lat, lon, beginning, ending, compute_indexes, slot_step=1,
-                            gray_scale=True)
+    features = get_features(
+        type_channels,
+        lat,
+        lon,
+        beginning,
+        ending,
+        compute_indexes,
+        slot_step=1,
+        gray_scale=True,
+    )
 
     segmentation_watershed_2d(features[16, :, :, chan])
 

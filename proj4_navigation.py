@@ -20,7 +20,7 @@ import pyproj
 
 def lc2YX(l=None, c=None, gt=None):
     xmin, xres, _, ymax, __, yres = gt
-    return ymax + l * yres + yres / 2., xmin + c * xres + xres / 2.
+    return ymax + l * yres + yres / 2.0, xmin + c * xres + xres / 2.0
 
 
 def YX2lc(Y=None, X=None, gt=None):
@@ -36,8 +36,8 @@ def YX2lc(Y=None, X=None, gt=None):
     """
 
     xmin, xres, _, ymax, __, yres = gt
-    ty = ((Y - ymax) / yres) + .5
-    tx = ((X - xmin) / xres) + .5
+    ty = ((Y - ymax) / yres) + 0.5
+    tx = ((X - xmin) / xres) + 0.5
     try:
         rc = int(math.floor(ty)), int(math.floor(tx))
     except TypeError:
@@ -51,7 +51,9 @@ def lc2ll(l=None, c=None, ssp=None, gt=None):
 
 
 def YX2ll(Y=None, X=None, ssp=None):
-    proj4_str = '+proj=geos +a=6378169.0 +b=6356583.8 +h=35785831.0 +lon_0=%.2f +units=m' % ssp
+    proj4_str = (
+        "+proj=geos +a=6378169.0 +b=6356583.8 +h=35785831.0 +lon_0=%.2f +units=m" % ssp
+    )
     geosp = pyproj.Proj(proj4_str)
     lon, lat = geosp(X, Y, inverse=True)
     return lat, lon
@@ -67,7 +69,9 @@ def ll2YX(lat=None, lon=None, ssp=None):
     :return:
     """
 
-    proj4_str = '+proj=geos +a=6378169.0 +b=6356583.8 +h=35785831.0 +lon_0=%.2f +units=m' % ssp
+    proj4_str = (
+        "+proj=geos +a=6378169.0 +b=6356583.8 +h=35785831.0 +lon_0=%.2f +units=m" % ssp
+    )
     geosp = pyproj.Proj(proj4_str)
     try:  # fix the bug in Proj4 that Tomas run into. The bug is related to not
         shp = lon.shape

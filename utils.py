@@ -14,70 +14,131 @@ from visualize import get_bbox
 def typical_input(seed=0):
     sat_name = read_satellite_name()
     if seed == 0:
-        if sat_name == 'GOES16':
+        if sat_name == "GOES16":
             beginning = 13516 + 365 + 10  # +36
             nb_days = 5
             ending = beginning + nb_days - 1
-            latitude_beginning = 35. + 5
-            latitude_end = 40. + 5
-            longitude_beginning = -80.
-            longitude_end = -75.
-        elif sat_name == 'H08':
+            latitude_beginning = 35.0 + 5
+            latitude_end = 40.0 + 5
+            longitude_beginning = -80.0
+            longitude_end = -75.0
+        elif sat_name == "H08":
             beginning = 13525 + 180
             nb_days = 3
             ending = beginning + nb_days - 1
-            latitude_beginning = -10.
-            latitude_end = -5.
-            longitude_beginning = 110.
-            longitude_end = 115.
-        return beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end
+            latitude_beginning = -10.0
+            latitude_end = -5.0
+            longitude_beginning = 110.0
+            longitude_end = 115.0
+        return (
+            beginning,
+            ending,
+            latitude_beginning,
+            latitude_end,
+            longitude_beginning,
+            longitude_end,
+        )
     else:
-        if sat_name == 'GOES16':
+        if sat_name == "GOES16":
             beginning = 13516 + 365 + 10
             nb_days = 6
             ending = beginning + nb_days - 1
-            latitude_beginning = 35. + 1
-            latitude_end = 40. - 3
-            longitude_beginning = -115. + 35 + 1
-            longitude_end = -110. + 35 - 3
-        elif sat_name == 'H08':
+            latitude_beginning = 35.0 + 1
+            latitude_end = 40.0 - 3
+            longitude_beginning = -115.0 + 35 + 1
+            longitude_end = -110.0 + 35 - 3
+        elif sat_name == "H08":
             beginning = 13525 + 180
             nb_days = 5
             ending = beginning + nb_days - 1
-            latitude_beginning = 40. - 5
-            latitude_end = 45. - 5
-            longitude_beginning = 110. + 10 + 5
-            longitude_end = 115. + 10 + 5
-        return beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end
+            latitude_beginning = 40.0 - 5
+            latitude_end = 45.0 - 5
+            longitude_beginning = 110.0 + 10 + 5
+            longitude_end = 115.0 + 10 + 5
+        return (
+            beginning,
+            ending,
+            latitude_beginning,
+            latitude_end,
+            longitude_beginning,
+            longitude_end,
+        )
 
 
 def typical_outputs(type_channels, output_level, seed=0):
-    beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end = typical_input(seed)
-    lats, lons = get_latitudes_longitudes(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
+    (
+        beginning,
+        ending,
+        latitude_beginning,
+        latitude_end,
+        longitude_beginning,
+        longitude_end,
+    ) = typical_input(seed)
+    lats, lons = get_latitudes_longitudes(
+        latitude_beginning, latitude_end, longitude_beginning, longitude_end
+    )
     return get_features(type_channels, lats, lons, beginning, ending, output_level)
 
 
 def typical_angles(seed=0):
-    beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end = typical_input(seed)
-    lats, lons = get_latitudes_longitudes(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
-    return get_zenith_angle(get_times_utc(beginning, ending, read_satellite_step(), 1), lats, lons)
+    (
+        beginning,
+        ending,
+        latitude_beginning,
+        latitude_end,
+        longitude_beginning,
+        longitude_end,
+    ) = typical_input(seed)
+    lats, lons = get_latitudes_longitudes(
+        latitude_beginning, latitude_end, longitude_beginning, longitude_end
+    )
+    return get_zenith_angle(
+        get_times_utc(beginning, ending, read_satellite_step(), 1), lats, lons
+    )
 
 
 def typical_land_mask(seed=0):
-    beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end = typical_input(seed)
-    lats, lons = get_latitudes_longitudes(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
+    (
+        beginning,
+        ending,
+        latitude_beginning,
+        latitude_end,
+        longitude_beginning,
+        longitude_end,
+    ) = typical_input(seed)
+    lats, lons = get_latitudes_longitudes(
+        latitude_beginning, latitude_end, longitude_beginning, longitude_end
+    )
     return read_land_mask(lats, lons)
 
 
 def typical_temperatures_forecast(seed=0):
-    beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end = typical_input(seed)
-    lats, lons = get_latitudes_longitudes(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
+    (
+        beginning,
+        ending,
+        latitude_beginning,
+        latitude_end,
+        longitude_beginning,
+        longitude_end,
+    ) = typical_input(seed)
+    lats, lons = get_latitudes_longitudes(
+        latitude_beginning, latitude_end, longitude_beginning, longitude_end
+    )
     return prepare_temperature_mask(lats, lons, beginning, ending)
 
 
 def typical_bbox(seed=0):
-    beginning, ending, latitude_beginning, latitude_end, longitude_beginning, longitude_end = typical_input(seed)
-    return get_bbox(latitude_beginning, latitude_end, longitude_beginning, longitude_end)
+    (
+        beginning,
+        ending,
+        latitude_beginning,
+        latitude_end,
+        longitude_beginning,
+        longitude_end,
+    ) = typical_input(seed)
+    return get_bbox(
+        latitude_beginning, latitude_end, longitude_beginning, longitude_end
+    )
 
 
 def typical_time_step():
@@ -88,7 +149,7 @@ def array_to_one_label(arr, base=6):
     arr = arr.flatten()
     r = 0
     for k, x in enumerate(arr):
-        r += x * (base ** k)
+        r += x * (base**k)
     return int(r)
 
 
@@ -97,9 +158,9 @@ def one_label_to_array(lab, shape, base=6):
     to_return = np.zeros(row * col, dtype=int)
     k = to_return.size - 1
     while k >= 0:
-        coef = lab / base ** k
+        coef = lab / base**k
         to_return[k] = coef
-        lab -= coef * (base ** k)
+        lab -= coef * (base**k)
         k -= 1
     return to_return.reshape(shape)
 
@@ -107,30 +168,31 @@ def one_label_to_array(lab, shape, base=6):
 ### compute rolling mean or median to smooth the albedo (for albedo-based cloud test) ###
 def rounding_mean_list(list_1d, window):
     cumsum = np.cumsum(np.insert(list_1d, 0, 0))
-    list_1d[window - 1:] = (cumsum[window:] - cumsum[:-window]) / float(window)
+    list_1d[window - 1 :] = (cumsum[window:] - cumsum[:-window]) / float(window)
     return list_1d
 
 
 def rounding_median_list(list_1d, window):
     # not used practically because it is too resources-consuming
-    list_1d[window:] = \
-        rolling_apply(list_1d, window=window, center=False, func=np.nanmedian)[window:]
+    list_1d[window:] = rolling_apply(
+        list_1d, window=window, center=False, func=np.nanmedian
+    )[window:]
     return list_1d
 
 
-def apply_rolling_on_time(array, window=5, method='mean'):
-    '''
+def apply_rolling_on_time(array, window=5, method="mean"):
+    """
 
     :param array:
     :param window:
     :param method:
     :return:
-    '''
-    assert window % 2 == 1, 'please give an uneven window width'
+    """
+    assert window % 2 == 1, "please give an uneven window width"
     s = array.shape
-    assert len(s) in [1, 3], 'dimension non valid'
-    assert method in ['mean', 'median'], 'pleas ask for an implemented method'
-    if method == 'mean':
+    assert len(s) in [1, 3], "dimension non valid"
+    assert method in ["mean", "median"], "pleas ask for an implemented method"
+    if method == "mean":
         if len(s) == 1:
             return rounding_mean_list(array, window)
         if len(s) == 3:
@@ -139,14 +201,16 @@ def apply_rolling_on_time(array, window=5, method='mean'):
                 for lon in range(lons):
                     array[:, lat, lon] = rounding_mean_list(array[:, lat, lon], window)
     else:
-        print 'WARNING the median method is much slower than the mean'
+        print("WARNING the median method is much slower than the mean")
         if len(s) == 1:
             return rounding_mean_list(array, window)
         if len(s) == 3:
             lats, lons = s[1:3]
             for lat in range(lats):
                 for lon in range(lons):
-                    array[:, lat, lon] = rounding_median_list(array[:, lat, lon], window)
+                    array[:, lat, lon] = rounding_median_list(
+                        array[:, lat, lon], window
+                    )
     return array
 
 
@@ -165,7 +229,7 @@ def rc_to_latlon(r, c, size_tile=5):
         lon = -180 + size_tile * int(c)
         return lat, lon
     else:
-        raise AttributeError('rc not well formatted')
+        raise AttributeError("rc not well formatted")
 
 
 def latlon_to_rc(lat, lon, size_tile=5):
@@ -174,14 +238,16 @@ def latlon_to_rc(lat, lon, size_tile=5):
     if lon % size_tile == 0:
         lon += 1
     if -90 <= lat < 90 and -180 <= lon <= 175:
-        row = int(np.ceil((90. - 1. * lat) / size_tile))
-        col = int(np.ceil((180. + 1. * lon) / size_tile))
+        row = int(np.ceil((90.0 - 1.0 * lat) / size_tile))
+        col = int(np.ceil((180.0 + 1.0 * lon) / size_tile))
         return row - 1, col - 1
     else:
-        raise AttributeError('latlon not well formatted')
+        raise AttributeError("latlon not well formatted")
 
 
-def get_latitudes_longitudes(lat_start, lat_end, lon_start, lon_end, resolution=2.0 / 60):
+def get_latitudes_longitudes(
+    lat_start, lat_end, lon_start, lon_end, resolution=2.0 / 60
+):
     nb_lat = int((lat_end - lat_start) / resolution)
     latitudes = np.linspace(lat_start, lat_end, nb_lat, endpoint=False)
     nb_lon = int((lon_end - lon_start) / resolution)
@@ -191,10 +257,16 @@ def get_latitudes_longitudes(lat_start, lat_end, lon_start, lon_end, resolution=
 
 def get_times_utc(dfb_beginning, dfb_ending, satellite_timestep, slot_step):
     from datetime import datetime, timedelta
-    len_times = (1 + dfb_ending - dfb_beginning) * 60 * 24 / (satellite_timestep * slot_step)
+
+    len_times = (
+        (1 + dfb_ending - dfb_beginning) * 60 * 24 / (satellite_timestep * slot_step)
+    )
     origin_of_time = datetime(1980, 1, 1)
     date_beginning = origin_of_time + timedelta(days=dfb_beginning)
-    times = [date_beginning + timedelta(minutes=k * satellite_timestep * slot_step) for k in range(len_times)]
+    times = [
+        date_beginning + timedelta(minutes=k * satellite_timestep * slot_step)
+        for k in range(len_times)
+    ]
     return times
 
 
@@ -206,31 +278,34 @@ def get_dfbs_slots(dfb_beginning, dfb_ending, satellite_timestep, slot_step):
 
 def print_date_from_dfb(begin, ending):
     from datetime import datetime, timedelta
+
     d_beginning = datetime(1980, 1, 1) + timedelta(days=begin - 1, seconds=1)
     d_ending = datetime(1980, 1, 1) + timedelta(days=ending + 1 - 1, seconds=-1)
-    print 'Dates from ', str(d_beginning), ' till ', str(d_ending)
+    print("Dates from ", str(d_beginning), " till ", str(d_ending))
     return d_beginning, d_ending
 
 
 def get_nb_slots_per_day(satellite_step, slot_step):
-    '''
+    """
 
     :param satellite_step: the satellite characteristic time step between two slots (10 minutes for Himawari 8)
     :param slot_step: the chosen sampling of slots. if slot_step = n, the sampled slots are s[0], s[n], s[2*n]...
     :return: number of slots per day for this satellite and the chosen sampling step
-    '''
+    """
     return int(24 * 60 / (satellite_step * slot_step))
 
 
 def upper_divisor_slot_step(slot_step, nb_slots_per_day):
-    while nb_slots_per_day % slot_step != 0:  # increase slot step as long as its not a divisor of nb_slots_per_day
+    while (
+        nb_slots_per_day % slot_step != 0
+    ):  # increase slot step as long as its not a divisor of nb_slots_per_day
         slot_step += 1
     return slot_step
 
 
-def normalize(array, mask=None, normalization='max', return_m_s=False):
+def normalize(array, mask=None, normalization="max", return_m_s=False):
     # normalization: max, standard, 'reduced', 'gray-scale'
-    if normalization == 'gray-scale':
+    if normalization == "gray-scale":
         if mask is None:
             M = np.max(array)
             m = np.min(array)
@@ -240,28 +315,28 @@ def normalize(array, mask=None, normalization='max', return_m_s=False):
             m = np.min(array[~mask])
             to_return = np.zeros_like(array, dtype=np.uint8), 0, 1
             to_return[0][~mask] = 255 * (array[~mask] - m) / (M - m)
-    elif normalization == 'max':
+    elif normalization == "max":
         if mask is None:
             to_return = array / np.max(np.abs(array)), 0, 1
         else:
             to_return = array / np.max(array[~mask]), 0, 1
-    elif normalization == 'centered':
+    elif normalization == "centered":
         if mask is None:
             m = np.mean(array)
             to_return = (array - m), m, 1
         else:
             m = np.mean(array[~mask])
-            array[~mask] = (array[~mask] - m)
+            array[~mask] = array[~mask] - m
             to_return = array, m, 1
-    elif normalization == 'reduced':
+    elif normalization == "reduced":
         if mask is None:
             s = np.sqrt(np.var(array))
             to_return = array / s, 0, s
         else:
             s = np.sqrt(np.var(array[~mask]))
-            array[~mask] = (array[~mask] / s)
+            array[~mask] = array[~mask] / s
             to_return = array, 0, s
-    elif normalization == 'standard':
+    elif normalization == "standard":
         if mask is None:
             m = np.mean(array)
             s = np.sqrt(np.var(array))
@@ -281,39 +356,31 @@ def normalize(array, mask=None, normalization='max', return_m_s=False):
 
 def get_centers(model, process):
     # for gaussian mixture (not used now)
-    if process in ['gaussian', 'bayesian']:
+    if process in ["gaussian", "bayesian"]:
         return model.means_
-    elif process == 'kmeans':
+    elif process == "kmeans":
         return model.cluster_centers_
     else:
-        raise Exception('not implemented classifier')
+        raise Exception("not implemented classifier")
 
 
 def get_std(model, process, index):
     # for gaussian mixture (not used now)
-    if process in ['gaussian', 'bayesian']:
+    if process in ["gaussian", "bayesian"]:
         return np.sqrt(model.covariances_[index, 0, 0])
-    elif process == 'kmeans':
+    elif process == "kmeans":
         return 0
     else:
-        raise Exception('not implemented classifier')
+        raise Exception("not implemented classifier")
 
 
 def save(path, to_be_saved):
     from pickle import dump
-    dump(to_be_saved, open(path, 'wb'))
+
+    dump(to_be_saved, open(path, "wb"))
 
 
 def load(path):
     from pickle import load
-    return load(open(path, 'rb'))
 
-
-if __name__ == '__main__':
-    arr = np.asarray([10, 2, 3, 8, 9, 9, 2, 4.])
-    print arr
-    print rounding_mean_list(arr, window=3)
-
-    dfb_begin, dfb_end, latitude_begin, latitude_end, longitude_begin, longitude_end = typical_input()
-    print rc_to_latlon(10, 53)
-    print latlon_to_rc(-8, 111)
+    return load(open(path, "rb"))

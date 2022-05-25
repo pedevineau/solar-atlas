@@ -1,7 +1,11 @@
 from numpy import zeros_like
 
 from static_tests import dawn_day_test, gross_cloud_test, thin_cirrus_test
-from static_tests import typical_static_classifier, epsilon_transparent_cloud_test, thick_cloud_test
+from static_tests import (
+    typical_static_classifier,
+    epsilon_transparent_cloud_test,
+    thick_cloud_test,
+)
 from utils import visualize_map_time, typical_bbox
 
 
@@ -9,7 +13,7 @@ def corr2test(test_1, test_2):
     # expect list
     # test_1 = test_1.flatten()
     # test_2 = test_2.flatten()
-    assert len(test_1) == len(test_2), 'the two lists have different sizes'
+    assert len(test_1) == len(test_2), "the two lists have different sizes"
     score = float(sum(test_2)) / sum(test_1)
     # score = (1.*sum(test_1 == test_2)) / len(test_1)
     return score
@@ -20,7 +24,7 @@ def compute_common_scores(*args):
     n = len(args)
     common = args[0]
     for k in range(1, n):
-        common = (args[k] | common)
+        common = args[k] | common
     score = []
     for l in range(n):
         score.append(corr2test(common, args[l]))
@@ -32,7 +36,7 @@ def compute_unique_scores(*args):
     n = len(args)
     common = args[0]
     for k in range(1, n):
-        common = (args[k] | common)
+        common = args[k] | common
     scores = []
     for k in range(n):
         unique = args[k]
@@ -44,40 +48,52 @@ def compute_unique_scores(*args):
 
 
 def visualize_regular_cloud_tests(quick_test=False):
-    '''
+    """
     Show the clouds detected by regular test above lands (does not include the visible cloud test
      and the unstable snowy test), and print the "individual score" of each test (=the ratio of clouds
      which have been detected only by this test)
     :param quick_test: if True, does not compute texture test
     :return: two lists: the list
-    '''
-    zen, lands, cli_mu, cli_var, cli_epsilon, vis, lir, fir, lir_forecast, fir_forecast = typical_static_classifier(
-        bypass=True)
+    """
+    (
+        zen,
+        lands,
+        cli_mu,
+        cli_var,
+        cli_epsilon,
+        vis,
+        lir,
+        fir,
+        lir_forecast,
+        fir_forecast,
+    ) = typical_static_classifier(bypass=True)
     # visualize_map_time(cli_mu, typical_bbox(), vmin=0, vmax=50, color='gray')
     # visualize_map_time(cli_epsilon*2, typical_bbox(), vmin=0, vmax=1, color='gray')
     common_condition = lands & dawn_day_test(zen)
     opaque_condition = thick_cloud_test(lands, lir, cli_mu, cli_epsilon, quick_test)
     epsilon_condition = epsilon_transparent_cloud_test(cli_epsilon)
     gross_condition = gross_cloud_test(lir, lir_forecast)
-    transparent_condition = thin_cirrus_test(lands, lir, fir, lir_forecast, fir_forecast)
+    transparent_condition = thin_cirrus_test(
+        lands, lir, fir, lir_forecast, fir_forecast
+    )
 
-    print 'CONDITIONS: GROSS, EPSILON, OPAQUE'
-    print 'COMMON SCORES FOR LAND DAWN-DAY PRIMARY CLOUD CLASSIFICATION'
+    print("CONDITIONS: GROSS, EPSILON, OPAQUE")
+    print("COMMON SCORES FOR LAND DAWN-DAY PRIMARY CLOUD CLASSIFICATION")
     common_scores = compute_common_scores(
         gross_condition[common_condition],
         epsilon_condition[common_condition],
         # transparent_condition[common_condition],
-        opaque_condition[common_condition]
+        opaque_condition[common_condition],
     )
-    print common_scores
-    print 'INDIVIDUAL SCORES FOR LAND DAWN-DAY PRIMARY CLOUD CLASSIFICATION'
+    print(common_scores)
+    print("INDIVIDUAL SCORES FOR LAND DAWN-DAY PRIMARY CLOUD CLASSIFICATION")
     unique_scores = compute_unique_scores(
         gross_condition[common_condition],
         epsilon_condition[common_condition],
         # transparent_condition[common_condition],
-        opaque_condition[common_condition]
+        opaque_condition[common_condition],
     )
-    print unique_scores
+    print(unique_scores)
     to_return = zeros_like(gross_condition)
     to_return[opaque_condition] = 1
     to_return[gross_condition] = 2
@@ -91,5 +107,5 @@ def visualize_regular_cloud_tests(quick_test=False):
     return common_scores, unique_scores
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     visualize_regular_cloud_tests(quick_test=False)

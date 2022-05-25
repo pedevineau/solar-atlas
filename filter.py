@@ -18,14 +18,14 @@ def median_filter_3d(array, scope=5):
 
 def contrast_filter(array):
     s = np.shape(array)
-    contrast = 0.125 * np.array([[-1, -1, -1],
-                                 [-1, 8, -1],
-                                 [-1, -1, -1]])
+    contrast = 0.125 * np.array([[-1, -1, -1], [-1, 8, -1], [-1, -1, -1]])
     if len(s) == 2:
-        return signal.convolve2d(array, contrast, boundary='symm', mode='same')
+        return signal.convolve2d(array, contrast, boundary="symm", mode="same")
     if len(s) == 3:
         for k in range(s[0]):
-            array[k] = signal.convolve2d(array[k], contrast, boundary='symm', mode='same')
+            array[k] = signal.convolve2d(
+                array[k], contrast, boundary="symm", mode="same"
+            )
         return array
 
 
@@ -64,7 +64,9 @@ def low_pass_filter_3d(array, cutoff, omega=0):
         filt[abs(fft2) < cutoff - omega] = 1
         filt[abs(fft2) > cutoff + omega] = 0
         mask = (cutoff - omega < abs(fft2)) & (abs(fft2) < cutoff + omega)
-        filt[mask] = 0.5 * (1 - np.sin(np.pi * (abs(fft2[mask]) - cutoff) / (2 * omega)))
+        filt[mask] = 0.5 * (
+            1 - np.sin(np.pi * (abs(fft2[mask]) - cutoff) / (2 * omega))
+        )
         fft2 = fft2 * filt
         filtered_spatial[k] = fftpack.ifft2(fft2)
     return filtered_spatial
@@ -77,8 +79,8 @@ def low_pass_filter_3d(array, cutoff, omega=0):
 def digital_low_cut_filtering_time(array, mask, satellite_step):
     # the slot step does not matter here
     fs = 0.5 * get_nb_slots_per_day(satellite_step, 1)
-    cutoff = 20. / (fs * 1)
-    b, a = signal.butter(8, cutoff, 'high', analog=False, output='ba')
+    cutoff = 20.0 / (fs * 1)
+    b, a = signal.butter(8, cutoff, "high", analog=False, output="ba")
     X1 = signal.lfilter(b, a, array, axis=0)
     X1[mask] = 0
     return X1
@@ -91,9 +93,12 @@ def time_smoothing(array_3D_to_smoothen, nb_neighbours_smoothing=5):
         shape = np.shape(array_3D_to_smoothen)
         array = np.empty(shape)
         for k in range(nb_neighbours_smoothing, shape[0] - nb_neighbours_smoothing):
-            array[k] = np.mean(array_3D_to_smoothen[k - nb_neighbours_smoothing:k + nb_neighbours_smoothing + 1])
+            array[k] = np.mean(
+                array_3D_to_smoothen[
+                    k - nb_neighbours_smoothing : k + nb_neighbours_smoothing + 1
+                ]
+            )
         time_stop_smoothing = time.time()
-        print 'time smoothing', str(time_stop_smoothing - time_start_smoothing)
         return array / (1 + 2 * nb_neighbours_smoothing)
     else:
         return array_3D_to_smoothen

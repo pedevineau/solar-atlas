@@ -32,8 +32,9 @@ INV_FLATTENING = 298.2572221  # 1/f where f = (a-b)/a and a= req and b = rpol
 FD_FOV_RAD = 0.303744
 
 L1B_RESOLUTIONS_MICRORAD = 14, 28, 56, 112, 280  # micro radians
-L1B_NPIXELS = tuple([int(FD_FOV_RAD / e * 1e6) for e in
-                     L1B_RESOLUTIONS_MICRORAD])  # the number of lines or columns. FOR FD they are identical
+L1B_NPIXELS = tuple(
+    [int(FD_FOV_RAD / e * 1e6) for e in L1B_RESOLUTIONS_MICRORAD]
+)  # the number of lines or columns. FOR FD they are identical
 
 L1B_RESOLUTIONS_KM = 0.5, 1, 2, 4, 10
 
@@ -72,65 +73,18 @@ def rad2ll(x=None, y=None, lon0=None):
         x = x[:, np.newaxis]
         y = y[np.newaxis, :]
     elif (x.ndim > 2) or (y.ndim > 2):
-        raise Exception('Invalind dimesions for x %s or y %s. Max allowed is 2' % (x.ndim, y.ndim))
+        raise Exception(
+            "Invalind dimesions for x %s or y %s. Max allowed is 2" % (x.ndim, y.ndim)
+        )
 
     lon0_rad = np.deg2rad(lon0)
-    a = np.sin(x) ** 2 + np.cos(x) ** 2 * (np.cos(y) ** 2 + (REQ / RPOL * np.sin(y)) ** 2)
+    a = np.sin(x) ** 2 + np.cos(x) ** 2 * (
+        np.cos(y) ** 2 + (REQ / RPOL * np.sin(y)) ** 2
+    )
 
     b = -2 * H * np.cos(x) * np.cos(y)
-    c = H ** 2 - REQ ** 2
-    t = b ** 2 - 4 * a * c
-    # not_vis = t<0
-    # #t[not_vis] == np.nan
-    # if not_vis[not_vis].size > 0:
-    #     print 'masking'
-    #     x = (x*y)/y
-    #     y = (y*x)/x
-    #     b = b[~not_vis]
-    #     t = t[~not_vis]
-    #     a = a[~not_vis]
-    #     x = x[~not_vis]
-    #     y = y[~not_vis]
-    #     rs = (-b - (np.sqrt(t))) / 2 * a
-    #
-    #     sx = rs * np.cos(x) * np.cos(y)
-    #     sy = -rs * np.sin(x)
-    #     sz = rs * np.cos(x) * np.sin(y)
-    #
-    #     lat_rad = np.arctan((REQ ** 2 / RPOL ** 2) * (sz / np.sqrt((H - sx) ** 2 + sy ** 2)))
-    #     lon_rad = lon0_rad - np.arctan(sy / (H - sx))
-    #
-    #     lat_ = np.rad2deg(lat_rad)
-    #     lon_ = np.rad2deg(lon_rad)
-    #     lat = np.empty((nl, nc))
-    #     lon = np.empty((nl, nc))
-    #
-    #     lat[:] = np.nan
-    #     lon[:] = np.nan
-    #     lat[~not_vis] = lat_
-    #     lon[~not_vis] = lon_
-    #     del x,y,a,b,t,rs,sx,sy,sz,lat_,lon_, lat_rad, lon_rad
-    #
-    # else:
-    #     print 'no masking'
-    #
-    #     # pylab.title('tt')
-    #     # pylab.imshow(tt, interpolation='nearest')
-    #     # pylab.show()
-    #     #ak tu neprejde je mimo globe
-    #
-    #     rs = (-b-(np.sqrt(t)))/2*a
-    #
-    #     sx = rs*np.cos(x)*np.cos(y)
-    #     sy = -rs*np.sin(x)
-    #     sz = rs*np.cos(x)*np.sin(y)
-    #
-    #     lat_rad = np.arctan((REQ**2/RPOL**2)*(sz/np.sqrt((H-sx)**2+sy**2)))
-    #     lon_rad = lon0_rad - np.arctan(sy/(H-sx))
-    #
-    #     lat = np.rad2deg(lat_rad)
-    #     lon = np.rad2deg(lon_rad)
-    not_vis = t < 0
+    c = H**2 - REQ**2
+    t = b**2 - 4 * a * c
 
     rs = (-b - (np.sqrt(t))) / 2 * a
 
@@ -138,7 +92,9 @@ def rad2ll(x=None, y=None, lon0=None):
     sy = -rs * np.sin(x)
     sz = rs * np.cos(x) * np.sin(y)
 
-    lat_rad = np.arctan((REQ ** 2 / RPOL ** 2) * (sz / np.sqrt((H - sx) ** 2 + sy ** 2)))
+    lat_rad = np.arctan(
+        (REQ**2 / RPOL**2) * (sz / np.sqrt((H - sx) ** 2 + sy**2))
+    )
     lon_rad = lon0_rad - np.arctan(sy / (H - sx))
 
     lat = np.rad2deg(lat_rad)
@@ -169,17 +125,20 @@ def ll2rad(lat=None, lon=None, lon0=None):
         lon = lon[np.newaxis, :]
         lat = lat[:, np.newaxis]
     elif (lat.ndim > 2) or (lon.ndim > 2):
-        raise Exception('Invalind dimesions for lat %s or lon %s. Max allowed is 2' % (lat.ndim, lon.ndim))
+        raise Exception(
+            "Invalind dimesions for lat %s or lon %s. Max allowed is 2"
+            % (lat.ndim, lon.ndim)
+        )
 
     lon0_rad = np.deg2rad(lon0)
     lat_rad = np.deg2rad(lat)
     lon_rad = np.deg2rad(lon)
-    latc = np.arctan(RPOL ** 2 / REQ ** 2 * np.tan(lat_rad))
-    rc = RPOL / np.sqrt(1 - ECCENTRICITY ** 2 * np.cos(latc) ** 2)
+    latc = np.arctan(RPOL**2 / REQ**2 * np.tan(lat_rad))
+    rc = RPOL / np.sqrt(1 - ECCENTRICITY**2 * np.cos(latc) ** 2)
     ssx = H - rc * np.cos(latc) * np.cos(lon_rad - lon0_rad)
     ssy = -rc * np.cos(latc) * np.sin(lon_rad - lon0_rad)
     ssz = rc * np.sin(latc)
-    rn = np.sqrt(ssx ** 2 + ssy ** 2 + ssz ** 2)
+    rn = np.sqrt(ssx**2 + ssy**2 + ssz**2)
 
     isvisible = rn * rn + np.square(rc * latc)
     # if isvisible> np.square(H):
@@ -195,7 +154,9 @@ def rad2lc(y=None, x=None, res_km=None):
     res_microrad = L1B_RESOLUTIONS_KM_DICT[res_km]
     xres_rad = res_microrad * 1e-6
     yres_rad = -xres_rad
-    x_offset = (-FD_FOV_RAD / 2) - (xres_rad / 2)  # the x offset is - half the field of view minus half resolution,
+    x_offset = (-FD_FOV_RAD / 2) - (
+        xres_rad / 2
+    )  # the x offset is - half the field of view minus half resolution,
     y_offset = (FD_FOV_RAD / 2) - (yres_rad / 2)
 
     # it is easier/faster to produce the radian  coordinates arrays then read them from the netcdf.
@@ -234,13 +195,17 @@ def get_radian_arrays(resolution_km=None):
     :param resolution_km, number:, the resolution in kilometers
     :return:
     """
-    assert resolution_km in L1B_RESOLUTIONS_KM, 'The supplied resolution %s is not a native ABI resolution. valid resolutions are %s' % (
-        resolution_km, L1B_RESOLUTIONS_KM)
+    assert resolution_km in L1B_RESOLUTIONS_KM, (
+        "The supplied resolution %s is not a native ABI resolution. valid resolutions are %s"
+        % (resolution_km, L1B_RESOLUTIONS_KM)
+    )
 
     res_microrad = L1B_RESOLUTIONS_KM_DICT[resolution_km]
     res_rad = res_microrad * 1e-6
     n_pixels_in_dim = int(FD_FOV_RAD / res_rad)
-    offset = (-FD_FOV_RAD / 2) - (res_rad / 2)  # the offset is half the foield of view minus half resolution,
+    offset = (-FD_FOV_RAD / 2) - (
+        res_rad / 2
+    )  # the offset is half the foield of view minus half resolution,
     y_rad = np.arange(1, n_pixels_in_dim + 1, dtype=np.int16) * res_rad + offset
     x_rad = np.arange(1, n_pixels_in_dim + 1, dtype=np.int16) * res_rad + offset
     return y_rad[::-1], x_rad  # reverse the y
@@ -278,14 +243,19 @@ def reproject_abi2ll(abi_array=None, lat=None, lon=None, lon0=None):
     """
 
     nl, nc = abi_array.shape
-    assert nl == nc, 'The supplied radiance array does not have an equal number of lines %s and columns %s' % (nl, nc)
+    assert nl == nc, (
+        "The supplied radiance array does not have an equal number of lines %s and columns %s"
+        % (nl, nc)
+    )
 
     res_microrad = L1B_NPIXELS_RESOLUTIONS[nl]
     xres_rad = res_microrad * 1e-6
     yres_rad = -xres_rad
     res_km = L1B_RESOLUTIONS_MICRORAD_DICT[res_microrad]
 
-    x_offset = (-FD_FOV_RAD / 2) - (xres_rad / 2)  # the x offset is - half the field of view minus half resolution,
+    x_offset = (-FD_FOV_RAD / 2) - (
+        xres_rad / 2
+    )  # the x offset is - half the field of view minus half resolution,
     y_offset = (FD_FOV_RAD / 2) - (yres_rad / 2)
     # convert radians to latlon
     lrad, crad = ll2rad(lon=lon, lat=lat, lon0=lon0)
@@ -328,14 +298,19 @@ def reproject_abi2ll2(abi_array=None, lat=None, lon=None, lon0=None):
     """
 
     nl, nc = abi_array.shape
-    assert nl == nc, 'The supplied radiance array does not have an equal number of lines %s and columns %s' % (nl, nc)
+    assert nl == nc, (
+        "The supplied radiance array does not have an equal number of lines %s and columns %s"
+        % (nl, nc)
+    )
 
     res_microrad = L1B_NPIXELS_RESOLUTIONS[nl]
     xres_rad = res_microrad * 1e-6
     yres_rad = -xres_rad
     res_km = L1B_RESOLUTIONS_MICRORAD_DICT[res_microrad]
 
-    x_offset = (-FD_FOV_RAD / 2) - (xres_rad / 2)  # the x offset is - half the field of view minus half resolution,
+    x_offset = (-FD_FOV_RAD / 2) - (
+        xres_rad / 2
+    )  # the x offset is - half the field of view minus half resolution,
     y_offset = (FD_FOV_RAD / 2) - (yres_rad / 2)
     # convert radians to latlon
     lrad, crad = ll2rad(lon=lon, lat=lat, lon0=lon0)
@@ -370,7 +345,7 @@ def get_nav_coeff(res_km=None):
     res_mrad = L1B_RESOLUTIONS_KM_DICT[res_km]
     res_rad = res_mrad * 1e-6
     offset = int(np.round(FD_FOV_RAD / res_rad))
-    fac = int(np.round(np.deg2rad(2 ** 16 / res_rad)))
+    fac = int(np.round(np.deg2rad(2**16 / res_rad)))
     # fac = np.deg2rad(2**16/res_rad)
     return offset // 2, fac
 
@@ -534,13 +509,25 @@ def create_shared_ndarray(shape, dtype, manager):
     :return: initialized shareable multiprocessing.Array object"""
     element_count = reduce(lambda x, y: x * y, shape)
     element_size = dtype(0).nbytes
-    shareable_array = manager.Array(typecode_or_type=ctypes.c_byte, size_or_initializer=element_size * element_count,
-                                    lock=True)
+    shareable_array = manager.Array(
+        typecode_or_type=ctypes.c_byte,
+        size_or_initializer=element_size * element_count,
+        lock=True,
+    )
     return shareable_array
 
 
-def rr(shared_y_array=None, shared_x_array=None, sl=None, el=None, sc=None, ec=None, from_ssp=None, to_ssp=None,
-       res_km=None, ):
+def rr(
+    shared_y_array=None,
+    shared_x_array=None,
+    sl=None,
+    el=None,
+    sc=None,
+    ec=None,
+    from_ssp=None,
+    to_ssp=None,
+    res_km=None,
+):
     x_arr = np.frombuffer(shared_x_array.get_obj())
     y_arr = np.frombuffer(shared_y_array.get_obj())
     xseg = x_arr[sc:ec]
@@ -565,14 +552,18 @@ def local_ndarray_from_shareable(shareable_array, shape, dtype):
 
     else:
         element_count = reduce(lambda x, y: x * y, shape)
-        local_ndarray = np.frombuffer(shareable_array.get_obj(), dtype=dtype, count=element_count)
+        local_ndarray = np.frombuffer(
+            shareable_array.get_obj(), dtype=dtype, count=element_count
+        )
         local_ndarray = local_ndarray.reshape(shape)
         return local_ndarray
 
 
-def repr_ssp2ssp(abi_array=None, from_ssp=None, to_ssp=None, use_chunks=True, use_mp=True):
+def repr_ssp2ssp(
+    abi_array=None, from_ssp=None, to_ssp=None, use_chunks=True, use_mp=True
+):
     nl, nc = abi_array.shape
-    assert nl == nc, 'Input array has different dimensions %s %s' % (nl, nc)
+    assert nl == nc, "Input array has different dimensions %s %s" % (nl, nc)
     out_geos_data = np.zeros((nl, nc), dtype=abi_array.dtype)
     out_geos_data[:] = 0
 
@@ -580,7 +571,6 @@ def repr_ssp2ssp(abi_array=None, from_ssp=None, to_ssp=None, use_chunks=True, us
     res_km = L1B_NPIXELS_RESOLUTIONS_KM[nl]
     nsegs = 4
     seg_len = nl // nsegs
-    print seg_len
     y, x = get_radian_arrays(res_km)
     if not use_chunks:
 
@@ -591,8 +581,6 @@ def repr_ssp2ssp(abi_array=None, from_ssp=None, to_ssp=None, use_chunks=True, us
 
     else:
         if use_mp:
-            print 'mp'
-
             l = list()
             x_sh = mp.Array(ctypes.c_byte, x.nbytes)
             xx = np.frombuffer(x_sh.get_obj(), dtype=x.dtype, count=x.size)
@@ -608,15 +596,25 @@ def repr_ssp2ssp(abi_array=None, from_ssp=None, to_ssp=None, use_chunks=True, us
                 for j in range(nsegs):
                     sc = j * seg_len
                     ec = sc + seg_len
-                    kwargs = {'shared_y_array': y_sh, 'shared_x_array': x_sh, 'sl': sl, 'el': el, 'sc': sc, 'ec': ec,
-                              'from_ssp': from_ssp, 'to_ssp': to_ssp, 'res_km': res_km, 'nl': nl, 'nc': nc}
+                    kwargs = {
+                        "shared_y_array": y_sh,
+                        "shared_x_array": x_sh,
+                        "sl": sl,
+                        "el": el,
+                        "sc": sc,
+                        "ec": ec,
+                        "from_ssp": from_ssp,
+                        "to_ssp": to_ssp,
+                        "res_km": res_km,
+                        "nl": nl,
+                        "nc": nc,
+                    }
                     l.append(pool.apply_async(rr, kwds=kwargs))
 
             for __e in l:
                 l, c, sl, el, sc, ec = __e.get()
                 m = (l < nl) & (l >= 0) & (c < nc) & (c >= 0)
                 out_geos_data[sl:el, sc:ec][m] = abi_array[l[m], c[m]]  # pus
-
 
         else:
             for i in range(nsegs):
@@ -640,8 +638,10 @@ def repr_ssp2ssp(abi_array=None, from_ssp=None, to_ssp=None, use_chunks=True, us
                         b[:] = np.nan
                         b[~m] = a
 
-                        d = {'b': b, 'g': g, '~m': ~m}
-                        display(d, )
+                        d = {"b": b, "g": g, "~m": ~m}
+                        display(
+                            d,
+                        )
                     out_geos_data[sl:el, sc:ec][~m] = a
     return out_geos_data
 

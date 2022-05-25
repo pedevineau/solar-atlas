@@ -26,7 +26,10 @@ from utils import *
 from utils import np, get_nb_slots_per_day, apply_rolling_on_time
 from utils import typical_outputs, typical_temperatures_forecast, typical_land_mask
 from utils import typical_time_step
-from visible_predictors import get_bright_negative_variability_5d, get_bright_positive_variability_5d
+from visible_predictors import (
+    get_bright_negative_variability_5d,
+    get_bright_positive_variability_5d,
+)
 from visualize import visualize_map_time
 
 
@@ -35,7 +38,7 @@ def threshold_test_positive(observed, forecast, thresh):
 
 
 def gross_cloud_test(lir_observed, lir_forecast):
-    '''
+    """
     Hocking (2011)
     A strong anomaly between temperature observed by satellite and forecast temperature is nothing but a cloud
     Warning: here, the observed brightness temperature is most of the time underestimated by
@@ -45,29 +48,30 @@ def gross_cloud_test(lir_observed, lir_forecast):
     :param lir_forecast: output of "expected brightness temperature" function whose inputs are
      the forecast temperature in kelvin and the epsilon parameter
     :return:
-    '''
+    """
     thresh = compute_gross_cloud_threshold()
     return threshold_test_positive(lir_forecast, lir_observed, thresh)
 
 
 def lir_fir_test(lir_observed, fir_observed, dlw=12.3 - 10.3):
-    '''
+    """
     Currently not used (replaced by the cloud epsilon test)
     :param lir_observed:
     :param fir_observed:
     :param dlw:
     :return:
-    '''
+    """
     # the test can be apply over any type of surface
     # mostly for semi-transparent clouds, like cirrus. Quite blind to opaque thick clouds
     h = 6.626 * 10 ** (-34)
     k = 1.38 * 10 ** (-23)
-    c = 3. * 10 ** 8
+    c = 3.0 * 10**8
     K = h * c / (k * dlw * 10 ** (-6))
     thresh_epsilon = compute_epsilon_threshold()
     thresh_epsilon_maximal_lir = compute_epsilon_maximal_lir_threshold()
-    return (exp(-K * (1. / fir_observed - 1. / lir_observed)) < thresh_epsilon) & (
-            lir_observed < thresh_epsilon_maximal_lir)
+    return (exp(-K * (1.0 / fir_observed - 1.0 / lir_observed)) < thresh_epsilon) & (
+        lir_observed < thresh_epsilon_maximal_lir
+    )
 
 
 def perso_cli_test(mir_observed, fir_observed):
@@ -76,20 +80,25 @@ def perso_cli_test(mir_observed, fir_observed):
 
 
 def low_cloud_test_sun_glint(cos_zen, vis, mir, lir, mask):
-    cli410 = get_cloud_index(cos_zen, mir, lir, mask, 'mu-normalization')
+    cli410 = get_cloud_index(cos_zen, mir, lir, mask, "mu-normalization")
     thresh_mir_sunglint = compute_mir_sun_glint_threshold()
     thresh_vis_sunglint = compute_vis_sun_glint_threshold()
-    return day_test(cos_zen) & (mir < thresh_mir_sunglint) & (vis > thresh_vis_sunglint) & (cli410 > 0) & \
-           (vis > (1 / 0.15) * cli410)
+    return (
+        day_test(cos_zen)
+        & (mir < thresh_mir_sunglint)
+        & (vis > thresh_vis_sunglint)
+        & (cli410 > 0)
+        & (vis > (1 / 0.15) * cli410)
+    )
 
 
 def texture_test(lir, mask=None):
-    '''
+    """
     Test to find broken clouds over lands or sea (but not over clouds). WARNING: this test is time consuming
     :param lir:
     :param mask:
     :return:
-    '''
+    """
     # Le Gleau 2006 (simplified)
     # eliminate pixels near sea
     thresh_coherence_lir_land = compute_lir_texture_land_threshold()
@@ -104,7 +113,7 @@ def texture_test(lir, mask=None):
 
 
 def thick_cloud_test(is_land, vis, lir, cli_mu, cli_epsilon, quick_test=False):
-    '''
+    """
     Probably the most important test
     :param is_land:
     :param lir:
@@ -112,24 +121,29 @@ def thick_cloud_test(is_land, vis, lir, cli_mu, cli_epsilon, quick_test=False):
     :param cli_epsilon:
     :param quick_test
     :return:
-    '''
+    """
     if quick_test:
         return opaque_cloud_test(cli_mu, cli_epsilon)
     else:
-        not_coast = decrease_connectivity_2(decrease_connectivity_2(is_land)) | \
-                    decrease_connectivity_2(decrease_connectivity_2(~is_land))
-        mask = (cli_mu == -10)
+        not_coast = decrease_connectivity_2(
+            decrease_connectivity_2(is_land)
+        ) | decrease_connectivity_2(decrease_connectivity_2(~is_land))
+        mask = cli_mu == -10
 
         # WARNING: ERROR IN THE NEXT LINES, TO BE FIXED !!
         thresh_coherence_lir_land = compute_lir_texture_land_threshold()
 
         sd_lir = texture_test(lir, mask)
-        heterogeneous = (sd_lir > thresh_coherence_lir_land)
+        heterogeneous = sd_lir > thresh_coherence_lir_land
 
-        cli_epsilon_var = get_cloud_index_positive_variability_7d(sd_lir, mask, read_satellite_step())
+        cli_epsilon_var = get_cloud_index_positive_variability_7d(
+            sd_lir, mask, read_satellite_step()
+        )
         thresh_epsilon_var = 0.2
         del sd_lir
-        broken_cloud_not_coasts = not_coast & heterogeneous & (cli_epsilon_var > thresh_epsilon_var)
+        broken_cloud_not_coasts = (
+            not_coast & heterogeneous & (cli_epsilon_var > thresh_epsilon_var)
+        )
         del cli_epsilon_var
         opaque = opaque_cloud_test(cli_mu, cli_epsilon)
         fog = opaque & (vis > 0.5)
@@ -138,14 +152,16 @@ def thick_cloud_test(is_land, vis, lir, cli_mu, cli_epsilon, quick_test=False):
 
 
 def broken_cloud_test(opaque_texture_index, mask):
-    '''
+    """
 
     :param opaque_texture_index:
     :param mask:
     :return:
-    '''
+    """
     thresh_daily_variability_lir_land = compute_lir_texture_land_variability_threshold()
-    var = get_cloud_index_positive_variability_7d(opaque_texture_index, mask, typical_time_step())
+    var = get_cloud_index_positive_variability_7d(
+        opaque_texture_index, mask, typical_time_step()
+    )
     return opaque_texture_index & (var > thresh_daily_variability_lir_land)
 
 
@@ -157,26 +173,32 @@ def opaque_cloud_test(cli_mu_observed, cli_espilon_observed):
 
 
 def gross_snow_test(lir_observed, lir_forecast):
-    '''
+    """
     Hocking (2011) - Duerr (2006)
     snow (or ice) is supposed to be colder than snow-free pixels under clear-sky conditions. However, this cold snow
     on the ground is still supposed to appear warmer than a potential cold icy cloud
     :param lir_observed:
     :param lir_forecast:
     :return:
-    '''
-    thresh_gross = compute_gross_cloud_threshold()  # coldness which would be due to clouds if there were clouds
-    thresh_snow = compute_gross_snow_threshold()  # coldness only due to the presence of snow on the ground
-    return threshold_test_positive(lir_observed, lir_forecast, - thresh_gross - thresh_snow)
+    """
+    thresh_gross = (
+        compute_gross_cloud_threshold()
+    )  # coldness which would be due to clouds if there were clouds
+    thresh_snow = (
+        compute_gross_snow_threshold()
+    )  # coldness only due to the presence of snow on the ground
+    return threshold_test_positive(
+        lir_observed, lir_forecast, -thresh_gross - thresh_snow
+    )
 
 
 def static_temperature_test(lir_observed):
-    '''
+    """
     snow (or ice) is supposed to be colder than snow-free pixels under clear-sky conditions
     TODO: the threshold should depends on local factors
     :param lir_observed: channel fir
     :return:
-    '''
+    """
     thresh_temperature = compute_thresh_temperature()
     return lir_observed < thresh_temperature
 
@@ -185,18 +207,26 @@ def dynamic_temperature_test(lir_observed, temperature_mask, satellite_step, slo
     s = shape(lir_observed)
     to_return = empty_like(lir_observed, dtype=bool)
     lw_nm = {
-        'GOES16': 10.3 * 10 ** (-6),
-        'H08': 12.4 * 10 ** (-6),
+        "GOES16": 10.3 * 10 ** (-6),
+        "H08": 12.4 * 10 ** (-6),
     }[read_satellite_name()]
     for slot in range(s[0]):
         try:
             nearest_temp_meas = int(0.5 + satellite_step * slot_step * slot / 60)
-            to_return[slot] = (expected_brightness_temperature_only_emissivity(
-                temperature_mask[nearest_temp_meas] + 273.15, lw_nm=lw_nm, eps=0.85) - lir_observed[slot]) > 5 + 3
+            to_return[slot] = (
+                expected_brightness_temperature_only_emissivity(
+                    temperature_mask[nearest_temp_meas] + 273.15, lw_nm=lw_nm, eps=0.85
+                )
+                - lir_observed[slot]
+            ) > 5 + 3
         except IndexError:
             nearest_temp_meas = int(satellite_step * slot_step * slot / 60)
-            to_return[slot] = (expected_brightness_temperature_only_emissivity(
-                temperature_mask[nearest_temp_meas] + 273.5, lw_nm=lw_nm, eps=0.85) - lir_observed[slot]) > 5 + 3
+            to_return[slot] = (
+                expected_brightness_temperature_only_emissivity(
+                    temperature_mask[nearest_temp_meas] + 273.5, lw_nm=lw_nm, eps=0.85
+                )
+                - lir_observed[slot]
+            ) > 5 + 3
     return to_return
 
 
@@ -231,115 +261,120 @@ def cli_stability(cloud_var):
 
 
 def epsilon_transparent_cloud_test(cloud_epsilon):
-    '''
+    """
     epsilon test (PED 2018)
     :param cloud_epsilon:
     :return:
-    '''
+    """
     # epsilon test (PED 2018)
     thresh = compute_cloud_epsilon_threshold()
     return cloud_epsilon > thresh
 
 
 def dawn_day_test(angles):
-    '''
+    """
     to avoid twilight and night
     :param angles:
     :return: boolean array. True when test is completed
-    '''
+    """
 
-    thresh_inf_radians = 0. / 180. * pi
-    thresh_sup_radians = 85. / 180. * pi
+    thresh_inf_radians = 0.0 / 180.0 * pi
+    thresh_sup_radians = 85.0 / 180.0 * pi
     return (angles > thresh_inf_radians) & (angles < thresh_sup_radians)
 
 
 def day_test(angles):
-    '''
+    """
     to avoid negative or low zenith angles
     :param angles:
     :return: boolean array. True when test is completed
-    '''
+    """
 
-    thresh_inf_radians = 15. / 180. * pi
-    thresh_sup_radians = 85. / 180. * pi
+    thresh_inf_radians = 15.0 / 180.0 * pi
+    thresh_sup_radians = 85.0 / 180.0 * pi
     return (angles > thresh_inf_radians) & (angles < thresh_sup_radians)
 
 
 def night_test(angles):
-    '''
+    """
     to avoid night
     :param angles:
     :return: boolean array. True when test is completed
-    '''
-    thresh_inf_radians = 0. / 180. * pi
-    thresh_sup_radians = 90. / 180. * pi
+    """
+    thresh_inf_radians = 0.0 / 180.0 * pi
+    thresh_sup_radians = 90.0 / 180.0 * pi
     return (angles > thresh_inf_radians) & (angles < thresh_sup_radians)
 
 
 def twilight_test(angles):
-    '''
+    """
     to select twilight (80 <= theta < 90)
     :param angles:
     :return: boolean array. True when test is completed
-    '''
-    thresh_inf_radians = 80. / 180. * pi
-    thresh_sup_radians = 90. / 180. * pi
+    """
+    thresh_inf_radians = 80.0 / 180.0 * pi
+    thresh_sup_radians = 90.0 / 180.0 * pi
     return (angles > thresh_inf_radians) & (angles < thresh_sup_radians)
 
 
 def glint_angle_temporal_test(is_land, specular_angles, glint_angles):
-    thresh1_glint_radians = 25. / 180. * pi
-    thresh2_glint_radians = 40. / 180. * pi
-    thresh_specular_radians = 50. / 180. * pi
-    return (glint_angles > thresh1_glint_radians) | ((glint_angles > thresh2_glint_radians) & ~is_land &
-                                                     (specular_angles > thresh_specular_radians))
+    thresh1_glint_radians = 25.0 / 180.0 * pi
+    thresh2_glint_radians = 40.0 / 180.0 * pi
+    thresh_specular_radians = 50.0 / 180.0 * pi
+    return (glint_angles > thresh1_glint_radians) | (
+        (glint_angles > thresh2_glint_radians)
+        & ~is_land
+        & (specular_angles > thresh_specular_radians)
+    )
 
 
 def satellite_angle_temporal_test(specular_angles, satellite_angles):
-    thresh1_specular_radians = 25. / 180. * pi
-    thresh2_specular_radians = 50. / 180. * pi
-    thresh_satellite_radians = 70. / 180. * pi
-    return (satellite_angles < thresh_satellite_radians) & ((specular_angles < thresh1_specular_radians) |
-                                                            (specular_angles > thresh2_specular_radians))
+    thresh1_specular_radians = 25.0 / 180.0 * pi
+    thresh2_specular_radians = 50.0 / 180.0 * pi
+    thresh_satellite_radians = 70.0 / 180.0 * pi
+    return (satellite_angles < thresh_satellite_radians) & (
+        (specular_angles < thresh1_specular_radians)
+        | (specular_angles > thresh2_specular_radians)
+    )
 
 
 def solar_angle_temporal_test(angles):
-    '''
+    """
     to select twilight (80 <= theta < 90)
     :param angles:
     :return: boolean array. True when test is completed
-    '''
-    thresh_inf_radians = 75. / 180. * pi
-    thresh_sup_radians = 89. / 180. * pi
+    """
+    thresh_inf_radians = 75.0 / 180.0 * pi
+    thresh_sup_radians = 89.0 / 180.0 * pi
     return (angles > thresh_inf_radians) & (angles < thresh_sup_radians)
 
 
 def specular_satellite_test(specular_angles):
-    '''
+    """
     to avoid severe glint (low specular angles) and edge of the specular disk (high specular angles)
     :param specular_angles:
     :return: boolean array. True when test is completed
-    '''
-    angles_in_degree = 180. / pi * specular_angles
+    """
+    angles_in_degree = 180.0 / pi * specular_angles
     return (angles_in_degree > 15) & (angles_in_degree < 70)
 
 
 def visible_snow_test(vis):
-    '''
+    """
     to avoid shadows being mistaken for snow and ice
     :param vis: available visible channel (6*10^2 or 8*10^2 nm)
     :return: boolean array. True when test is completed
-    '''
+    """
     thresh = compute_vis_snow_threshold()
     return vis > thresh
 
 
 def broad_visible_snow_test(vis):
-    '''
+    """
     broad test accepting more false positive than the visible snow test
     :param vis: available visible channel (6*10^2 or 8*10^2 nm)
     :return: boolean array. True when test is completed
-    '''
+    """
     thresh = compute_broad_vis_snow_threshold()
     return vis > thresh
 
@@ -361,7 +396,7 @@ def get_borders_connectivity_2(to_expand):
 def angular_factor(angles):
     po = power(cos(angles), 0.3)
     po[po < 0.04] = 0.04
-    return 1. / po
+    return 1.0 / po
 
 
 def land_visible_test(is_land, vis, clear_sky_vis):
@@ -376,12 +411,16 @@ def sea_coasts_cloud_test(angles, is_land, vis_observed):
     # expand is_land because of high visibility of coast pixels
     is_land_expanded = expand_connectivity_2(is_land)
     coasts = is_land_expanded & ~is_land
-    return (~is_land_expanded & (vis_observed > coef_sea * factors)) | (coasts & (vis_observed > coef_coasts * factors))
+    return (~is_land_expanded & (vis_observed > coef_sea * factors)) | (
+        coasts & (vis_observed > coef_coasts * factors)
+    )
 
 
 def thin_cirrus_test(is_land, lir_observed, fir_observed, lir_forecast, fir_forecast):
     thresh = compute_thin_cirrus_threshold()
-    supposed_cirrus = threshold_test_positive(lir_observed - fir_observed, lir_forecast - fir_forecast, thresh)
+    supposed_cirrus = threshold_test_positive(
+        lir_observed - fir_observed, lir_forecast - fir_forecast, thresh
+    )
     # additional test to avoid warm lands
     return supposed_cirrus & ((lir_observed < 305) | ~is_land)
 
@@ -390,27 +429,57 @@ def stability_test(channel_observed, past_channel_observed, thresh):
     return abs(channel_observed - past_channel_observed) < thresh
 
 
-def thermal_stability_test(is_land, lir_observed, fir_observed, past_lir_observed, past_fir_observed):
+def thermal_stability_test(
+    is_land, lir_observed, fir_observed, past_lir_observed, past_fir_observed
+):
     thresh_lir_fir = compute_evolution_lir_fir_threshold()
     land_thresh_lir = compute_land_evolution_lir()
     sea_thresh_lir = compute_sea_evolution_lir()
-    return (is_land | stability_test(lir_observed, past_lir_observed, land_thresh_lir)) | \
-           (~is_land | stability_test(lir_observed, past_lir_observed, sea_thresh_lir)) | \
-           stability_test(lir_observed - fir_observed, past_lir_observed - past_fir_observed, thresh_lir_fir)
+    return (
+        (is_land | stability_test(lir_observed, past_lir_observed, land_thresh_lir))
+        | (~is_land | stability_test(lir_observed, past_lir_observed, sea_thresh_lir))
+        | stability_test(
+            lir_observed - fir_observed,
+            past_lir_observed - past_fir_observed,
+            thresh_lir_fir,
+        )
+    )
 
 
-def flagged_cloud_and_thermally_stable(is_land, dawn_day_clouds, lir_observed, fir_observed,
-                                       past_lir_observed, past_fir_observed):
-    number_slots_45_min = 45. / read_satellite_step()
-    number_slots_1_hour = 60. / read_satellite_step()
-    return roll(dawn_day_clouds, number_slots_45_min) & roll(dawn_day_clouds, number_slots_1_hour) & \
-           thermal_stability_test(is_land, lir_observed, fir_observed, past_lir_observed, past_fir_observed)
+def flagged_cloud_and_thermally_stable(
+    is_land,
+    dawn_day_clouds,
+    lir_observed,
+    fir_observed,
+    past_lir_observed,
+    past_fir_observed,
+):
+    number_slots_45_min = 45.0 / read_satellite_step()
+    number_slots_1_hour = 60.0 / read_satellite_step()
+    return (
+        roll(dawn_day_clouds, number_slots_45_min)
+        & roll(dawn_day_clouds, number_slots_1_hour)
+        & thermal_stability_test(
+            is_land, lir_observed, fir_observed, past_lir_observed, past_fir_observed
+        )
+    )
 
 
-def twilight_temporal_low_cloud_test(is_land, dawn_day_clouds, cirrus_clouds, angles, specular_angles, satellite_angles,
-                                     glint_angles, vis_observed, lir_observed, fir_observed,
-                                     past_lir_observed, past_fir_observed):
-    '''
+def twilight_temporal_low_cloud_test(
+    is_land,
+    dawn_day_clouds,
+    cirrus_clouds,
+    angles,
+    specular_angles,
+    satellite_angles,
+    glint_angles,
+    vis_observed,
+    lir_observed,
+    fir_observed,
+    past_lir_observed,
+    past_fir_observed,
+):
+    """
     Derrien & Le Gleau (2007) as quoted by Hocking, Francis & Saunders (2011)
     :param is_land:
     :param dawn_day_clouds:
@@ -425,7 +494,7 @@ def twilight_temporal_low_cloud_test(is_land, dawn_day_clouds, cirrus_clouds, an
     :param past_lir_observed:
     :param past_fir_observed:
     :return:
-    '''
+    """
     # exclude pixels identified as:
     # - current snow (to avoid false positive)
     # - former cirrus (not low cloud)
@@ -435,13 +504,25 @@ def twilight_temporal_low_cloud_test(is_land, dawn_day_clouds, cirrus_clouds, an
     found_clouds = zeros_like(angles, dtype=bool)
     for slot in range(shape(angles)[0]):
         if any(twilight[slot]):
-            seeds = flagged_cloud_and_thermally_stable(is_land, dawn_day_clouds, lir_observed,
-                                                       fir_observed, past_lir_observed,
-                                                       past_fir_observed)[slot]
+            seeds = flagged_cloud_and_thermally_stable(
+                is_land,
+                dawn_day_clouds,
+                lir_observed,
+                fir_observed,
+                past_lir_observed,
+                past_fir_observed,
+            )[slot]
             seeds = remove_cirrus(seeds, cirrus_clouds[slot])
-            found_clouds[slot] = grow_seeds(is_land, seeds, angles[slot], specular_angles[slot],
-                                            satellite_angles[slot], glint_angles[slot], vis_observed[slot],
-                                            lir_observed[slot])
+            found_clouds[slot] = grow_seeds(
+                is_land,
+                seeds,
+                angles[slot],
+                specular_angles[slot],
+                satellite_angles[slot],
+                glint_angles[slot],
+                vis_observed[slot],
+                lir_observed[slot],
+            )
     return found_clouds
 
 
@@ -464,16 +545,16 @@ def get_local_avg(seeds, channel):
 
 
 def seeds_vis_test(vis, vis_avg):
-    '''
+    """
     Devoted to "cloud twilight expansion" which is NOT computed now (probably not useful)
-    '''
+    """
     return vis > 1.05 * vis_avg
 
 
 def seeds_lir_test(lir, lir_avg):
-    '''
+    """
     Devoted to "cloud twilight expansion" which is NOT computed now (probably not useful)
-    '''
+    """
     return ((lir_avg - 5.0) < lir) & (lir < (lir_avg + 0.5))
 
 
@@ -481,11 +562,13 @@ def keep_only_3_3_square(seeds):
     return minimum_filter(seeds, size=3)
 
 
-def grow_seeds(seeds, is_land, angles, specular_angles, satellite_angles, glint_angles, vis, lir):
-    '''
+def grow_seeds(
+    seeds, is_land, angles, specular_angles, satellite_angles, glint_angles, vis, lir
+):
+    """
     Devoted to "cloud twilight expansion" which is NOT computed now (probably not useful)
     :param seeds: credible clouds which has been identified during the previous "twilight expansion" step
-    '''
+    """
 
     try_growing = True
     seeds = keep_only_3_3_square(seeds)
@@ -493,8 +576,14 @@ def grow_seeds(seeds, is_land, angles, specular_angles, satellite_angles, glint_
         borders = get_borders_connectivity_2(seeds)
         vis_avg = get_local_avg(seeds, vis)
         lir_avg = get_local_avg(seeds, lir)
-        new_found_seeds = borders & seeds_lir_test(lir, lir_avg) & seeds_vis_test(vis, vis_avg) & \
-                          seeds_angular_tests(is_land, angles, specular_angles, satellite_angles, glint_angles)
+        new_found_seeds = (
+            borders
+            & seeds_lir_test(lir, lir_avg)
+            & seeds_vis_test(vis, vis_avg)
+            & seeds_angular_tests(
+                is_land, angles, specular_angles, satellite_angles, glint_angles
+            )
+        )
         if array(new_found_seeds).sum() == 0:
             try_growing = False
         seeds = seeds | new_found_seeds
@@ -504,36 +593,69 @@ def grow_seeds(seeds, is_land, angles, specular_angles, satellite_angles, glint_
 def broad_ndsi_test(ndsi_observed, cos_scat=None):
     thresh = compute_broad_ndsi_snow_threshold()
 
-    return segmentation('watershed-3d', ndsi_observed, thresh_method='static', static=thresh) | \
-           ndsi_test(ndsi_observed, cos_scat)
+    return segmentation(
+        "watershed-3d", ndsi_observed, thresh_method="static", static=thresh
+    ) | ndsi_test(ndsi_observed, cos_scat)
 
 
-def seeds_angular_tests(is_land, angles, specular_angles, satellite_angles, glint_angles):
-    '''
+def seeds_angular_tests(
+    is_land, angles, specular_angles, satellite_angles, glint_angles
+):
+    """
     Devoted to "cloud twilight expansion" which is NOT computed now (probably not useful)
-    '''
-    return specular_satellite_test(specular_angles) & solar_angle_temporal_test(angles) & \
-           glint_angle_temporal_test(is_land, specular_angles, glint_angles) & \
-           satellite_angle_temporal_test(specular_angles, satellite_angles)
+    """
+    return (
+        specular_satellite_test(specular_angles)
+        & solar_angle_temporal_test(angles)
+        & glint_angle_temporal_test(is_land, specular_angles, glint_angles)
+        & satellite_angle_temporal_test(specular_angles, satellite_angles)
+    )
 
 
-def exhaustive_dawn_day_cloud_test(angles, is_land, cli_mu_observed, cli_mu_var_observed, cli_epsilon_observed,
-                                   vis_observed, lir_observed, fir_observed, lir_forecast, fir_forecast, quick_test):
-    '''
+def exhaustive_dawn_day_cloud_test(
+    angles,
+    is_land,
+    cli_mu_observed,
+    cli_mu_var_observed,
+    cli_epsilon_observed,
+    vis_observed,
+    lir_observed,
+    fir_observed,
+    lir_forecast,
+    fir_forecast,
+    quick_test,
+):
+    """
     Function detecting clouds which should be called when you have 5 channels
-    '''
+    """
     return dawn_day_test(angles) & (
-            thick_cloud_test(is_land, vis_observed, lir_observed, cli_mu_observed, cli_epsilon_observed,
-                             quick_test) |
-            epsilon_transparent_cloud_test(cli_epsilon_observed) |
-            sea_coasts_cloud_test(angles, is_land, vis_observed) |
-            gross_cloud_test(lir_observed, lir_forecast) |
-            thin_cirrus_test(is_land, lir_observed, fir_observed, lir_forecast, fir_forecast))
+        thick_cloud_test(
+            is_land,
+            vis_observed,
+            lir_observed,
+            cli_mu_observed,
+            cli_epsilon_observed,
+            quick_test,
+        )
+        | epsilon_transparent_cloud_test(cli_epsilon_observed)
+        | sea_coasts_cloud_test(angles, is_land, vis_observed)
+        | gross_cloud_test(lir_observed, lir_forecast)
+        | thin_cirrus_test(
+            is_land, lir_observed, fir_observed, lir_forecast, fir_forecast
+        )
+    )
 
 
-def partial_dawn_day_cloud_test(angles, is_land, cli_mu_observed, cli_mu_var_observed, vis_observed, fir_observed,
-                                fir_forecast):
-    '''
+def partial_dawn_day_cloud_test(
+    angles,
+    is_land,
+    cli_mu_observed,
+    cli_mu_var_observed,
+    vis_observed,
+    fir_observed,
+    fir_forecast,
+):
+    """
     Function detecting clouds which should be called when you have only 4 channels
     :param angles: see below
     :param is_land: see below
@@ -543,15 +665,25 @@ def partial_dawn_day_cloud_test(angles, is_land, cli_mu_observed, cli_mu_var_obs
     :param fir_observed: channel fir
     :param fir_forecast: estimation of expected channel fir from actual temperature forecast
     :return: cloud mask
-    '''
-    return dawn_day_test(angles) & ((cli_water_cloud_test(cli_mu_observed) & cli_stability(cli_mu_var_observed)) |
-                                    sea_coasts_cloud_test(angles, is_land, vis_observed)
-                                    | gross_cloud_test(fir_observed, fir_forecast))
+    """
+    return dawn_day_test(angles) & (
+        (cli_water_cloud_test(cli_mu_observed) & cli_stability(cli_mu_var_observed))
+        | sea_coasts_cloud_test(angles, is_land, vis_observed)
+        | gross_cloud_test(fir_observed, fir_forecast)
+    )
 
 
-def exhaustive_dawn_day_snow_test(angles, is_land, ndsi_observed, cli_mu_observed, cli_epsilon_observed, vis_observed,
-                                  lir_observed, lir_forecast):
-    '''
+def exhaustive_dawn_day_snow_test(
+    angles,
+    is_land,
+    ndsi_observed,
+    cli_mu_observed,
+    cli_epsilon_observed,
+    vis_observed,
+    lir_observed,
+    lir_forecast,
+):
+    """
     Function detecting snow which should be called when you have 5 channels
     :param angles: matrix time*lat*lon filled with solar zenith angles
     :param is_land: mask where big lakes or sea = False, and lands = True
@@ -562,15 +694,23 @@ def exhaustive_dawn_day_snow_test(angles, is_land, ndsi_observed, cli_mu_observe
     :param lir_observed: channel lir
     :param lir_forecast: estimation of expected  channel lir from actual temperature forecast
     :return: snow mask
-    '''
-    snow_dawn_day = (dawn_day_test(angles) & is_land & ndsi_test(ndsi_observed) & cli_snow_test(cli_mu_observed) &
-                     gross_snow_test(lir_observed, lir_forecast) & broad_cirrus_snow_test(cli_epsilon_observed) &
-                     visible_snow_test(vis_observed))
+    """
+    snow_dawn_day = (
+        dawn_day_test(angles)
+        & is_land
+        & ndsi_test(ndsi_observed)
+        & cli_snow_test(cli_mu_observed)
+        & gross_snow_test(lir_observed, lir_forecast)
+        & broad_cirrus_snow_test(cli_epsilon_observed)
+        & visible_snow_test(vis_observed)
+    )
     return snow_dawn_day
 
 
-def partial_dawn_day_snow_test(angles, is_land, ndsi_observed, cli_observed, vis_observed):
-    '''
+def partial_dawn_day_snow_test(
+    angles, is_land, ndsi_observed, cli_observed, vis_observed
+):
+    """
     Function detecting snow which should be called when you have only 4 channels
     :param angles: matrix time*lat*lon filled with solar zenith angles
     :param is_land: mask where big lakes or sea = False, and lands = True
@@ -578,9 +718,14 @@ def partial_dawn_day_snow_test(angles, is_land, ndsi_observed, cli_observed, vis
     :param cli_observed: basic cloud index computed from channels channels fir 124 (or lir 108 if available) and mir 390
     :param vis_observed: visible channel 064
     :return: boolean matrix (time, latitude, longitude) which is True in presence of snow
-    '''
-    snow_dawn_day = (dawn_day_test(angles) & is_land & ndsi_test(ndsi_observed) & cli_snow_test(cli_observed) &
-                     visible_snow_test(vis_observed))
+    """
+    snow_dawn_day = (
+        dawn_day_test(angles)
+        & is_land
+        & ndsi_test(ndsi_observed)
+        & cli_snow_test(cli_observed)
+        & visible_snow_test(vis_observed)
+    )
     return snow_dawn_day
 
 
@@ -589,105 +734,191 @@ def is_lir_available():
 
 
 def broad_exhaustive_snow_test(angles, is_land, ndsi_observed, vis_observed):
-    return dawn_day_test(angles) & is_land & broad_ndsi_test(ndsi_observed) & broad_visible_snow_test(vis_observed)
+    return (
+        dawn_day_test(angles)
+        & is_land
+        & broad_ndsi_test(ndsi_observed)
+        & broad_visible_snow_test(vis_observed)
+    )
 
 
 def suspect_snow_classified_pixels(snow, ndsi, mask_input):
-    '''
+    """
     the "suspect snow" test flagged as cloud the pixels which were supposed to be snowy
      - because they pass the adequate test - but whose ndsi is strangely high
     :param snow:
     :param ndsi:
     :param mask_input:
     :return: boolean matrix (time, latitude, longitude) which is True if the pixel is snowy
-    '''
-    return snow & ((get_bright_positive_variability_5d(ndsi, mask_input, typical_time_step(), 1) > 0.2) |
-                   (get_bright_negative_variability_5d(ndsi, mask_input, typical_time_step(), 1) > 0.2) |
-                   (compute_variability(ndsi, mask=mask_input, abs_value=True) > 0.05))
+    """
+    return snow & (
+        (
+            get_bright_positive_variability_5d(ndsi, mask_input, typical_time_step(), 1)
+            > 0.2
+        )
+        | (
+            get_bright_negative_variability_5d(ndsi, mask_input, typical_time_step(), 1)
+            > 0.2
+        )
+        | (compute_variability(ndsi, mask=mask_input, abs_value=True) > 0.05)
+    )
 
 
 # def score(not_flagged_yet, vis):
 #     thresh = compute_land_visible_threshold()
 #     potential_clouds =
 
+
 def maybe_cloud_after_all(is_land, is_supposed_free, vis):
-    '''
+    """
     the "unstable albedo test" classifies as cloud the previously "allegedly cloud-free and snow-free pixels" which are much brighter than expected
     :param is_land:
     :param is_supposed_free:
     :param vis:
     :return: a boolean matrix which is True if the pixel passes this visible cloud test but not the previous cloud tests
-    '''
+    """
     # apply only for a few consecutive days
-    is_supposed_free_for_long = is_supposed_free & np.roll(is_supposed_free, -1) & np.roll(is_supposed_free, 2) & \
-                                is_supposed_free & np.roll(is_supposed_free, -2) & np.roll(is_supposed_free, 2)
+    is_supposed_free_for_long = (
+        is_supposed_free
+        & np.roll(is_supposed_free, -1)
+        & np.roll(is_supposed_free, 2)
+        & is_supposed_free
+        & np.roll(is_supposed_free, -2)
+        & np.roll(is_supposed_free, 2)
+    )
     (slots, lats, lons) = vis.shape
     slot_per_day = get_nb_slots_per_day(read_satellite_step(), 1)
     entire_days = slots / slot_per_day
-    assert entire_days < 11, 'please do not apply this test on strictly more than 10 days'
+    assert (
+        entire_days < 11
+    ), "please do not apply this test on strictly more than 10 days"
     vis_copy = vis.copy()
     vis_copy[~is_supposed_free_for_long] = 100
     supposed_clear_sky = np.min(
-        apply_rolling_on_time(vis_copy, 5, 'mean').reshape((entire_days, slot_per_day, lats, lons)), axis=0)
+        apply_rolling_on_time(vis_copy, 5, "mean").reshape(
+            (entire_days, slot_per_day, lats, lons)
+        ),
+        axis=0,
+    )
     del vis_copy
     vis = vis.reshape((entire_days, slot_per_day, lats, lons))
     # from quick_visualization import visualize_map_time
     # visualize_map_time(supposed_clear_sky, typical_bbox(seed))
     # visualize_map_time(is_supposed_free & land_visible_test(is_land, vis, supposed_clear_sky).reshape((slots, lats, lons)), typical_bbox())
-    return is_supposed_free & land_visible_test(is_land, vis, supposed_clear_sky).reshape((slots, lats, lons))
+    return is_supposed_free & land_visible_test(
+        is_land, vis, supposed_clear_sky
+    ).reshape((slots, lats, lons))
 
 
 def typical_static_classifier(seed=0, bypass=False, quick_test=False):
-    '''
+    """
     shortcut for demo: compute the classifier on the sample(s) defined in utils.py
     :param seed: integer equals to 0 or 1. determine which predefined sample is used
     :param bypass: boolean. If activated, returns predictors of deterministic classification (instead of its outputs)
     :param quick_test: boolean. If activated, apply
     :return: if bypass=False, returns the outputs of classification. If bypass=True, returns its main predictors
-    '''
-    zen, vis, ndsi, mask_input = typical_outputs('visible', 'ndsi', seed)
-    infrared = typical_outputs('infrared', 'channel', seed)
+    """
+    zen, vis, ndsi, mask_input = typical_outputs("visible", "ndsi", seed)
+    infrared = typical_outputs("infrared", "channel", seed)
     lands = typical_land_mask(seed)
-    is_exhaustive = (np.shape(infrared)[-1] == 3)
+    is_exhaustive = np.shape(infrared)[-1] == 3
     if is_exhaustive:
-        names = read_channels_names('infrared')
+        names = read_channels_names("infrared")
         lw_fir = float(names[0][2:5]) / 10 * 10 ** (-6)
         lw_lir = float(names[1][2:5]) / 10 * 10 ** (-6)
-        cli_mu, cli_epsilon, mask_input_cli = typical_outputs('infrared', 'cli', seed)
-        cli_default = get_cloud_index(np.cos(zen), mir=infrared[:, :, :, 2], lir=infrared[:, :, :, 1], method='default')
-        snow = exhaustive_dawn_day_snow_test(zen, lands, ndsi, cli_default, cli_epsilon, vis, infrared[:, :, :, 1],
-                                             expected_brightness_temperature_only_emissivity(
-                                                 typical_temperatures_forecast(seed), lw_nm=lw_lir, eps=0.95))
+        cli_mu, cli_epsilon, mask_input_cli = typical_outputs("infrared", "cli", seed)
+        cli_default = get_cloud_index(
+            np.cos(zen),
+            mir=infrared[:, :, :, 2],
+            lir=infrared[:, :, :, 1],
+            method="default",
+        )
+        snow = exhaustive_dawn_day_snow_test(
+            zen,
+            lands,
+            ndsi,
+            cli_default,
+            cli_epsilon,
+            vis,
+            infrared[:, :, :, 1],
+            expected_brightness_temperature_only_emissivity(
+                typical_temperatures_forecast(seed), lw_nm=lw_lir, eps=0.95
+            ),
+        )
         mask_input = mask_input | mask_input_cli
         del mask_input_cli
     else:
-        cli_default = get_cloud_index(np.cos(zen), mir=infrared[:, :, :, 1], lir=infrared[:, :, :, 0], method='default')
+        cli_default = get_cloud_index(
+            np.cos(zen),
+            mir=infrared[:, :, :, 1],
+            lir=infrared[:, :, :, 0],
+            method="default",
+        )
         snow = partial_dawn_day_snow_test(zen, lands, ndsi, cli_default, vis)
 
-    cli_var = get_cloud_index_positive_variability_7d(cli_default, definition_mask=mask_input, pre_cloud_mask=None,
-                                                      satellite_step=typical_time_step(), slot_step=1)
+    cli_var = get_cloud_index_positive_variability_7d(
+        cli_default,
+        definition_mask=mask_input,
+        pre_cloud_mask=None,
+        satellite_step=typical_time_step(),
+        slot_step=1,
+    )
     del cli_default
     if is_exhaustive:
         if bypass:
-            return zen, lands, cli_mu, cli_var, cli_epsilon, vis, infrared[:, :, :, 1], infrared[:, :, :, 0], \
-                   expected_brightness_temperature_only_emissivity(
-                       typical_temperatures_forecast(seed), lw_nm=lw_lir, eps=0.95), \
-                   expected_brightness_temperature_only_emissivity(
-                       typical_temperatures_forecast(seed), lw_nm=lw_fir, eps=0.95)
-        clouds = exhaustive_dawn_day_cloud_test(zen, lands, cli_mu, cli_var, cli_epsilon, vis, infrared[:, :, :, 1],
-                                                infrared[:, :, :, 0], expected_brightness_temperature_only_emissivity(
-                typical_temperatures_forecast(seed), lw_nm=lw_lir, eps=0.95),
-                                                expected_brightness_temperature_only_emissivity(
-                                                    typical_temperatures_forecast(seed), lw_nm=lw_fir, eps=0.95),
-                                                quick_test)
+            return (
+                zen,
+                lands,
+                cli_mu,
+                cli_var,
+                cli_epsilon,
+                vis,
+                infrared[:, :, :, 1],
+                infrared[:, :, :, 0],
+                expected_brightness_temperature_only_emissivity(
+                    typical_temperatures_forecast(seed), lw_nm=lw_lir, eps=0.95
+                ),
+                expected_brightness_temperature_only_emissivity(
+                    typical_temperatures_forecast(seed), lw_nm=lw_fir, eps=0.95
+                ),
+            )
+        clouds = exhaustive_dawn_day_cloud_test(
+            zen,
+            lands,
+            cli_mu,
+            cli_var,
+            cli_epsilon,
+            vis,
+            infrared[:, :, :, 1],
+            infrared[:, :, :, 0],
+            expected_brightness_temperature_only_emissivity(
+                typical_temperatures_forecast(seed), lw_nm=lw_lir, eps=0.95
+            ),
+            expected_brightness_temperature_only_emissivity(
+                typical_temperatures_forecast(seed), lw_nm=lw_fir, eps=0.95
+            ),
+            quick_test,
+        )
 
         del cli_epsilon, cli_mu, cli_var
     else:
-        cli_mu = get_cloud_index(np.cos(zen), mir=infrared[:, :, :, 1], lir=infrared[:, :, :, 0],
-                                 method='mu-normalization')
-        clouds = partial_dawn_day_cloud_test(zen, lands, cli_mu, cli_var, vis, infrared[:, :, :, 0],
-                                             expected_brightness_temperature_only_emissivity(
-                                                 typical_temperatures_forecast(seed), lw_nm=12.4, eps=0.95))
+        cli_mu = get_cloud_index(
+            np.cos(zen),
+            mir=infrared[:, :, :, 1],
+            lir=infrared[:, :, :, 0],
+            method="mu-normalization",
+        )
+        clouds = partial_dawn_day_cloud_test(
+            zen,
+            lands,
+            cli_mu,
+            cli_var,
+            vis,
+            infrared[:, :, :, 0],
+            expected_brightness_temperature_only_emissivity(
+                typical_temperatures_forecast(seed), lw_nm=12.4, eps=0.95
+            ),
+        )
         del cli_mu, cli_var
 
     # visualize_map_time(snow, typical_bbox(seed))
@@ -697,11 +928,18 @@ def typical_static_classifier(seed=0, bypass=False, quick_test=False):
     output[clouds] = 2
     output[suspect_snow_classified_pixels(snow, ndsi, mask_input)] = 3
     maybe_snow = broad_exhaustive_snow_test(zen, lands, ndsi, vis)
-    output[~maybe_snow & maybe_cloud_after_all(lands, ((output == 0) & ~maybe_snow), vis)] = 4
+    output[
+        ~maybe_snow & maybe_cloud_after_all(lands, ((output == 0) & ~maybe_snow), vis)
+    ] = 4
     # visualize_map_time(output, typical_bbox(seed), vmin=-1, vmax=4)
     return output
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     seed = 0
-    visualize_map_time(typical_static_classifier(quick_test=False, seed=seed), typical_bbox(seed=seed), vmin=0, vmax=5)
+    visualize_map_time(
+        typical_static_classifier(quick_test=False, seed=seed),
+        typical_bbox(seed=seed),
+        vmin=0,
+        vmax=5,
+    )

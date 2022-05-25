@@ -72,6 +72,7 @@ def compute_lir_texture_land_variability_threshold():
 def compute_vis_sea_coasts_cloud_factors(zen):
     # Inspired from Hocking (2011)
     from numpy import cos, power
+
     cos_zen = cos(zen)
     cos_zen[cos_zen < 0.03] = 0.03
     cos_zen = power(cos_zen, 0.3)
