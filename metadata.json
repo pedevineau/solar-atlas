@@ -14,31 +14,31 @@
     ],
     "indexes": {
       "visible": {
-        "dir": "/data/test_data/computed",
+        "dir": "test***/",
         "pattern": "{SATELLITE}LATLON_VISIBLE_INDEXES__TMON_{YYYY}_{mm}__SDEG05_r{SDEG5_LATITUDE}_c{SDEG5_LONGITUDE}.nc"
       },
       "infrared": {
-        "dir": "/data/test_data/computed",
+        "dir": "test***/",
         "pattern": "{SATELLITE}LATLON_INFRARED_INDEXES__TMON_{YYYY}_{mm}__SDEG05_r{SDEG5_LATITUDE}_c{SDEG5_LONGITUDE}.nc"
       },
       "classes": {
-        "dir": "/data/test_data/classes",
+        "dir": "test***/",
         "pattern": "{SATELLITE}LATLON_CLASSES_INDEXES__TMON_{YYYY}_{mm}__SDEG05_r{SDEG5_LATITUDE}_c{SDEG5_LONGITUDE}.nc"
       }
     },
     "channels": {
       "dir": [
-        "/data/test_data/himawari_test2",
-        "/data/test_data/CHN13"
+        "test***/",
+        "test***/"
       ],
       "pattern": "{SATELLITE}LATLON_{CHANNEL}__TMON_{YYYY}_{mm}__SDEG05_r{SDEG5_LATITUDE}_c{SDEG5_LONGITUDE}.nc"
     },
-    "model_path": "/data/test_data/models/model_H08",
-    "pca_path": "/data/test_data/models/pca_H08",
-    "res_path": "/data/test_data/models/res_H08",
+    "model_path": "test***//",
+    "pca_path": "test***/",
+    "res_path": "test***/",
     "labels": {
-      "csp": "/data/test_data/BOM_clear_mask_latlon",
-      "ct": "/data/test_data/BOM_cloud_type_latlon"
+      "csp": "test***/",
+      "ct": "test***/"
     }
   },
   "GOES16": {
@@ -55,36 +55,36 @@
     ],
     "indexes": {
       "visible": {
-        "dir": "/data/test_data/computed",
+        "dir": "test***/",
         "pattern": "{SATELLITE}_VISIBLE_INDEXES_{YYYY}_{mm}_c{SDEG5_LONGITUDE}_r{SDEG5_LATITUDE}_east.nc"
       },
       "infrared": {
-        "dir": "/data/test_data/computed",
+        "dir": "test***/",
         "pattern": "{SATELLITE}_INFRARED_INDEXES_{YYYY}_{mm}_c{SDEG5_LONGITUDE}_r{SDEG5_LATITUDE}_east.nc"
       },
       "classes": {
-        "dir": "/data/test_data/classes",
+        "dir": "test***/",
         "pattern": "{SATELLITE}_CLASSES_INDEXES_{YYYY}_{mm}_c{SDEG5_LONGITUDE}_r{SDEG5_LATITUDE}_east.nc"
       }
     },
     "channels": {
-      "dir": "/data/test_data_goesr",
+      "dir": "test***",
       "pattern": "{SATELLITE}_{CHANNEL}_{YYYY}_{mm}_c{SDEG5_LONGITUDE}_r{SDEG5_LATITUDE}_east_calibrated.nc"
     },
-    "model_path": "/data/test_data/models/model_GOES16",
-    "pca_path": "/data/test_data/models/pca_GOES16",
-    "res_path": "/data/test_data/models/res_GOES16",
+    "model_path": "test***/",
+    "pca_path": "test***/",
+    "res_path": "test***/",
     "labels": {
-      "csp": "/data/test_data/GOES_clear_mask_latlon"
+      "csp": "test***/"
     }
   },
   "masks": {
     "land": {
-      "dir": "/data/test_data/masks",
+      "dir": "test***/",
       "pattern": "landsea_mask_2arcmin.nc"
     },
     "temperature_forecast": {
-      "dir": "/net/sponde/data/weather_params/CFSv2/netcdf_optimized",
+      "dir": "***",
       "pattern": "CFSv2_t2_{YYYY}_ts.nc"
     },
     "terrain": {

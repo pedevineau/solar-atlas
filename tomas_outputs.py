@@ -22,8 +22,8 @@ def get_tomas_outputs(dfb_begin, dfb_end, lat_begin, lat_end, lon_begin, lon_end
     nc_var_name = "GHI"
     nc_var_name = "LBclass"
     data_path_pool = [
-        "/data/model_data_himawari/data_output/v20b/",
-        "/data/test_data_goesr/model_output/",
+        "output",
+        "test***_goesr/model_output/",
     ]
     file_time_segmentation = "month"
     skip_empty = False

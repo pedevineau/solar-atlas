@@ -4,7 +4,8 @@ import numpy as np
 from netCDF4 import Dataset
 
 from general_utils import latlon
-
+from general_utils.daytimeconv import doyy2yyyymmdd
+import abi_navigation
 try:
     from numba import jit
 
@@ -56,9 +57,9 @@ if __name__ == "__main__":
         lons = bb.longitudes(array2d=False)
 
     if name == "H08":
-        dir_in = "/data/test_data/BOM_cloud_data"
-        dir_csp_out = "/data/test_data/BOM_clear_mask_latlon"
-        dir_ct_out = "/data/test_data/BOM_cloud_type_latlon"
+        dir_in = "test***/"
+        dir_csp_out = "test***/"
+        dir_ct_out = "test***/"
         nc_csp = "clear_sky_probability"
         nc_ct = "cloud_type"
 
@@ -153,12 +154,11 @@ if __name__ == "__main__":
                 print("Exception", file_path, type(e), e)
 
     elif name == "GOES16":
-        dir_in = "/data/test_data/goes_clear_mask"
-        dir_csp_out = "/data/test_data/GOES_clear_mask_latlon"
+        dir_in = "test***/goes_clear_mask"
+        dir_csp_out = "test***/"
         nc_csp = "BCM"
 
-        from general_utils.daytimeconv import doyy2yyyymmdd
-        import abi_navigation
+
 
         for file_ in (i for i in os.listdir(dir_in)):
             # file_ is just filename of .nc file in the directory (no dir in the string)
